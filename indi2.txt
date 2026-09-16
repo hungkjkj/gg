@@ -1,0 +1,420 @@
+//@version=5
+indicator("Normalized Volume + Percentile Lines [Nâng cấp]", shorttitle="Norm Vol + RVol", format=format.volume, precision=2, overlay=false, max_lines_count=500, max_bars_back=5000)
+
+// --- 1. Cài đặt Thông số ---
+grpSet = "Cài đặt Chung"
+
+vol_mode = input.string("Bình thường (Standard)", title="Chế độ Tính Volume", options=["Bình thường (Standard)", "So với cùng giờ (Time-Based RVol)"], tooltip="Time-Based sẽ lấy volume hiện tại so sánh với volume của đúng giờ này trong các ngày trước.", group=grpSet)
+
+days_lookback = input.int(30, title="Chu kỳ Percentile & Thống kê đỉnh (Số ngày)", group=grpSet)
+market_hours  = input.float(24.0, title="Số giờ giao dịch mỗi ngày", tooltip="Để 24 nếu là Crypto/Forex. Để 6.5 nếu là Cổ phiếu Mỹ.", group=grpSet)
+
+max_bars_limit = input.int(5000, title="Giới hạn Nến tối đa (Max allowed)", tooltip="Giảm số này nếu báo lỗi tàng hình do thiếu dữ liệu.", group=grpSet)
+
+show_ma  = input.bool(true, title="Hiển thị Đường Trung Bình Volume", group=grpSet)
+ma_len   = input.int(2, title="Chu kỳ MA Volume", group=grpSet)
+
+lvl_hi  = 85
+lvl_75  = 75
+lvl_mid = 50
+lvl_lo  = 15
+
+// --- 2. Cài đặt Highlight Phiên Giao Dịch (Key Hours) ---
+grpSession = "Cài đặt Phiên Giao Dịch (Key Hours)"
+show_session = input.bool(true, title="Hiển thị Background Các Phiên", group=grpSession)
+
+bg_asia = input.color(color.new(#FF4081, 92), title="Màu phiên Á", group=grpSession)
+bg_euro = input.color(color.new(#2962FF, 92), title="Màu phiên Âu", group=grpSession)
+bg_us   = input.color(color.new(#FF6D00, 92), title="Màu phiên Mỹ", group=grpSession)
+
+asia_sess = input.session("0900-1100", title="Giờ mở phiên Á (Tokyo)", group=grpSession) 
+euro_sess = input.session("0700-0900", title="Giờ mở phiên Âu (London)", group=grpSession) 
+us_sess   = input.session("0730-1100", title="Giờ mở phiên Mỹ (New York)", group=grpSession)
+
+// --- Cài đặt Động lượng & Bias ---
+grpMom = "Cài đặt Động lượng & Hiển thị"
+showMom = input.bool(true, title="Hiển thị cột Động lượng lõi", group=grpMom)
+momLength = input.int(20, title="Chu kỳ N (Động lượng)", group=grpMom)
+vol_bias = input.float(6.0, title="Độ dịch chuyển Volume lên cao (Bias)", step=1.0, group=grpMom, tooltip="Đẩy toàn bộ cột Volume bay lên trên. Hãy tăng số này nếu cột Động lượng quá cao chạm vào Volume.")
+
+// --- 3. LOGIC TÍNH TOÁN (XỬ LÝ 2 CHẾ ĐỘ VOLUME) ---
+sec_per_bar = timeframe.in_seconds(timeframe.period)
+sec_per_day = market_hours * 3600
+
+bars_per_day = int(math.round(sec_per_day / sec_per_bar))
+bars_per_day := math.max(1, bars_per_day) 
+
+ideal_bars = bars_per_day * days_lookback
+bars_lookback = math.max(1, math.min(ideal_bars, max_bars_limit))
+
+int safe_lookback = bar_index > 0 ? math.min(bars_lookback, bar_index) : 1
+
+float median_vol = 0.0
+float vol_rank = 0.0
+float vol_85_raw = 0.0
+float vol_75_raw = 0.0
+float vol_15_raw = 0.0
+
+if vol_mode == "Bình thường (Standard)"
+    median_vol := ta.median(volume, safe_lookback)
+    vol_rank   := ta.percentrank(volume, safe_lookback)
+    vol_85_raw := ta.percentile_nearest_rank(volume, safe_lookback, 85)
+    vol_75_raw := ta.percentile_nearest_rank(volume, safe_lookback, 75) 
+    vol_15_raw := ta.percentile_nearest_rank(volume, safe_lookback, 15)
+else
+    max_days = math.floor(max_bars_limit / bars_per_day)
+    actual_days = math.min(days_lookback, int(max_days))
+    
+    var float[] time_vols = array.new_float(0)
+    array.clear(time_vols)
+    
+    for i = 1 to actual_days
+        idx = int(i * bars_per_day)
+        if idx <= bar_index
+            array.push(time_vols, volume[idx])
+            
+    array.push(time_vols, volume)
+    sz = array.size(time_vols)
+    
+    if sz > 1
+        median_vol := array.median(time_vols)
+        vol_rank := array.percentrank(time_vols, sz - 1) 
+        
+        array.sort(time_vols) 
+        
+        idx_85 = int(math.round((85.0 / 100.0) * (sz - 1)))
+        idx_75 = int(math.round((75.0 / 100.0) * (sz - 1)))
+        idx_15 = int(math.round((15.0 / 100.0) * (sz - 1)))
+        
+        vol_85_raw := array.get(time_vols, idx_85)
+        vol_75_raw := array.get(time_vols, idx_75)
+        vol_15_raw := array.get(time_vols, idx_15)
+    else
+        median_vol := volume
+        vol_rank   := 50
+        vol_85_raw := volume
+        vol_75_raw := volume
+        vol_15_raw := volume
+
+// --- 4. TÍNH TOÁN VOLUME CHUẨN HÓA LÊN BIỂU ĐỒ ---
+float norm_vol = median_vol > 0 ? (volume / median_vol) : 0
+float vol_85 = median_vol > 0 ? (vol_85_raw / median_vol) : 0
+float vol_75 = median_vol > 0 ? (vol_75_raw / median_vol) : 0 
+float vol_50 = 1.0 
+float vol_15 = median_vol > 0 ? (vol_15_raw / median_vol) : 0
+
+// --- 5. Logic Đổi màu theo Rank ---
+col_vol_lo  = color.new(#0400ff, 0)
+col_vol_mid = color.new(#e97203, 0) 
+col_vol_75  = color.new(#e1e626, 0) 
+col_vol_hi  = color.new(#f30606, 0) 
+col_vol_max = color.new(#9c27b0, 0) 
+col_run     = color.new(color.gray, 0)
+
+color vol_color = switch
+    vol_rank <= lvl_lo  => col_vol_lo
+    vol_rank <= lvl_mid => col_vol_mid
+    vol_rank <= lvl_75  => col_vol_75 
+    vol_rank <= lvl_hi  => col_vol_hi
+    => col_vol_max
+
+color final_vol_color = barstate.isconfirmed ? vol_color : col_run
+
+// --- 6. Tính toán MA ---
+float ma_val = ta.sma(norm_vol, ma_len)
+color base_ma_color = ma_val > ma_val[1] ? color.new(color.green, 0) : color.new(color.red, 0) 
+color ma_color = barstate.isconfirmed ? base_ma_color : col_run
+
+// --- 7. TÍNH TOÁN ĐỘNG LƯỢNG & ĐƯỜNG PHÂN NHÓM ---
+float body_mom = close - open
+float atr_val = ta.atr(momLength)
+float norm_body = atr_val > 0 ? (body_mom / atr_val) : 0
+
+float sma_vol_mom = ta.sma(volume, momLength)
+float rvol_mom = sma_vol_mom > 0 ? (volume / sma_vol_mom) : 0
+
+float mom_raw = norm_body * rvol_mom
+float abs_mom = math.abs(mom_raw) 
+
+float mom_85 = ta.percentile_nearest_rank(abs_mom, safe_lookback, 85)
+float mom_75 = ta.percentile_nearest_rank(abs_mom, safe_lookback, 75)
+float mom_50 = ta.percentile_nearest_rank(abs_mom, safe_lookback, 50)
+float mom_15 = ta.percentile_nearest_rank(abs_mom, safe_lookback, 15)
+
+bool is_bull_mom = mom_raw > 0
+
+// Chuyển toàn bộ màu sang sáng rực rỡ (transparency = 0)
+color col_mom = is_bull_mom ? color.new(#00e676, 0) : color.new(#ff5252, 0)
+
+// =====================================================================
+// --- 8. HIỂN TRỰC QUAN LÊN BIỂU ĐỒ ---
+// =====================================================================
+
+plot(0, color=color.new(color.gray, 50), linewidth=1, title="Zero Line")
+plot(showMom ? mom_raw : na, title="Động lượng", color=col_mom, style=plot.style_histogram, linewidth=3)
+
+plot(showMom ? mom_85 : na, title="Mom 85% Up", color=color.new(color.orange, 50), style=plot.style_line, linewidth=1)
+plot(showMom ? mom_75 : na, title="Mom 75% Up", color=color.new(#e1e626, 50), style=plot.style_line, linewidth=1) 
+plot(showMom ? mom_50 : na, title="Mom 50% Up", color=color.new(color.gray, 50), style=plot.style_line, linewidth=1)
+plot(showMom ? mom_15 : na, title="Mom 15% Up", color=color.new(color.blue, 50), style=plot.style_line, linewidth=1)
+
+plot(showMom ? -mom_85 : na, title="Mom 85% Dn", color=color.new(color.orange, 50), style=plot.style_line, linewidth=1)
+plot(showMom ? -mom_75 : na, title="Mom 75% Dn", color=color.new(#e1e626, 50), style=plot.style_line, linewidth=1) 
+plot(showMom ? -mom_50 : na, title="Mom 50% Dn", color=color.new(color.gray, 50), style=plot.style_line, linewidth=1)
+plot(showMom ? -mom_15 : na, title="Mom 15% Dn", color=color.new(color.blue, 50), style=plot.style_line, linewidth=1)
+
+plot(norm_vol + vol_bias, title="Normalized Volume", color=final_vol_color, style=plot.style_columns, linewidth=2, histbase=vol_bias)
+
+plot(vol_85 + vol_bias, title="Mức 85%", color=color.new(color.orange, 50), style=plot.style_line, linewidth=1)
+plot(vol_75 + vol_bias, title="Mức 75%", color=color.new(#e1e626, 50), style=plot.style_line, linewidth=1) 
+plot(vol_50 + vol_bias, title="Mức 50%", color=color.new(color.gray, 50), style=plot.style_line, linewidth=1)
+plot(vol_15 + vol_bias, title="Mức 15%", color=color.new(color.blue, 50), style=plot.style_line, linewidth=1)
+plot(show_ma ? (ma_val + vol_bias) : na, title="MA Volume", color=ma_color, linewidth=2)
+
+// --- 9. Background Theo Phiên ---
+in_asia = not na(time(timeframe.period, asia_sess, "Asia/Tokyo"))
+in_euro = not na(time(timeframe.period, euro_sess, "Europe/London"))
+in_us   = not na(time(timeframe.period, us_sess, "America/New_York"))
+
+color session_color = na
+if in_us
+    session_color := bg_us
+else if in_euro
+    session_color := bg_euro
+else if in_asia
+    session_color := bg_asia
+
+bgcolor(show_session ? session_color : na, title="Background Phiên Giao Dịch")
+
+// =====================================================================
+// --- 10. THỐNG KÊ ĐỈNH PHIÊN & ĐÁY CHUYỂN GIAO ---
+// =====================================================================
+grpStats = "Thống kê Đỉnh/Đáy Vol"
+show_future_lines = input.bool(true, title="Vẽ trước đường dự báo tương lai", group=grpStats, tooltip="Vẽ các đường nét đứt kèm Nhãn ở khoảng trống tương lai để biết lát nữa đỉnh/đáy sẽ vào giờ nào")
+peak_line_color = input.color(color.new(color.green, 0), title="Màu Line ĐỈNH Vol", group=grpStats)
+btm_line_color  = input.color(color.new(color.red, 0), title="Màu Line ĐÁY Vol", group=grpStats)
+
+var int[] asia_peaks = array.new_int()
+var int[] euro_peaks = array.new_int()
+var int[] us_peaks   = array.new_int()
+var int[] ae_btms = array.new_int()
+var int[] eu_btms = array.new_int()
+var int[] ua_btms = array.new_int()
+
+f_get_mode(arr) =>
+    if array.size(arr) == 0
+        [-1, 0]
+    else
+        int[] unique_vals = array.new_int()
+        int[] counts = array.new_int()
+        for i = 0 to array.size(arr) - 1
+            val = array.get(arr, i)
+            idx = array.indexof(unique_vals, val)
+            if idx == -1
+                array.push(unique_vals, val)
+                array.push(counts, 1)
+            else
+                array.set(counts, idx, array.get(counts, idx) + 1)
+        max_c = 0
+        mode_v = -1
+        for i = 0 to array.size(unique_vals) - 1
+            c = array.get(counts, i)
+            if c > max_c
+                max_c := c
+                mode_v := array.get(unique_vals, i)
+        [mode_v, max_c]
+
+f_get_bucket(tz) =>
+    h = hour(time, tz)
+    m = minute(time, tz)
+    h * 100 + (m >= 30 ? 30 : 0)
+
+var int current_phase = 0 
+if in_asia
+    current_phase := 1
+else if in_euro
+    current_phase := 3
+else if in_us
+    current_phase := 5
+else
+    if current_phase == 1
+        current_phase := 2
+    else if current_phase == 3
+        current_phase := 4
+    else if current_phase == 5
+        current_phase := 6
+
+bool is_asia_ph = current_phase == 1
+bool is_gap_ae  = current_phase == 2
+bool is_euro_ph = current_phase == 3
+bool is_gap_eu  = current_phase == 4
+bool is_us_ph   = current_phase == 5
+bool is_gap_ua  = current_phase == 6
+
+var float asia_cur_max = 0.0, var int asia_cur_max_t = na
+var float euro_cur_max = 0.0, var int euro_cur_max_t = na
+var float us_cur_max   = 0.0, var int us_cur_max_t   = na
+var float ae_cur_min = 999999999.0, var int ae_cur_min_t = na
+var float eu_cur_min = 999999999.0, var int eu_cur_min_t = na
+var float ua_cur_min = 999999999.0, var int ua_cur_min_t = na
+var int cur_a_peak = -1, var int cur_ae_btm = -1
+var int cur_e_peak = -1, var int cur_eu_btm = -1
+var int cur_u_peak = -1, var int cur_ua_btm = -1
+
+// Logic thống kê dữ liệu quá khứ
+if is_asia_ph and not is_asia_ph[1]
+    asia_cur_max := volume
+    asia_cur_max_t := f_get_bucket("Asia/Tokyo")
+else if is_asia_ph and volume > asia_cur_max
+    asia_cur_max := volume
+    asia_cur_max_t := f_get_bucket("Asia/Tokyo")
+if not is_asia_ph and is_asia_ph[1] and not na(asia_cur_max_t)
+    array.push(asia_peaks, asia_cur_max_t)
+    if array.size(asia_peaks) > days_lookback
+        array.shift(asia_peaks)
+    [m, c] = f_get_mode(asia_peaks)
+    cur_a_peak := m
+
+if is_gap_ae and not is_gap_ae[1]
+    ae_cur_min := volume
+    ae_cur_min_t := f_get_bucket(syminfo.timezone)
+else if is_gap_ae and volume < ae_cur_min
+    ae_cur_min := volume
+    ae_cur_min_t := f_get_bucket(syminfo.timezone)
+if not is_gap_ae and is_gap_ae[1] and not na(ae_cur_min_t)
+    array.push(ae_btms, ae_cur_min_t)
+    if array.size(ae_btms) > days_lookback
+        array.shift(ae_btms)
+    [m, c] = f_get_mode(ae_btms)
+    cur_ae_btm := m
+
+if is_euro_ph and not is_euro_ph[1]
+    euro_cur_max := volume
+    euro_cur_max_t := f_get_bucket("Europe/London")
+else if is_euro_ph and volume > euro_cur_max
+    euro_cur_max := volume
+    euro_cur_max_t := f_get_bucket("Europe/London")
+if not is_euro_ph and is_euro_ph[1] and not na(euro_cur_max_t)
+    array.push(euro_peaks, euro_cur_max_t)
+    if array.size(euro_peaks) > days_lookback
+        array.shift(euro_peaks)
+    [m, c] = f_get_mode(euro_peaks)
+    cur_e_peak := m
+
+if is_gap_eu and not is_gap_eu[1]
+    eu_cur_min := volume
+    eu_cur_min_t := f_get_bucket(syminfo.timezone)
+else if is_gap_eu and volume < eu_cur_min
+    eu_cur_min := volume
+    eu_cur_min_t := f_get_bucket(syminfo.timezone)
+if not is_gap_eu and is_gap_eu[1] and not na(eu_cur_min_t)
+    array.push(eu_btms, eu_cur_min_t)
+    if array.size(eu_btms) > days_lookback
+        array.shift(eu_btms)
+    [m, c] = f_get_mode(eu_btms)
+    cur_eu_btm := m
+
+if is_us_ph and not is_us_ph[1]
+    us_cur_max := volume
+    us_cur_max_t := f_get_bucket("America/New_York")
+else if is_us_ph and volume > us_cur_max
+    us_cur_max := volume
+    us_cur_max_t := f_get_bucket("America/New_York")
+if not is_us_ph and is_us_ph[1] and not na(us_cur_max_t)
+    array.push(us_peaks, us_cur_max_t)
+    if array.size(us_peaks) > days_lookback
+        array.shift(us_peaks)
+    [m, c] = f_get_mode(us_peaks)
+    cur_u_peak := m
+
+if is_gap_ua and not is_gap_ua[1]
+    ua_cur_min := volume
+    ua_cur_min_t := f_get_bucket(syminfo.timezone)
+else if is_gap_ua and volume < ua_cur_min
+    ua_cur_min := volume
+    ua_cur_min_t := f_get_bucket(syminfo.timezone)
+if not is_gap_ua and is_gap_ua[1] and not na(ua_cur_min_t)
+    array.push(ua_btms, ua_cur_min_t)
+    if array.size(ua_btms) > days_lookback
+        array.shift(ua_btms)
+    [m, c] = f_get_mode(ua_btms)
+    cur_ua_btm := m
+
+// In vạch xác nhận khi nến chạy ngang qua
+var int l_a_p_d = 0, var int l_ae_b_d = 0
+var int l_e_p_d = 0, var int l_eu_b_d = 0
+var int l_u_p_d = 0, var int l_ua_b_d = 0
+
+if is_asia_ph and cur_a_peak != -1 and f_get_bucket("Asia/Tokyo") == cur_a_peak and dayofmonth(time, "Asia/Tokyo") != l_a_p_d
+    l_a_p_d := dayofmonth(time, "Asia/Tokyo")
+    line.new(bar_index, 0, bar_index, 1, extend=extend.both, color=peak_line_color, style=line.style_solid, width=1)
+if is_gap_ae and cur_ae_btm != -1 and f_get_bucket(syminfo.timezone) == cur_ae_btm and dayofmonth(time, syminfo.timezone) != l_ae_b_d
+    l_ae_b_d := dayofmonth(time, syminfo.timezone)
+    line.new(bar_index, 0, bar_index, 1, extend=extend.both, color=btm_line_color, style=line.style_solid, width=1)
+if is_euro_ph and cur_e_peak != -1 and f_get_bucket("Europe/London") == cur_e_peak and dayofmonth(time, "Europe/London") != l_e_p_d
+    l_e_p_d := dayofmonth(time, "Europe/London")
+    line.new(bar_index, 0, bar_index, 1, extend=extend.both, color=peak_line_color, style=line.style_solid, width=1)
+if is_gap_eu and cur_eu_btm != -1 and f_get_bucket(syminfo.timezone) == cur_eu_btm and dayofmonth(time, syminfo.timezone) != l_eu_b_d
+    l_eu_b_d := dayofmonth(time, syminfo.timezone)
+    line.new(bar_index, 0, bar_index, 1, extend=extend.both, color=btm_line_color, style=line.style_solid, width=1)
+if is_us_ph and cur_u_peak != -1 and f_get_bucket("America/New_York") == cur_u_peak and dayofmonth(time, "America/New_York") != l_u_p_d
+    l_u_p_d := dayofmonth(time, "America/New_York")
+    line.new(bar_index, 0, bar_index, 1, extend=extend.both, color=peak_line_color, style=line.style_solid, width=1)
+if is_gap_ua and cur_ua_btm != -1 and f_get_bucket(syminfo.timezone) == cur_ua_btm and dayofmonth(time, syminfo.timezone) != l_ua_b_d
+    l_ua_b_d := dayofmonth(time, syminfo.timezone)
+    line.new(bar_index, 0, bar_index, 1, extend=extend.both, color=btm_line_color, style=line.style_solid, width=1)
+
+
+// =====================================================================
+// --- 11. TÍNH NĂNG ĐẶC BIỆT: VẼ DỰ BÁO TRONG TƯƠNG LAI ---
+// =====================================================================
+
+// Hàm lấy ra UNIX Timestamp (ms) của giờ mục tiêu trong tương lai
+f_get_next_timestamp(mode_val, tz) =>
+    if mode_val < 0
+        0
+    else
+        tgt_h = math.floor(mode_val / 100)
+        tgt_m = mode_val % 100
+        cur_y = year(time, tz)
+        cur_m = month(time, tz)
+        cur_d = dayofmonth(time, tz)
+        
+        tgt_time = timestamp(tz, cur_y, cur_m, cur_d, tgt_h, tgt_m, 0)
+        
+        // Nếu giờ mục tiêu của ngày hôm nay đã đi qua, thì cộng thêm 1 ngày để đẩy nó sang ngày mai
+        if tgt_time <= time
+            tgt_time := timestamp(tz, cur_y, cur_m, cur_d + 1, tgt_h, tgt_m, 0)
+        tgt_time
+
+// Khai báo mảng lưu trữ ở lề ngoài cùng
+var line[] future_lines = array.new_line()
+var label[] future_labels = array.new_label()
+
+// [ĐÃ SỬA LỖI]: Thay 'yloc.bottom' thành 'yloc.price'
+f_draw_future(mode_val, tz, col, txt) =>
+    if mode_val != -1
+        t = f_get_next_timestamp(mode_val, tz)
+        if t > 0
+            ln = line.new(t, 0, t, 1, xloc=xloc.bar_time, extend=extend.both, color=col, style=line.style_dashed, width=1)
+            lb = label.new(t, 0, text=txt, xloc=xloc.bar_time, yloc=yloc.price, style=label.style_label_up, color=color.new(color.black, 100), textcolor=col, size=size.small)
+            array.push(future_lines, ln)
+            array.push(future_labels, lb)
+
+// Chỉ thực hiện vẽ ở cây nến cuối cùng (Realtime)
+if barstate.islast and show_future_lines
+    // Xóa các đường/nhãn cũ trước khi vẽ mới để không bị lag biểu đồ
+    if array.size(future_lines) > 0
+        for i = 0 to array.size(future_lines) - 1
+            line.delete(array.get(future_lines, i))
+            label.delete(array.get(future_labels, i))
+        array.clear(future_lines)
+        array.clear(future_labels)
+        
+    // Gọi hàm vẽ các đường dự báo
+    f_draw_future(cur_a_peak, "Asia/Tokyo", peak_line_color, "Dự báo Đỉnh Á")
+    f_draw_future(cur_ae_btm, syminfo.timezone, btm_line_color, "Dự báo Đáy Á-Âu")
+    f_draw_future(cur_e_peak, "Europe/London", peak_line_color, "Dự báo Đỉnh Âu")
+    f_draw_future(cur_eu_btm, syminfo.timezone, btm_line_color, "Dự báo Đáy Âu-Mỹ")
+    f_draw_future(cur_u_peak, "America/New_York", peak_line_color, "Dự báo Đỉnh Mỹ")
+    f_draw_future(cur_ua_btm, syminfo.timezone, btm_line_color, "Dự báo Đáy Mỹ-Á")
