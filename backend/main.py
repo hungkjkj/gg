@@ -650,7 +650,7 @@ def get_matrix_progress(matrix_type: str = "currency"):
     return {"progress": MATRIX_PROGRESS.get(matrix_type, 0.0)}
 
 @app.get("/api/v1/matrix")
-async def get_currency_matrix(n_hours: int = 24, matrix_type: str = "currency", end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
+async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str = "currency", end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
     if matrix_type == "crypto":
         currencies = ["BTC", "ETH", "SOL", "USD"]
         pairs = ["BTCUSD", "ETHUSD", "SOLUSD", "ETHBTC", "SOLBTC"]
@@ -672,7 +672,7 @@ async def get_currency_matrix(n_hours: int = 24, matrix_type: str = "currency", 
     total_pairs = len(pairs)
     
     MATRIX_PROGRESS[matrix_type] = 0.0
-    count = n_hours + 25 # Lấy dư 25 nến để đủ dữ liệu cho VWMA(20)
+    count = max(n_hours + 25, vol_days * 24 + n_hours) # Lấy nến tuỳ thuộc vào N days volume hoặc chu kỳ matrix
     
     def process_pair(pair):
         df = get_historical_data(pair, "H1", count, end_time, brokerTimezone)
@@ -680,6 +680,7 @@ async def get_currency_matrix(n_hours: int = 24, matrix_type: str = "currency", 
             return None
             
         df['vwma'] = (df['close'] * df['tick_volume']).rolling(window=20, min_periods=1).sum() / df['tick_volume'].rolling(window=20, min_periods=1).sum()
+        df['vol_rolling'] = df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
         
         if len(df) > n_hours:
             current_vwma = df['vwma'].iloc[-1]
@@ -692,28 +693,61 @@ async def get_currency_matrix(n_hours: int = 24, matrix_type: str = "currency", 
             
             base_currency = pair[:3]
             quote_currency = pair[3:]
-            return (pair, diff_pct, base_currency, quote_currency)
+            
+            hist_vol = df['vol_rolling'].iloc[-(vol_days * 24):].values
+            
+            return (pair, diff_pct, base_currency, quote_currency, hist_vol)
         return None
 
     # Chạy song song đa luồng để lấy dữ liệu 15 cặp siêu tốc
     with concurrent.futures.ThreadPoolExecutor(max_workers=total_pairs) as executor:
         results = list(executor.map(process_pair, pairs))
         
+    vol_series_by_currency = {c: [] for c in currencies}
+    
     for res in results:
         if res:
-            pair, diff_pct, base_currency, quote_currency = res
+            pair, diff_pct, base_currency, quote_currency, hist_vol = res
             if base_currency in scores:
                 scores[base_currency] += diff_pct
+                if len(vol_series_by_currency[base_currency]) == 0:
+                    vol_series_by_currency[base_currency] = hist_vol.copy()
+                else:
+                    length = min(len(vol_series_by_currency[base_currency]), len(hist_vol))
+                    vol_series_by_currency[base_currency][-length:] += hist_vol[-length:]
+                    
             if quote_currency in scores:
                 scores[quote_currency] -= diff_pct
+                if len(vol_series_by_currency[quote_currency]) == 0:
+                    vol_series_by_currency[quote_currency] = hist_vol.copy()
+                else:
+                    length = min(len(vol_series_by_currency[quote_currency]), len(hist_vol))
+                    vol_series_by_currency[quote_currency][-length:] += hist_vol[-length:]
                 
             matrix_data.append({
                 "pair": pair,
                 "change_pct": round(diff_pct, 4)
             })
 
-    # Xếp hạng currencies
-    ranked_currencies = sorted([{"currency": k, "score": round(v, 4)} for k, v in scores.items()], key=lambda x: x["score"], reverse=True)
+    # Xếp hạng currencies và tính Vol Percentile
+    import numpy as np
+    ranked_currencies = []
+    for c in currencies:
+        vol_arr = vol_series_by_currency[c]
+        vol_percentile = 0.0
+        if len(vol_arr) > 0:
+            current_vol = vol_arr[-1]
+            # Tính phần trăm số nến trong lịch sử nhỏ hơn khối lượng hiện tại
+            percentile = np.mean(vol_arr < current_vol) * 100
+            vol_percentile = round(percentile, 2)
+            
+        ranked_currencies.append({
+            "currency": c,
+            "score": round(scores[c], 4),
+            "vol_percentile": vol_percentile
+        })
+        
+    ranked_currencies = sorted(ranked_currencies, key=lambda x: x["score"], reverse=True)
     
     MATRIX_PROGRESS[matrix_type] = 100.0
     return {

@@ -386,7 +386,7 @@ useEffect(() => {
     if (symbol.includes("JPY")) {
       precision = 3;
       minMove = 0.001;
-    } else if (symbol.includes("XAU") || symbol.includes("GOLD") || symbol.includes("BTC")) {
+    } else if (symbol.includes("XAU") || symbol.includes("GOLD") || symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL")) {
       precision = 2;
       minMove = 0.01;
     }
@@ -1178,7 +1178,7 @@ useEffect(() => {
                 const bid = lastItem.close;
                 let minMove = 0.00001;
                 if (symbol.includes("JPY")) minMove = 0.001;
-                else if (symbol.includes("XAU") || symbol.includes("GOLD") || symbol.includes("BTC")) minMove = 0.01;
+                else if (symbol.includes("XAU") || symbol.includes("GOLD") || symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL")) minMove = 0.01;
                 const ask = bid + (lastItem.spread * minMove);
                 
                 if (!bidPriceLineRef.current) {
@@ -1371,7 +1371,7 @@ useEffect(() => {
       simulatedTimeRef.current += tfSec;
       
       // Bỏ qua Thứ 7, Chủ Nhật để Backtest không bị "treo" (trừ Crypto)
-      const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("XRP") || symbol.includes("CRYPTO");
+      const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
       if (!isCrypto) {
           const d = new Date(simulatedTimeRef.current * 1000);
           const day = d.getUTCDay();
@@ -1746,6 +1746,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [matrixHours, setMatrixHours] = useState(Number(localStorage.getItem('currencyMatrixHours')) || 24);
+  const [matrixVolDays, setMatrixVolDays] = useState(Number(localStorage.getItem('currencyMatrixVolDays')) || 30);
   const [matrixType, setMatrixType] = useState(localStorage.getItem('matrixType') || 'currency');
 
   useEffect(() => {
@@ -1770,7 +1771,8 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone }) => {
       const cached = localStorage.getItem(`matrixCache_${matrixType}`);
       const cachedTime = localStorage.getItem(`matrixCacheTime_${matrixType}`);
       const cachedHours = localStorage.getItem(`matrixCacheHours_${matrixType}`);
-      if (cached && cachedTime && cachedHours == matrixHours) {
+      const cachedVolDays = localStorage.getItem(`matrixCacheVolDays_${matrixType}`);
+      if (cached && cachedTime && cachedHours == matrixHours && cachedVolDays == matrixVolDays) {
         const age = Date.now() - parseInt(cachedTime);
         if (age < 60 * 1000) {
           setMatrixData(JSON.parse(cached));
@@ -1782,15 +1784,17 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone }) => {
     setLoading(true);
     try {
       const response = await axios.get(`http://localhost:8000/api/v1/matrix`, {
-        params: { n_hours: matrixHours, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone }
+        params: { n_hours: matrixHours, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone }
       });
       setMatrixData(response.data);
       if (!simulatedTime) {
           localStorage.setItem(`matrixCache_${matrixType}`, JSON.stringify(response.data));
           localStorage.setItem(`matrixCacheTime_${matrixType}`, Date.now().toString());
           localStorage.setItem(`matrixCacheHours_${matrixType}`, matrixHours.toString());
+          localStorage.setItem(`matrixCacheVolDays_${matrixType}`, matrixVolDays.toString());
       }
       localStorage.setItem('currencyMatrixHours', matrixHours.toString());
+      localStorage.setItem('currencyMatrixVolDays', matrixVolDays.toString());
       localStorage.setItem('matrixType', matrixType);
     } catch (err) {
       console.error("Error fetching matrix:", err);
@@ -1856,6 +1860,14 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone }) => {
           onChange={e => setMatrixHours(Number(e.target.value))} 
           style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '80px' }}
         />
+        
+        <label style={{ marginLeft: '10px' }}>So sánh Khối lượng (Ngày):</label>
+        <input 
+          type="number" 
+          value={matrixVolDays} 
+          onChange={e => setMatrixVolDays(Number(e.target.value))} 
+          style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '80px' }}
+        />
         <button 
           onClick={() => fetchMatrix(true)}
           style={{ padding: '5px 15px', borderRadius: '5px', background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
@@ -1877,18 +1889,28 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone }) => {
               <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hạng</th>
               <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Đồng tiền</th>
               <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Điểm sức mạnh (Score)</th>
+              <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Khối lượng (Top %)</th>
             </tr>
           </thead>
           <tbody>
-            {matrixData.ranking.map((item, index) => (
+            {matrixData.ranking.map((item, index) => {
+              // Color logic cho Volume Percentile
+              let volColor = 'var(--text-primary)';
+              if (item.vol_percentile >= 75) volColor = '#4ade80'; // Xanh lá sáng
+              else if (item.vol_percentile <= 20) volColor = '#f87171'; // Đỏ nhạt
+              
+              return (
               <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                 <td style={{ padding: '12px 0', fontWeight: 'bold' }}>#{index + 1}</td>
                 <td style={{ padding: '12px 0' }}>{item.currency}</td>
                 <td style={{ padding: '12px 0', color: item.score > 0 ? 'var(--up-color)' : (item.score < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
                   {item.score > 0 ? '+' : ''}{item.score.toFixed(2)}
                 </td>
+                <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal' }}>
+                  {item.vol_percentile}%
+                </td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>
