@@ -1266,15 +1266,18 @@ useEffect(() => {
             
             // Đưa vào setTimeout để tránh race condition với hàm setData() của Lightweight Charts
             setTimeout(() => {
+                const currentLogicalRange = chartRef.current ? chartRef.current.timeScale().getVisibleLogicalRange() : null;
                 if (chartRef.current) {
                     chartRef.current.priceScale('right').applyOptions({ autoScale: false });
                     chartRef.current.priceScale('right').applyOptions({ autoScale: true });
                 }
                 if (momentumChartRef.current) {
+                    if (currentLogicalRange) momentumChartRef.current.timeScale().setVisibleLogicalRange(currentLogicalRange);
                     momentumChartRef.current.priceScale('right').applyOptions({ autoScale: false });
                     momentumChartRef.current.priceScale('right').applyOptions({ autoScale: true });
                 }
                 if (volumeChartRef.current) {
+                    if (currentLogicalRange) volumeChartRef.current.timeScale().setVisibleLogicalRange(currentLogicalRange);
                     volumeChartRef.current.priceScale('right').applyOptions({ autoScale: false });
                     volumeChartRef.current.priceScale('right').applyOptions({ autoScale: true });
                 }
@@ -2375,17 +2378,17 @@ function App() {
   const handleAddAlert = async (alertData) => {
     try {
       const newAlert = { ...alertData, id: Date.now(), status: 'active' };
-      // Bỏ dùng cache local, chỉ gửi request lên backend
+      setAlerts(prev => [...prev, newAlert]); // Optimistic UI update
       await axios.post('http://localhost:8000/api/v1/alerts', newAlert);
-      fetchAlerts(); // Cập nhật lại từ backend
+      fetchAlerts(); 
     } catch (e) { console.error(e); }
   };
 
   const handleDeleteAlert = async (id) => {
     try {
-      // Bỏ dùng cache local
+      setAlerts(prev => prev.filter(a => a.id !== id)); // Optimistic UI update
       await axios.delete(`http://localhost:8000/api/v1/alerts/${id}`);
-      fetchAlerts(); // Cập nhật lại từ backend
+      fetchAlerts(); 
     } catch (e) { console.error(e); }
   };
 
