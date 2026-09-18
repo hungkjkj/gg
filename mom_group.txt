@@ -1,0 +1,77 @@
+<details style={styleGroup} open>
+          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#60a5fa' }}>D-VP (Volume Profile Động)</summary>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Chế độ chia lưới</label>
+            <select value={local.gridMode} onChange={e => handleChange('gridMode', e.target.value)} style={styleInput}>
+              <option value="auto">Tự động (Chia theo số ô)</option>
+              <option value="fixed">Cố định (Theo số Pip)</option>
+            </select>
+          </div>
+          {local.gridMode === 'auto' ? (
+            <div style={{ marginTop: '10px' }}>
+              <label style={styleLabel}>Số lượng ô (Auto Mode)</label>
+              <input type="number" value={local.rowCount} onChange={e => handleChange('rowCount', Number(e.target.value))} style={styleInput} />
+            </div>
+          ) : (
+            <div style={{ marginTop: '10px' }}>
+              <label style={styleLabel}>Số Pip mỗi ô (Fixed Mode)</label>
+              <input type="number" step="0.25" value={local.fixedPips} onChange={e => handleChange('fixedPips', Number(e.target.value))} style={styleInput} />
+            </div>
+          )}
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Số giờ Timeout để Reset</label>
+            <input type="number" value={local.timeoutHours} onChange={(e) => handleChange('timeoutHours', parseFloat(e.target.value))} style={styleInput} step="0.1" />
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Chu kỳ tính D-VP (Số giờ giới hạn vẽ DVP)</label>
+            <input type="number" value={local.dvpLookbackHours} onChange={(e) => handleChange('dvpLookbackHours', parseInt(e.target.value))} style={styleInput} step="24" />
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Top Level 1 (Màu Đỏ) %</label>
+            <input type="number" value={local.pct1} onChange={e => handleChange('pct1', Number(e.target.value))} style={styleInput} />
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Top Level 2 (Màu Tím) %</label>
+            <input type="number" value={local.pct2} onChange={e => handleChange('pct2', Number(e.target.value))} style={styleInput} />
+          </div>
+        </details>
+
+        <details style={styleGroup}>
+          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#34d399' }}>Chỉ báo VWAP & SD</summary>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Chu kỳ VWAP (vwapLength)</label>
+            <input type="number" value={local.vwapLength} onChange={e => handleChange('vwapLength', Number(e.target.value))} style={styleInput} />
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Hệ số Band (vwapMult)</label>
+            <input type="number" step="0.1" value={local.vwapMult} onChange={e => handleChange('vwapMult', Number(e.target.value))} style={styleInput} />
+          </div>
+        </details>
+
+        <details style={styleGroup}>
+          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#f59e0b' }}>Chỉ báo Động lượng Lõi (Momentum)</summary>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Chu kỳ Động lượng (momLength)</label>
+            <input type="number" value={local.momLength} onChange={e => handleChange('momLength', Number(e.target.value))} style={styleInput} />
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel} title="Chu kỳ của đường MA (màu trắng) chạy đè trên biểu đồ Momentum">Chu kỳ MA Động lượng (momMaLength)</label>
+            <input type="number" value={local.momMaLength} onChange={e => handleChange('momMaLength', Number(e.target.value))} style={styleInput} />
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Chu kỳ Ma trận chung (Giờ)</label>
+            <input type="number" value={local.matrixLookbackHours} onChange={e => handleChange('matrixLookbackHours', Number(e.target.value))} style={styleInput} title="Nhập số giờ để tính toán phân phối cho cả Động Lượng và Khối Lượng" />
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Xác suất Cao (momPct1)</label>
+            <input type="number" value={local.momPct1} onChange={e => handleChange('momPct1', Number(e.target.value))} style={styleInput} />
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Xác suất Vừa (momPct2)</label>
+            <input type="number" value={local.momPct2} onChange={e => handleChange('momPct2', Number(e.target.value))} style={styleInput} />
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Xác suất Trung vị (momPct3)</label>
+            <input type="number" value={local.momPct3} onChange={e => handleChange('momPct3', Number(e.target.value))} style={styleInput} />
+          </div>
+        </details>

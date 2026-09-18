@@ -204,7 +204,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
               rvolLookbackDays: int = 10, peakVolLookbackDays: int = 60,
               momLength: int = 20, matrixLookbackHours: float = 89.0,
               momPct1: float = 85.0, momPct2: float = 75.0, momPct3: float = 50.0,
-              maVolLength: int = 2, momMaLength: int = 3,
+              maVolLength: int = 2, momMaLength: int = 3, momFlipFilterPct: float = 75.0,
               volPct1: float = 85.0, volPct2: float = 75.0, volPct3: float = 50.0, volPct4: float = 15.0,
               timeShiftHours: float = 0.0, browserOffsetHours: float = 7.0, autoDst: bool = True,
               asiaStart: str = "07:00", asiaEnd: str = "10:00",
@@ -249,6 +249,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     mom_window = max(1, int((momLength * 3600) / tf_seconds))
     ma_vol_window = max(1, int((maVolLength * 3600) / tf_seconds))
     mom_ma_window = max(1, int((momMaLength * 3600) / tf_seconds))
+
     
     # --- 1. VWAP & SD Bands ---
     df['hlc3'] = (df['high'] + df['low'] + df['close']) / 3
@@ -280,13 +281,43 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['sma_vol'] = df['value'].rolling(window=mom_window, min_periods=1).mean()
     df['rvol_mom'] = np.where(df['sma_vol'] > 0, df['value'] / df['sma_vol'], 0)
     
-    df['mom_raw'] = df['norm_body'] * df['rvol_mom']
-    
-    # Tính toán các đường xác suất Momentum
-    df['abs_mom'] = df['mom_raw'].abs()
-    df['mom_ma'] = pd.Series(df['mom_raw']).rolling(window=mom_ma_window, min_periods=1).mean()
-    
     lookback_candles = max(1, int((matrixLookbackHours * 3600) / tf_seconds))
+    
+    df['mom_raw_raw'] = df['norm_body'] * df['rvol_mom']
+    df['abs_mom_raw'] = df['mom_raw_raw'].abs()
+    
+    # Tính median động lượng trong chu kỳ N giờ
+    rolling_median_mom = df['abs_mom_raw'].rolling(window=lookback_candles, min_periods=1).median().replace(0, np.nan).fillna(1e-9)
+    
+    # --- Momentum Flip ---
+    # hệ số flip = động lượng hiện tại / động lượng trước đó
+    flip_ratio = df['abs_mom_raw'] / df['abs_mom_raw'].shift(1).replace(0, np.nan).fillna(1e-9)
+    # nhân động lượng hiện tại / median động lượng, rồi nhân với hệ số flip
+    mom_flip_metric = (df['abs_mom_raw'] / rolling_median_mom) * flip_ratio
+    
+    # Tính ngưỡng lọc flip dựa trên phần trăm người dùng chọn
+    filter_threshold = df['abs_mom_raw'].rolling(window=lookback_candles, min_periods=1).quantile(momFlipFilterPct / 100.0)
+    
+    # Chỉ xét phân phối cho những nến có mom >= filter_threshold
+    valid_mask = df['abs_mom_raw'] >= filter_threshold
+    import numpy as np
+    mom_flip_metric_valid = mom_flip_metric.where(valid_mask, np.nan)
+    
+    def calc_percent_rank_np(x):
+        current_val = x[-1]
+        if np.isnan(current_val):
+            return 0.0
+        valid_vals = x[~np.isnan(x)]
+        if len(valid_vals) == 0:
+            return 0.0
+        return (valid_vals <= current_val).mean() * 100.0
+
+    df['mom_flip'] = mom_flip_metric_valid.rolling(window=lookback_candles, min_periods=1).apply(calc_percent_rank_np, raw=True)
+    
+    # Tính toán các đường xác suất Momentum (Momentum đã chuẩn hóa theo median)
+    df['mom_raw'] = df['mom_raw_raw'] / rolling_median_mom
+    df['abs_mom'] = df['abs_mom_raw'] / rolling_median_mom
+    df['mom_ma'] = pd.Series(df['mom_raw']).rolling(window=mom_ma_window, min_periods=1).mean()
     
     df['mom_lvl1'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct1 / 100.0)
     df['mom_lvl2'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct2 / 100.0)
@@ -478,6 +509,12 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         recent_max = recent_df['high'].max()
         bin_size = (recent_max - recent_min) / max(1, rowCount)
         
+    # BẢO VỆ CHỐNG TRÀN VÒNG LẶP D-VP DO QUÁ NHIỀU BINS
+    global_min = df['low'].min()
+    global_max = df['high'].max()
+    if global_max - global_min > 0 and bin_size > 0:
+        pass # Bỏ giới hạn số lượng hộp VP vì giao diện đã được vá lỗi hiệu năng đồ hoạ
+
     if bin_size <= 0:
         bin_size = 0.0001
     tf_sec_map = { "M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400, "D1": 86400 }
@@ -625,7 +662,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     if latest_only:
         df = df.tail(2)
         
-    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mom_ma', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'spread']
+    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'spread']
     existing_cols = [c for c in cols_to_keep if c in df.columns]
     df = df[existing_cols]
         

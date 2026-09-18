@@ -193,7 +193,6 @@ def _fetch_raw_data(symbol: str, timeframe: str, count: int = 1000, end_time: in
         tf = _get_mt5_timeframe(timeframe)
         real_sym = _get_real_symbol(symbol)
         if mt5.symbol_select(real_sym, True):
-            import pandas as pd
             if end_time > 0:
                 # end_time nhận vào là UTC timestamp, cần đổi sang Broker Time
                 utc_dt = pd.to_datetime(end_time, unit='s', utc=True)

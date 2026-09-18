@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import axios from 'axios';
+import { AssistiveTouch, MomFlipChartComponent } from './components/MomFlip';
 import './index.css';
 
 const customTimeFormatter = (time) => {
@@ -31,7 +32,8 @@ const customTickMarkFormatter = (time, tickMarkType) => {
     return `${dayStr} ${hh}:${mm}`;
 };
 
-const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, showSdBands }) => {
+const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, showSdBands, showMomFlipChart }) => {
+  const [momFlipData, setMomFlipData] = useState([]);
   const chartContainerRef = useRef(null);
   const momentumChartContainerRef = useRef(null);
   const volumeChartContainerRef = useRef();
@@ -113,7 +115,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const newsDataRef = useRef([]);
   const [selectedNewsGroup, setSelectedNewsGroup] = useState(null);
   
-  useEffect(() => { newsDataRef.current = newsData; }, [newsData]);
+  // Keep track of playback speed for the interval
   
   // Keep track of playback speed for the interval
   const playbackSpeedRef = useRef(1);
@@ -147,8 +149,21 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   // Apply News Markers
   useEffect(() => {
     if (newsSeriesRef.current && (newsData.length > 0 || (volStatsRef.current && volStatsRef.current.v_lines))) {
+      const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
+
+      // Align news to timeframe grid to prevent blank gaps in chart
+      const alignedNewsData = newsData.map(ev => {
+         let alignedTime = ev.time - (ev.time % tfSec);
+         let date = new Date(alignedTime * 1000);
+         let day = date.getUTCDay();
+         if (day === 6) alignedTime += 86400 * 2; // Shift Sat to Mon
+         else if (day === 0) alignedTime += 86400; // Shift Sun to Mon
+         return { ...ev, originalTime: ev.time, time: alignedTime };
+      });
+      newsDataRef.current = alignedNewsData;
+      
       // Setup timeline for news series to allow markers in the future
-      const newsTimes = [...new Set(newsData.map(ev => ev.time))].sort((a,b)=>a-b);
+      const newsTimes = [...new Set(alignedNewsData.map(ev => ev.time))].sort((a,b)=>a-b);
       let maxFutureTime = newsTimes.length > 0 ? newsTimes[newsTimes.length - 1] : 0;
       
       if (volStatsRef.current && volStatsRef.current.v_lines) {
@@ -158,8 +173,6 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       }
       
       if (maxFutureTime === 0) maxFutureTime = Math.floor(Date.now()/1000) + 86400;
-      
-      const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
       
       let currentTime = lastUpdateTimeRef.current || Math.floor(Date.now() / 1000);
       currentTime = currentTime - (currentTime % tfSec);
@@ -192,7 +205,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
           if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(newsSeriesData);
           // Group events by time
           const eventsByTime = {};
-          newsData.forEach(ev => {
+          alignedNewsData.forEach(ev => {
             if (!eventsByTime[ev.time]) eventsByTime[ev.time] = [];
             eventsByTime[ev.time].push(ev);
           });
@@ -487,6 +500,7 @@ useEffect(() => {
 
       const momentumSeries = momentumChart.addHistogramSeries({
         priceFormat: { type: 'volume' },
+        autoscaleInfoProvider: () => null,
       });
       
       const mom85Up = momentumChart.addLineSeries({ color: 'rgba(255, 165, 0, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
@@ -674,7 +688,7 @@ useEffect(() => {
     mom50UpRef.current = mom50Up;
     mom50DnRef.current = mom50Dn;
     
-    const momMaSeries = momentumChart.addLineSeries({ color: 'rgba(255, 255, 255, 0.8)', lineWidth: 1, crosshairMarkerVisible: false });
+    const momMaSeries = momentumChart.addLineSeries({ color: 'rgba(255, 255, 255, 0.8)', lineWidth: 1, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
     momMaSeriesRef.current = momMaSeries;
     
     normVolSeriesRef.current = normVolSeries;
@@ -752,6 +766,19 @@ useEffect(() => {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         
+        let minTime = timeScale.coordinateToTime(0);
+        let maxTime = timeScale.coordinateToTime(canvas.width);
+        
+        if (minTime !== null && typeof minTime === 'object') {
+            minTime = new Date(Date.UTC(minTime.year, minTime.month - 1, minTime.day)).getTime() / 1000;
+        }
+        if (maxTime !== null && typeof maxTime === 'object') {
+            maxTime = new Date(Date.UTC(maxTime.year, maxTime.month - 1, maxTime.day)).getTime() / 1000;
+        }
+        
+        if (minTime === null) minTime = 0;
+        if (maxTime === null) maxTime = Infinity;
+        
         // Ensure canvas dimensions match its container
         const rect = chartContainerRef.current.getBoundingClientRect();
         if (canvas.width !== rect.width || canvas.height !== rect.height) {
@@ -778,6 +805,7 @@ useEffect(() => {
         if (vpBoxes && vpBoxes.length > 0) {
           for (let i = 0; i < vpBoxes.length; i++) {
            const box = vpBoxes[i];
+           if (box.end < minTime || box.start > maxTime) continue; // CULLING OFF-SCREEN BOXES
            const startX = timeScale.timeToCoordinate(box.start);
            let endX = timeScale.timeToCoordinate(box.end);
            
@@ -788,8 +816,15 @@ useEffect(() => {
            
            if (topY === null || bottomY === null) continue;
            
-           const finalStartX = startX !== null ? startX : 0;
-           const finalEndX = endX !== null ? endX : canvas.width;
+           let finalStartX = startX;
+           if (startX === null) {
+               finalStartX = (box.start < minTime) ? -1000 : canvas.width + 1000;
+           }
+           
+           let finalEndX = endX;
+           if (endX === null) {
+               finalEndX = (box.end < minTime) ? -1000 : canvas.width + 1000;
+           }
            
            const width = Math.max(1, finalEndX - finalStartX);
            // Fix: Đảm bảo chiều cao tối thiểu là 1 pixel để không bị biến mất khi thu nhỏ thanh giá (sub-pixel rendering)
@@ -842,7 +877,6 @@ useEffect(() => {
       drawVerticalLines(volumeChartRef, volumeCanvasRef, volumeChartContainerRef);
     } catch (e) {
     }
-    
     animationFrameRef.current = requestAnimationFrame(updateOverlays);
   };
 
@@ -919,18 +953,34 @@ useEffect(() => {
         
         // Lọc bỏ các params không thuộc OHLCV API (email config, volMode...)
         const { emailSender, emailPassword, emailReceiver, volMode, ...ohlcvConfigs } = configs;
+        
         const response = await axios.get(`http://localhost:8000/api/v1/ohlcv`, {
           params: { symbol, timeframe, count: 10000, end_time: targetEndTime, browserOffsetHours, latest_only: isPolling, _t: Date.now(), ...ohlcvConfigs }
         });
         
         // Bỏ qua nếu response trả về dữ liệu của symbol/timeframe cũ (Race condition)
         if (response.data.symbol && (response.data.symbol !== symbolRef.current || response.data.timeframe !== timeframeRef.current)) {
-            setLoading(false);
+        setLoading(false);
             return;
         }
 
         const rawData = response.data.data;
-        
+
+        const newMomFlip = rawData.filter(d => d.mom_flip != null && !isNaN(d.mom_flip)).map(d => ({
+          time: d.time,
+          value: d.mom_flip
+        })).sort((a,b)=>a.time - b.time);
+
+        if (!isPolling) {
+            setMomFlipData(newMomFlip);
+        } else {
+            setMomFlipData(prev => {
+                const m = new Map(prev.map(i => [i.time, i]));
+                newMomFlip.forEach(i => m.set(i.time, i));
+                return Array.from(m.values()).sort((a,b)=>a.time - b.time);
+            });
+        }
+
         // Update price format for new symbol
         let precision = 5;
         let minMove = 0.00001;
@@ -1301,7 +1351,9 @@ useEffect(() => {
         setLastUpdateSignal(Date.now());
       } catch (err) {
         console.error("Error fetching data:", err);
-        setError(`Không thể tải dữ liệu ${symbol}. Hãy kiểm tra MT5 và Backend (Có thể mã không tồn tại trên sàn).`);
+        if (!isPolling) {
+            setError(`Không thể tải dữ liệu ${symbol}. Hãy kiểm tra MT5 và Backend (Có thể mã không tồn tại trên sàn).`);
+        }
         
         // Xóa dữ liệu cũ trên biểu đồ để tránh nhầm lẫn
         if (!isPolling && candlestickSeriesRef.current) {
@@ -1318,7 +1370,7 @@ useEffect(() => {
         if (!isPolling) {
             // Trì hoãn việc tắt Loading một chút để Lightweight Charts (Canvas) kịp vẽ xong 10,000 nến
             setTimeout(() => {
-                setLoading(false);
+            setLoading(false);
                 loadingRef.current = false;
             }, 300);
         }
@@ -1370,7 +1422,7 @@ useEffect(() => {
     const playNext = async () => {
       if (viewMode !== 'backtest' || !isPlayingRef.current) return;
       
-      const tfSec = timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'H1' ? 3600 : timeframe === 'H4' ? 14400 : timeframe === 'D1' ? 86400 : 3600;
+      const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H4' ? 14400 : timeframe === 'D1' ? 86400 : 3600;
       simulatedTimeRef.current += tfSec;
       
       // Bỏ qua Thứ 7, Chủ Nhật để Backtest không bị "treo" (trừ Crypto)
@@ -1606,7 +1658,7 @@ useEffect(() => {
           <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '8px', minWidth: '400px', maxWidth: '600px', border: '1px solid var(--border-color)', color: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
               <h2 style={{ margin: '0 0 15px 0', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-                Tin tức lúc {new Date(selectedNewsGroup[0].time * 1000).toLocaleTimeString([], {timeZone: 'UTC', hour: '2-digit', minute:'2-digit'})} ngày {new Date(selectedNewsGroup[0].time * 1000).toLocaleDateString('vi-VN', {timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric'})}
+                Tin tức lúc {new Date((selectedNewsGroup[0].originalTime || selectedNewsGroup[0].time) * 1000).toLocaleTimeString([], {timeZone: 'UTC', hour: '2-digit', minute:'2-digit'})} ngày {new Date((selectedNewsGroup[0].originalTime || selectedNewsGroup[0].time) * 1000).toLocaleDateString('vi-VN', {timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric'})}
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '60vh', overflowY: 'auto' }}>
                 {selectedNewsGroup.map((ev, idx) => (
@@ -1740,6 +1792,7 @@ useEffect(() => {
             </div>
           </div>
         )}
+        {showMomFlipChart && <MomFlipChartComponent data={momFlipData} mainChart={chartRef.current} mainSeries={candlestickSeriesRef.current} />}
       </div>
   );
 };
@@ -2054,7 +2107,12 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
             <label style={styleLabel}>Xác suất Trung vị (momPct3)</label>
             <input type="number" value={local.momPct3} onChange={e => handleChange('momPct3', Number(e.target.value))} style={styleInput} />
           </div>
+          <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #334155' }}>
+            <label style={styleLabel}>Mức lọc động lượng cho Flip (%)</label>
+            <input type="number" value={local.momFlipFilterPct} onChange={e => handleChange('momFlipFilterPct', Number(e.target.value))} style={styleInput} title="Chỉ lấy những nến có Momentum lớn hơn mức này để phân phối Flip" />
+          </div>
         </details>
+
 
         <details style={styleGroup}>
           <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#a78bfa' }}>Chỉ báo Khối lượng (Volume)</summary>
@@ -2378,7 +2436,6 @@ function App() {
   const handleAddAlert = async (alertData) => {
     try {
       const newAlert = { ...alertData, id: Date.now(), status: 'active' };
-      setAlerts(prev => [...prev, newAlert]); // Optimistic UI update
       await axios.post('http://localhost:8000/api/v1/alerts', newAlert);
       fetchAlerts(); 
     } catch (e) { console.error(e); }
@@ -2386,7 +2443,7 @@ function App() {
 
   const handleDeleteAlert = async (id) => {
     try {
-      setAlerts(prev => prev.filter(a => a.id !== id)); // Optimistic UI update
+      // Remove optimistic update to prevent race conditions with in-flight polling
       await axios.delete(`http://localhost:8000/api/v1/alerts/${id}`);
       fetchAlerts(); 
     } catch (e) { console.error(e); }
@@ -2437,6 +2494,7 @@ function App() {
   const [viewMode, setViewMode] = useState('chart'); // 'chart' hoặc 'matrix'
   const [chartType, setChartType] = useState(localStorage.getItem('chartType') || 'candles');
   const [showSdBands, setShowSdBands] = useState(localStorage.getItem('showSdBands') !== 'false');
+  const [showMomFlipChart, setShowMomFlipChart] = useState(false);
   
   const [configs, setConfigs] = useState(() => ({
     pct1: 70,
@@ -2450,6 +2508,7 @@ function App() {
     vwapMult: 2.0,
     momLength: 20,
     matrixLookbackHours: 24,
+    momFlipFilterPct: 75.0,
     volMode: 'normal',
     rvolLookbackDays: 10,
     peakVolLookbackDays: 60,
@@ -2528,6 +2587,14 @@ function App() {
         ))}
       </div>
 
+      
+      <AssistiveTouch 
+        showSdBands={showSdBands} 
+        setShowSdBands={setShowSdBands} 
+        showMomFlip={showMomFlipChart} 
+        setShowMomFlip={setShowMomFlipChart} 
+      />
+
       {showSettings && (
         
         <SettingsModal 
@@ -2594,21 +2661,7 @@ function App() {
             </select>
           </div>
           
-          <div style={{ marginTop: '15px', display: 'flex', alignItems: 'center' }}>
-            <input 
-              type="checkbox" 
-              id="showSdBands"
-              checked={showSdBands} 
-              onChange={(e) => {
-                setShowSdBands(e.target.checked);
-                localStorage.setItem('showSdBands', e.target.checked);
-              }}
-              style={{ marginRight: '8px' }}
-            />
-            <label htmlFor="showSdBands" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-              Hiển thị dải SD (Upper/Lower Bands)
-            </label>
-          </div>
+
           
           <div style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
             <h3 style={{ fontSize: '0.9rem', marginBottom: '10px', color: 'var(--text-secondary)' }}>Tính năng</h3>
@@ -2731,7 +2784,7 @@ function App() {
         <div className="chart-container">
           <div className="chart-wrapper" style={{ overflow: (viewMode === 'matrix' || viewMode === 'catalyst') ? 'auto' : 'hidden' }}>
             {viewMode === 'chart' || viewMode === 'backtest' ? (
-              <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} showSdBands={showSdBands} />
+              <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} showSdBands={showSdBands} showMomFlipChart={showMomFlipChart} />
             ) : viewMode === 'matrix' ? (
               <MatrixComponent simulatedTime={null} brokerTimezone={configs.brokerTimezone || 'Europe/Athens'} />
             ) : (
@@ -2745,3 +2798,13 @@ function App() {
 }
 
 export default App;
+
+
+
+
+
+
+
+
+
+
