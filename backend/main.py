@@ -217,6 +217,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     import numpy as np
     import pandas as pd
     
+    symbol = symbol.upper()
     df = get_historical_data(symbol, timeframe, count, end_time, brokerTimezone)
     
     if df is None or df.empty:
@@ -232,6 +233,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     utc_aware = broker_aware.dt.tz_convert('UTC')
     df['broker_time'] = df['time'] # Lưu lại để fetch M1 nếu cần
     df['time'] = (utc_aware - pd.Timestamp("1970-01-01", tz="UTC")) // pd.Timedelta('1s')
+    df = df.dropna(subset=['time']).copy()
     df['time'] = df['time'].astype(int)
         
     tf_mapping = {
@@ -480,19 +482,14 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     
     # --- 3. Dynamic Volume Profile (D-VP State Machine) ---
     if gridMode == 'fixed':
-        pip_size = 0.0001
         avg_price = df['close'].mean() if len(df) > 0 else 0
-        
-        if "JPY" in symbol or "GLOBAL_INDEX" in symbol or "XAG" in symbol:
-            pip_size = 0.01
-        elif "XAU" in symbol or "GOLD" in symbol:
-            pip_size = 0.1
-        elif "BTC" in symbol or "ETH" in symbol or "SOL" in symbol:
-            pip_size = 1.0
-        elif avg_price > 10000:
-            pip_size = 1.0
-        elif avg_price > 50:
-            pip_size = 0.01
+        if avg_price > 0:
+            import math
+            # Dynamic pip size based on EURUSD ratio
+            ratio_pip = avg_price * (0.0001 / 1.10)
+            pip_size = 10 ** math.floor(math.log10(ratio_pip))
+        else:
+            pip_size = 0.0001
             
         bin_size = fixedPips * pip_size
         
@@ -666,7 +663,12 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     existing_cols = [c for c in cols_to_keep if c in df.columns]
     df = df[existing_cols]
         
-    # Chuyển Dataframe sang dictionary (Thay thế NaN bằng None để JSON tương thích)
+    # Chuyển Dataframe sang dictionary (Thay thế NaN, Inf bằng None để JSON tương thích)
+    import pandas as pd
+    import numpy as np
+    for col in df.columns:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            df[col] = df[col].replace([np.inf, -np.inf], np.nan)
     df = df.replace({np.nan: None})
     records = df.to_dict(orient="records")
     

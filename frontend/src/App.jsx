@@ -200,9 +200,9 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       const newsSeriesData = Array.from(allTimesMap.values()).sort((a,b) => a.time - b.time);
       
       try {
-          if (newsSeriesRef.current) newsSeriesRef.current.setData(newsSeriesData);
-          if (volumeDummySeriesRef.current) volumeDummySeriesRef.current.setData(newsSeriesData);
-          if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(newsSeriesData);
+          if (newsSeriesRef.current) newsSeriesRef.current.setData(newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+          if (volumeDummySeriesRef.current) volumeDummySeriesRef.current.setData(newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+          if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
           // Group events by time
           const eventsByTime = {};
           alignedNewsData.forEach(ev => {
@@ -964,7 +964,19 @@ useEffect(() => {
             return;
         }
 
-        const rawData = response.data.data;
+                let rawData = response.data.data;
+        // Deduplicate rawData by time to prevent Lightweight Charts "Value is not ascending" errors
+        rawData.sort((a, b) => a.time - b.time);
+        const uniqueRaw = [];
+        let lastRawTime = -Infinity;
+        for (const item of rawData) {
+            if (item.time > lastRawTime) {
+                uniqueRaw.push(item);
+                lastRawTime = item.time;
+            }
+        }
+        rawData = uniqueRaw;
+
 
         const newMomFlip = rawData.filter(d => d.mom_flip != null && !isNaN(d.mom_flip)).map(d => ({
           time: d.time,
@@ -1005,7 +1017,7 @@ useEffect(() => {
         if (lineLowSeriesRef.current) lineLowSeriesRef.current.applyOptions({ priceFormat });
         
         // Format nến (Loại bỏ các nến bị lỗi null)
-        const formattedData = rawData
+        let formattedData = rawData
           .filter(item => item.open != null && item.high != null && item.low != null && item.close != null && !isNaN(item.open) && !isNaN(item.high) && !isNaN(item.low) && !isNaN(item.close))
           .map(item => ({
             time: item.time, 
@@ -1014,7 +1026,20 @@ useEffect(() => {
             low: item.low,
             close: item.close,
             spread: item.spread || 0
-          })).sort((a, b) => a.time - b.time);
+          }))
+          .filter(item => Number.isFinite(item.time) && Number.isFinite(item.open) && Number.isFinite(item.high) && Number.isFinite(item.low) && Number.isFinite(item.close))
+          .sort((a, b) => a.time - b.time);
+          
+        // Deduplicate strictly ascending
+        const uniqueData = [];
+        let lastTime = -Infinity;
+        for (const item of formattedData) {
+            if (item.time > lastTime) {
+                uniqueData.push(item);
+                lastTime = item.time;
+            }
+        }
+        formattedData = uniqueData;
         
         // Format VWAP & Bands
         const sortedRawForVwap = rawData.filter(d => d.vwap != null && !isNaN(d.vwap)).sort((a,b)=>a.time-b.time);
@@ -1213,14 +1238,14 @@ useEffect(() => {
               lastUpdateTimeRef.current = formattedData[formattedData.length - 1].time;
             }
             candlestickSeriesRef.current.setData(formattedData);
-            lineCloseSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.close })));
-            lineHighSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.high })));
-            lineLowSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.low })));
-            vwapSeriesRef.current.setData(vwapData);
-            if (fairValueSeriesRef.current) fairValueSeriesRef.current.setData(fairValueData);
-            upperBandSeriesRef.current.setData(upperBandData);
-            lowerBandSeriesRef.current.setData(lowerBandData);
-            momentumSeriesRef.current.setData(momentumData);
+            lineCloseSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.close })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            lineHighSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.high })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            lineLowSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.low })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            vwapSeriesRef.current.setData(vwapData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            if (fairValueSeriesRef.current) fairValueSeriesRef.current.setData(fairValueData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            upperBandSeriesRef.current.setData(upperBandData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            lowerBandSeriesRef.current.setData(lowerBandData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            momentumSeriesRef.current.setData(momentumData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             
             // Cập nhật đường Spread (Bid / Ask)
             if (formattedData.length > 0 && candlestickSeriesRef.current) {
@@ -1229,7 +1254,8 @@ useEffect(() => {
                 let minMove = 0.00001;
                 if (symbol.includes("JPY")) minMove = 0.001;
                 else if (symbol.includes("XAU") || symbol.includes("GOLD") || symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL")) minMove = 0.01;
-                const ask = bid + (lastItem.spread * minMove);
+                const ask = bid + ((lastItem.spread || 0) * minMove);
+                if (!Number.isFinite(ask) || !Number.isFinite(bid)) return;
                 
                 if (!bidPriceLineRef.current) {
                     bidPriceLineRef.current = candlestickSeriesRef.current.createPriceLine({
@@ -1259,22 +1285,22 @@ useEffect(() => {
             }
             
             if (mom85UpRef.current) {
-              mom85UpRef.current.setData(m85Up);
-              mom85DnRef.current.setData(m85Dn);
-              mom75UpRef.current.setData(m75Up);
-              mom75DnRef.current.setData(m75Dn);
-              mom50UpRef.current.setData(m50Up);
+              mom85UpRef.current.setData(m85Up.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+              mom85DnRef.current.setData(m85Dn.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+              mom75UpRef.current.setData(m75Up.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+              mom75DnRef.current.setData(m75Dn.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+              mom50UpRef.current.setData(m50Up.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             }
-            if (mom50DnRef.current) mom50DnRef.current.setData(m50Dn);
-            if (momMaSeriesRef.current) momMaSeriesRef.current.setData(momMaData);
+            if (mom50DnRef.current) mom50DnRef.current.setData(m50Dn.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            if (momMaSeriesRef.current) momMaSeriesRef.current.setData(momMaData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             
             if (normVolSeriesRef.current) {
-              normVolSeriesRef.current.setData(normVolData);
-              maVolSeriesRef.current.setData(maVolData);
-              vol85Ref.current.setData(v85);
-              vol75Ref.current.setData(v75);
-              vol50Ref.current.setData(v50);
-              vol15Ref.current.setData(v15);
+              normVolSeriesRef.current.setData(normVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+              maVolSeriesRef.current.setData(maVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+              vol85Ref.current.setData(v85.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+              vol75Ref.current.setData(v75.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+              vol50Ref.current.setData(v50.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+              vol15Ref.current.setData(v15.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             }
             
             const totalCandles = formattedData.length;
@@ -2394,6 +2420,14 @@ const DEFAULT_SYMBOLS = {
     {name: "BTCUSD", description: "Bitcoin vs US Dollar"},
     {name: "ETHUSD", description: "Ethereum vs US Dollar"},
     {name: "SOLUSD", description: "Solana vs US Dollar"}
+  ],
+  "Chỉ số chứng khoán": [
+    {name: "US100-DEC26", description: "Nasdaq 100 (Future)"},
+    {name: "US100", description: "Nasdaq 100"},
+    {name: "US500", description: "S&P 500"},
+    {name: "US30", description: "Dow Jones 30"},
+    {name: "GER40", description: "DAX 40"},
+    {name: "UK100", description: "FTSE 100"}
   ]
 };
 
