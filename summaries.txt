@@ -1,7 +1,0 @@
-D-VP (Volume Profile Động)
-Chỉ báo VWAP & SD
-Chỉ báo Động lượng Lõi (Momentum)
-Momentum Flip
-Chỉ báo Khối lượng (Volume)
-🕒 Khung Giờ & Hiển Thị Thời Gian
-📧 Cấu hình Gửi Email Cảnh Báo
