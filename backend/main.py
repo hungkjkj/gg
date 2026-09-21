@@ -714,7 +714,7 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
     except:
         config = {}
         
-    if matrix_type == "fx":
+    if matrix_type == "fx" or matrix_type == "currency":
         currencies = ["EUR", "GBP", "AUD", "NZD", "JPY", "USD", "GI"]
         pairs = [
             "EURUSD", "GBPUSD", "AUDUSD", "NZDUSD", "USDJPY",
@@ -728,7 +728,7 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         # Load from config for other groups
         group_symbols = config.get("matrix_groups", {}).get(matrix_type, [])
         if not group_symbols:
-            return {"progress": 100.0, "matrix": [], "matrix_type": matrix_type}
+            return {"progress": 100.0, "ranking": [], "pairs_data": [], "matrix_type": matrix_type}
         
         gi_symbol = f"{matrix_type.upper()}_GI"
         currencies = group_symbols + [gi_symbol]

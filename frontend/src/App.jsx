@@ -1857,7 +1857,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone }) => {
   const [progress, setProgress] = useState(0);
   const [matrixHours, setMatrixHours] = useState(Number(localStorage.getItem('currencyMatrixHours')) || 24);
   const [matrixVolDays, setMatrixVolDays] = useState(Number(localStorage.getItem('currencyMatrixVolDays')) || 30);
-  const [matrixType, setMatrixType] = useState(localStorage.getItem('matrixType') || 'currency');
+  const [matrixType, setMatrixType] = useState((localStorage.getItem('matrixType') === 'currency' ? 'fx' : localStorage.getItem('matrixType')) || 'fx');
 
   useEffect(() => {
     let interval;
