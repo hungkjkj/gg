@@ -726,7 +726,7 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         if df is None or df.empty or len(df) < n_hours:
             return None
             
-        df['vwma'] = (df['close'] * df['tick_volume']).rolling(window=20, min_periods=1).sum() / df['tick_volume'].rolling(window=20, min_periods=1).sum()
+        df['vwma'] = (df['close'] * df['tick_volume']).rolling(window=n_hours, min_periods=1).sum() / df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
         df['vol_rolling'] = df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
         
         if len(df) > n_hours:
