@@ -171,9 +171,11 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
          });
       }
       
-      if (maxFutureTime === 0) maxFutureTime = Math.floor(Date.now()/1000) + 86400;
+      let baseTime = (viewMode === 'backtest' && window.currentSimulatedTime) ? window.currentSimulatedTime : Math.floor(Date.now() / 1000);
+      if (maxFutureTime === 0) maxFutureTime = baseTime + 86400;
       
-      let currentTime = lastUpdateTimeRef.current || Math.floor(Date.now() / 1000);
+      let currentTime = lastUpdateTimeRef.current;
+      if (!currentTime || currentTime === 0) currentTime = baseTime;
       currentTime = currentTime - (currentTime % tfSec);
       
       const futureTimes = [];
