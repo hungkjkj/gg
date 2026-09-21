@@ -2465,7 +2465,9 @@ const DEFAULT_SYMBOLS = {
     {name: "NZDJPY", description: "New Zealand Dollar vs Japanese Yen"}
   ],
   "Hàng hoá & Kim loại": [
-    {name: "GOLD", description: "Gold (XM)"}
+    {name: "GOLD.i#", description: "Vàng (Gold)"},
+    {name: "SILVER.i#", description: "Bạc (Silver)"},
+    {name: "OILCash#", description: "Dầu thô (WTI Oil)"}
   ],
   "Tiền điện tử": [
     {name: "BTCUSD", description: "Bitcoin vs US Dollar"},
@@ -2473,12 +2475,10 @@ const DEFAULT_SYMBOLS = {
     {name: "SOLUSD", description: "Solana vs US Dollar"}
   ],
   "Chỉ số chứng khoán": [
-    {name: "US100-DEC26", description: "Nasdaq 100 (Future)"},
-    {name: "US100", description: "Nasdaq 100"},
-    {name: "US500", description: "S&P 500"},
-    {name: "US30", description: "Dow Jones 30"},
-    {name: "GER40", description: "DAX 40"},
-    {name: "UK100", description: "FTSE 100"}
+    {name: "Nasdaq", description: "Nasdaq 100"},
+    {name: "US500Cash#", description: "S&P 500"},
+    {name: "US30Cash#", description: "Dow Jones 30"},
+    {name: "US100", description: "Nasdaq 100 (Alternative)"}
   ]
 };
 
