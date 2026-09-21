@@ -98,6 +98,14 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const lastHl2ColorRef = useRef(null);
   const lastBandwidthRef = useRef(null);
   const lastSdColorRef = useRef(null);
+  
+  // Dừng backtest khi đổi cặp tiền hoặc khung thời gian
+  useEffect(() => {
+    if (isPlayingRef.current) {
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+    }
+  }, [symbol, timeframe]);
   const bandwidthHistoryRef = useRef([]);
   const backtestWeekRef = useRef(0);
   
