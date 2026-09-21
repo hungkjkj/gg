@@ -274,27 +274,25 @@ def get_historical_data(symbol: str, timeframe: str, count: int = 1000, end_time
     is_global = (symbol == "GLOBAL_INDEX")
     
     if is_global:
-        # Luôn luôn tự tổng hợp (Synthetic) từ các cặp tiền chính để đảm bảo tốc độ cực nhanh
+        # Equal-weighted geometric mean (VN30 style) for Global Market vs USD
         df_eur = _fetch_raw_data("EURUSD", timeframe, count, end_time, brokerTimezone)
         df_jpy = _fetch_raw_data("USDJPY", timeframe, count, end_time, brokerTimezone)
         df_gbp = _fetch_raw_data("GBPUSD", timeframe, count, end_time, brokerTimezone)
+        df_aud = _fetch_raw_data("AUDUSD", timeframe, count, end_time, brokerTimezone)
+        df_nzd = _fetch_raw_data("NZDUSD", timeframe, count, end_time, brokerTimezone)
         
         if df_eur is not None and not df_eur.empty and df_jpy is not None:
             df = df_eur.copy()
-            df['close'] = 50.14 * (df_eur['close'] ** -0.576) * (df_jpy['close'] ** 0.136) * (df_gbp['close'] ** -0.119)
-            df['open'] = 50.14 * (df_eur['open'] ** -0.576) * (df_jpy['open'] ** 0.136) * (df_gbp['open'] ** -0.119)
-            df['high'] = 50.14 * (df_eur['low'] ** -0.576) * (df_jpy['high'] ** 0.136) * (df_gbp['low'] ** -0.119)
-            df['low'] = 50.14 * (df_eur['high'] ** -0.576) * (df_jpy['low'] ** 0.136) * (df_gbp['high'] ** -0.119)
-            df['tick_volume'] = df_eur['tick_volume'] + df_jpy['tick_volume'] + df_gbp['tick_volume']
+            # Calculate geometric mean of (EUR, GBP, AUD, NZD, 1/JPY)
+            df['close'] = 100 * ((df_eur['close'] * df_gbp['close'] * df_aud['close'] * df_nzd['close'] / df_jpy['close']) ** 0.2)
+            df['open'] = 100 * ((df_eur['open'] * df_gbp['open'] * df_aud['open'] * df_nzd['open'] / df_jpy['open']) ** 0.2)
+            df['high'] = 100 * ((df_eur['high'] * df_gbp['high'] * df_aud['high'] * df_nzd['high'] / df_jpy['low']) ** 0.2)
+            df['low'] = 100 * ((df_eur['low'] * df_gbp['low'] * df_aud['low'] * df_nzd['low'] / df_jpy['high']) ** 0.2)
+            
+            df['tick_volume'] = df_eur['tick_volume'] + df_jpy['tick_volume'] + df_gbp['tick_volume'] + df_aud['tick_volume'] + df_nzd['tick_volume']
             df['value'] = df['tick_volume']
             
-            # Đảo ngược DXY để ra GLOBAL_INDEX
-            inv_df = df.copy()
-            inv_df['close'] = 10000.0 / df['close']
-            inv_df['open'] = 10000.0 / df['open']
-            inv_df['high'] = 10000.0 / df['low']
-            inv_df['low'] = 10000.0 / df['high']
-            return inv_df
+            return df
         return pd.DataFrame()
         
     # Xử lý các mã bình thường

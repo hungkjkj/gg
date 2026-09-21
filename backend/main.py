@@ -741,8 +741,7 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
             if pair == "GLOBAL_INDEX":
                 base_currency = "GI"
                 quote_currency = "NONE"
-                diff_pct_current *= 5
-                df['diff_pct'] = (df['vwma'] - df['vwma'].shift(n_hours)) / df['vwma'].shift(n_hours) * 500
+                df['diff_pct'] = (df['vwma'] - df['vwma'].shift(n_hours)) / df['vwma'].shift(n_hours) * 100
             else:
                 base_currency = pair[:3]
                 quote_currency = pair[3:]
