@@ -2165,6 +2165,10 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
             <label style={styleLabel}>Mức lọc động lượng cho Flip (%)</label>
             <input type="number" value={local.momFlipFilterPct} onChange={e => handleChange('momFlipFilterPct', Number(e.target.value))} style={styleInput} title="Chỉ lấy những nến có Momentum lớn hơn mức này để phân phối Flip" />
           </div>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Mức lọc khối lượng cho Flip (%)</label>
+            <input type="number" value={local.momFlipVolFilterPct !== undefined ? local.momFlipVolFilterPct : 50.0} onChange={e => handleChange('momFlipVolFilterPct', Number(e.target.value))} style={styleInput} title="Chỉ lấy những nến có Volume lớn hơn mức này trong nhóm đã lọc Mom" />
+          </div>
         </details>
 
 
@@ -2577,6 +2581,7 @@ function App() {
     momLength: 20,
     matrixLookbackHours: 24,
     momFlipFilterPct: 75.0,
+    momFlipVolFilterPct: 50.0,
     volMode: 'normal',
     rvolLookbackDays: 10,
     peakVolLookbackDays: 60,

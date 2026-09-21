@@ -271,34 +271,87 @@ _cached_usdx_symbol = None
 _usdx_searched = False
 
 def get_historical_data(symbol: str, timeframe: str, count: int = 1000, end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
-    is_global = (symbol == "GLOBAL_INDEX")
+    is_global = symbol.endswith("_GI") or symbol == "GLOBAL_INDEX"
     
     if is_global:
-        # Equal-weighted geometric mean (VN30 style) for Global Market vs USD
-        df_eur = _fetch_raw_data("EURUSD", timeframe, count, end_time, brokerTimezone)
-        df_jpy = _fetch_raw_data("USDJPY", timeframe, count, end_time, brokerTimezone)
-        df_gbp = _fetch_raw_data("GBPUSD", timeframe, count, end_time, brokerTimezone)
-        df_aud = _fetch_raw_data("AUDUSD", timeframe, count, end_time, brokerTimezone)
-        df_nzd = _fetch_raw_data("NZDUSD", timeframe, count, end_time, brokerTimezone)
-        
-        if df_eur is not None and not df_eur.empty and df_jpy is not None:
-            df = df_eur.copy()
-            # Calculate geometric mean of (EUR, GBP, AUD, NZD, 1/JPY)
-            df['close'] = 100 * ((df_eur['close'] * df_gbp['close'] * df_aud['close'] * df_nzd['close'] / df_jpy['close']) ** 0.2)
-            df['open'] = 100 * ((df_eur['open'] * df_gbp['open'] * df_aud['open'] * df_nzd['open'] / df_jpy['open']) ** 0.2)
-            df['high'] = 100 * ((df_eur['high'] * df_gbp['high'] * df_aud['high'] * df_nzd['high'] / df_jpy['low']) ** 0.2)
-            df['low'] = 100 * ((df_eur['low'] * df_gbp['low'] * df_aud['low'] * df_nzd['low'] / df_jpy['high']) ** 0.2)
+        if symbol == "GLOBAL_INDEX":
+            # Equal-weighted geometric mean (VN30 style) for Global Market vs USD
+            df_eur = _fetch_raw_data("EURUSD", timeframe, count, end_time, brokerTimezone)
+            df_jpy = _fetch_raw_data("USDJPY", timeframe, count, end_time, brokerTimezone)
+            df_gbp = _fetch_raw_data("GBPUSD", timeframe, count, end_time, brokerTimezone)
+            df_aud = _fetch_raw_data("AUDUSD", timeframe, count, end_time, brokerTimezone)
+            df_nzd = _fetch_raw_data("NZDUSD", timeframe, count, end_time, brokerTimezone)
             
-            df['tick_volume'] = df_eur['tick_volume'] + df_jpy['tick_volume'] + df_gbp['tick_volume'] + df_aud['tick_volume'] + df_nzd['tick_volume']
-            df['value'] = df['tick_volume']
+            if df_eur is not None and not df_eur.empty and df_jpy is not None:
+                df = df_eur.copy()
+                df['close'] = 100 * ((df_eur['close'] * df_gbp['close'] * df_aud['close'] * df_nzd['close'] / df_jpy['close']) ** 0.2)
+                df['open'] = 100 * ((df_eur['open'] * df_gbp['open'] * df_aud['open'] * df_nzd['open'] / df_jpy['open']) ** 0.2)
+                df['high'] = 100 * ((df_eur['high'] * df_gbp['high'] * df_aud['high'] * df_nzd['high'] / df_jpy['low']) ** 0.2)
+                df['low'] = 100 * ((df_eur['low'] * df_gbp['low'] * df_aud['low'] * df_nzd['low'] / df_jpy['high']) ** 0.2)
+                df['tick_volume'] = df_eur['tick_volume'] + df_jpy['tick_volume'] + df_gbp['tick_volume'] + df_aud['tick_volume'] + df_nzd['tick_volume']
+                df['value'] = df['tick_volume']
+                return df
+            return pd.DataFrame()
+        else:
+            import json
+            import numpy as np
+            config_path = os.path.join(os.path.dirname(__file__), "app_configs.json")
+            try:
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+            except:
+                return pd.DataFrame()
+                
+            group_map = {
+                "US_STOCKS_GI": "us_stocks",
+                "COMMODITIES_GI": "commodities",
+                "CRYPTO_GI": "crypto"
+            }
+            group_key = group_map.get(symbol)
+            if not group_key: return pd.DataFrame()
             
-            return df
-        return pd.DataFrame()
-        
+            symbols = config.get("matrix_groups", {}).get(group_key, [])
+            if not symbols: return pd.DataFrame()
+            
+            dfs = []
+            for sym in symbols:
+                df_sym = _fetch_raw_data(sym, timeframe, count, end_time, brokerTimezone)
+                if df_sym is not None and not df_sym.empty:
+                    df_sym = df_sym.set_index('time')[['open', 'high', 'low', 'close', 'tick_volume', 'datetime']]
+                    dfs.append(df_sym)
+            
+            if not dfs: return pd.DataFrame()
+            
+            df_merged = dfs[0].copy()
+            for i in range(1, len(dfs)):
+                df_merged = df_merged.join(dfs[i], lsuffix='', rsuffix=f'_{i}', how='inner')
+                
+            if df_merged.empty: return pd.DataFrame()
+            
+            # Geometric mean calculation
+            N = len(dfs)
+            close_cols = ['close'] + [f'close_{i}' for i in range(1, N)]
+            open_cols = ['open'] + [f'open_{i}' for i in range(1, N)]
+            high_cols = ['high'] + [f'high_{i}' for i in range(1, N)]
+            low_cols = ['low'] + [f'low_{i}' for i in range(1, N)]
+            vol_cols = ['tick_volume'] + [f'tick_volume_{i}' for i in range(1, N)]
+            
+            df_res = pd.DataFrame(index=df_merged.index)
+            df_res['datetime'] = df_merged['datetime']
+            df_res['time'] = df_merged.index
+            
+            # Use np.exp(np.mean(np.log(X))) for geometric mean to avoid overflow
+            df_res['close'] = np.exp(np.mean(np.log(df_merged[close_cols].values), axis=1))
+            df_res['open'] = np.exp(np.mean(np.log(df_merged[open_cols].values), axis=1))
+            df_res['high'] = np.exp(np.mean(np.log(df_merged[high_cols].values), axis=1))
+            df_res['low'] = np.exp(np.mean(np.log(df_merged[low_cols].values), axis=1))
+            df_res['tick_volume'] = df_merged[vol_cols].sum(axis=1)
+            df_res['value'] = df_res['tick_volume']
+            
+            return df_res.reset_index(drop=True)
+            
     # Xử lý các mã bình thường
     df = _fetch_raw_data(symbol, timeframe, count, end_time, brokerTimezone)
     if df is not None:
         return df
     return pd.DataFrame()
-
-    return _fetch_raw_data(symbol, timeframe, count, end_time, brokerTimezone)

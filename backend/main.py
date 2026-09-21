@@ -204,7 +204,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
               rvolLookbackDays: int = 10, peakVolLookbackDays: int = 60,
               momLength: int = 20, matrixLookbackHours: float = 89.0,
               momPct1: float = 85.0, momPct2: float = 75.0, momPct3: float = 50.0,
-              maVolLength: int = 2, momMaLength: int = 3, momFlipFilterPct: float = 75.0,
+              maVolLength: int = 2, momMaLength: int = 3, momFlipFilterPct: float = 75.0, momFlipVolFilterPct: float = 50.0,
               volPct1: float = 85.0, volPct2: float = 75.0, volPct3: float = 50.0, volPct4: float = 15.0,
               timeShiftHours: float = 0.0, browserOffsetHours: float = 7.0, autoDst: bool = True,
               asiaStart: str = "07:00", asiaEnd: str = "10:00",
@@ -299,12 +299,21 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     # nhân động lượng hiện tại / median động lượng, rồi nhân với hệ số flip
     mom_flip_metric = (df['abs_mom_raw'] / rolling_median_mom) * flip_ratio
     
-    # Tính ngưỡng lọc flip dựa trên phần trăm người dùng chọn
+    # 1. Tính ngưỡng lọc flip dựa trên phần trăm mom người dùng chọn
     filter_threshold = df['abs_mom_raw'].rolling(window=lookback_candles, min_periods=1).quantile(momFlipFilterPct / 100.0)
+    mom_valid_mask = df['abs_mom_raw'] >= filter_threshold
     
-    # Chỉ xét phân phối cho những nến có mom >= filter_threshold
-    valid_mask = df['abs_mom_raw'] >= filter_threshold
     import numpy as np
+    
+    # 2. Tạo Series volume chỉ chứa những nến thoả mãn mom
+    vol_valid = df['tick_volume'].where(mom_valid_mask, np.nan)
+    
+    # 3. Tính ngưỡng lọc volume trên chính nhóm đã lọc mom
+    vol_filter_threshold = vol_valid.rolling(window=lookback_candles, min_periods=1).quantile(momFlipVolFilterPct / 100.0)
+    
+    # 4. Valid mask cuối cùng là thoả mãn cả hai
+    valid_mask = mom_valid_mask & (df['tick_volume'] >= vol_filter_threshold)
+
     mom_flip_metric_valid = mom_flip_metric.where(valid_mask, np.nan)
     
     def calc_percent_rank_np(x):
@@ -696,14 +705,16 @@ def get_matrix_progress(matrix_type: str = "currency"):
     return {"progress": MATRIX_PROGRESS.get(matrix_type, 0.0)}
 
 @app.get("/api/v1/matrix")
-async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str = "currency", end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
-    if matrix_type == "crypto":
-        currencies = ["BTC", "ETH", "SOL", "USD"]
-        pairs = ["BTCUSD", "ETHUSD", "SOLUSD", "ETHBTC", "SOLBTC"]
-    elif matrix_type == "metals":
-        currencies = ["XAU", "XAG", "USD"]
-        pairs = ["XAUUSD", "XAGUSD", "XAUXAG"]
-    else:
+async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str = "fx", end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
+    import json
+    config_path = os.path.join(os.path.dirname(__file__), "app_configs.json")
+    try:
+        with open(config_path, "r") as f:
+            config = json.load(f)
+    except:
+        config = {}
+        
+    if matrix_type == "fx":
         currencies = ["EUR", "GBP", "AUD", "NZD", "JPY", "USD", "GI"]
         pairs = [
             "EURUSD", "GBPUSD", "AUDUSD", "NZDUSD", "USDJPY",
@@ -713,18 +724,54 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
             "NZDJPY",
             "GLOBAL_INDEX"
         ]
+    else:
+        # Load from config for other groups
+        group_symbols = config.get("matrix_groups", {}).get(matrix_type, [])
+        if not group_symbols:
+            return {"progress": 100.0, "matrix": [], "matrix_type": matrix_type}
+        
+        gi_symbol = f"{matrix_type.upper()}_GI"
+        currencies = group_symbols + [gi_symbol]
+        pairs = group_symbols + [gi_symbol]
     
     scores = {c: 0.0 for c in currencies}
     matrix_data = []
     total_pairs = len(pairs)
     
     MATRIX_PROGRESS[matrix_type] = 0.0
-    count = max(n_hours + 25, vol_days * 24 + n_hours) # Lấy nến tuỳ thuộc vào N days volume hoặc chu kỳ matrix
+    count = max(n_hours + 25, vol_days * 24 + n_hours)
     
     def process_pair(pair):
         df = get_historical_data(pair, "H1", count, end_time, brokerTimezone)
         if df is None or df.empty or len(df) < n_hours:
             return None
+            
+        df['vwma'] = (df['close'] * df['tick_volume']).rolling(window=n_hours, min_periods=1).sum() / df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
+        df['vol_rolling'] = df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
+        
+        if len(df) > n_hours:
+            current_vwma = df['vwma'].iloc[-1]
+            past_vwma = df['vwma'].iloc[-n_hours]
+            
+            if pd.isna(current_vwma) or pd.isna(past_vwma) or past_vwma == 0:
+                return None
+                
+            diff_pct_current = ((current_vwma - past_vwma) / past_vwma) * 100
+            
+            if pair == "GLOBAL_INDEX" or matrix_type != "fx":
+                base_currency = pair
+                quote_currency = "NONE"
+                df['diff_pct'] = (df['vwma'] - df['vwma'].shift(n_hours)) / df['vwma'].shift(n_hours) * 100
+            else:
+                base_currency = pair[:3]
+                quote_currency = pair[3:]
+                df['diff_pct'] = (df['vwma'] - df['vwma'].shift(n_hours)) / df['vwma'].shift(n_hours) * 100
+            
+            diff_array = df['diff_pct'].iloc[-(vol_days * 24):].fillna(0).values
+            vol_array = df['vol_rolling'].iloc[-(vol_days * 24):].fillna(0).values
+            
+            return (pair, diff_pct_current, base_currency, quote_currency, diff_array, vol_array)
+        return None
             
         df['vwma'] = (df['close'] * df['tick_volume']).rolling(window=n_hours, min_periods=1).sum() / df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
         df['vol_rolling'] = df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
