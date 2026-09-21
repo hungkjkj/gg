@@ -772,33 +772,7 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
             
             return (pair, diff_pct_current, base_currency, quote_currency, diff_array, vol_array)
         return None
-            
-        df['vwma'] = (df['close'] * df['tick_volume']).rolling(window=n_hours, min_periods=1).sum() / df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
-        df['vol_rolling'] = df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
-        
-        if len(df) > n_hours:
-            current_vwma = df['vwma'].iloc[-1]
-            past_vwma = df['vwma'].iloc[-n_hours]
-            
-            if pd.isna(current_vwma) or pd.isna(past_vwma) or past_vwma == 0:
-                return None
-                
-            diff_pct_current = ((current_vwma - past_vwma) / past_vwma) * 100
-            
-            if pair == "GLOBAL_INDEX":
-                base_currency = "GI"
-                quote_currency = "NONE"
-                df['diff_pct'] = (df['vwma'] - df['vwma'].shift(n_hours)) / df['vwma'].shift(n_hours) * 100
-            else:
-                base_currency = pair[:3]
-                quote_currency = pair[3:]
-                df['diff_pct'] = (df['vwma'] - df['vwma'].shift(n_hours)) / df['vwma'].shift(n_hours) * 100
-            
-            diff_array = df['diff_pct'].iloc[-(vol_days * 24):].fillna(0).values
-            vol_array = df['vol_rolling'].iloc[-(vol_days * 24):].fillna(0).values
-            
-            return (pair, diff_pct_current, base_currency, quote_currency, diff_array, vol_array)
-        return None
+
 
     # Chạy song song đa luồng để lấy dữ liệu 15 cặp siêu tốc
     with concurrent.futures.ThreadPoolExecutor(max_workers=total_pairs) as executor:

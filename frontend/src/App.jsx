@@ -1961,7 +1961,26 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone }) => {
 
       {/* Header điều khiển */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '15px', background: 'var(--bg-panel)', padding: '15px 20px', borderRadius: '12px', flexWrap: 'wrap' }}>
-        <h3 style={{ margin: 0, color: '#60a5fa' }}>Cấu hình Ma trận:</h3>
+        <div style={{ display: 'flex', gap: '10px', marginRight: '15px', borderRight: '1px solid #4b5563', paddingRight: '15px' }}>
+          {['fx', 'us_stocks', 'commodities', 'crypto'].map(type => (
+            <button
+              key={type}
+              onClick={() => setMatrixType(type)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                background: matrixType === type ? '#3b82f6' : '#374151',
+                color: 'white',
+                cursor: 'pointer',
+                fontWeight: matrixType === type ? 'bold' : 'normal',
+                fontSize: '0.9rem'
+              }}
+            >
+              {type === 'fx' ? 'Forex' : type === 'us_stocks' ? 'Cổ phiếu Mỹ' : type === 'commodities' ? 'Hàng hóa' : 'Crypto'}
+            </button>
+          ))}
+        </div>
         
         <label>Chu kỳ (Giờ):</label>
         <input 
@@ -2617,7 +2636,8 @@ function App() {
       const bTime = configs.brokerTimezone || 'Europe/Athens';
       const mHours = Number(localStorage.getItem('currencyMatrixHours')) || 24;
       const mVolDays = Number(localStorage.getItem('currencyMatrixVolDays')) || 30;
-      let url = `http://localhost:8000/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}`;
+      const mType = localStorage.getItem('matrixType') || 'fx';
+      let url = `http://localhost:8000/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}`;
       if (viewMode === 'backtest' && window.currentSimulatedTime) {
         url += `&end_time=${window.currentSimulatedTime}`;
       }
