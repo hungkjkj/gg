@@ -2596,7 +2596,7 @@ function App() {
       const bTime = configs.brokerTimezone || 'Europe/Athens';
       const mHours = Number(localStorage.getItem('currencyMatrixHours')) || 24;
       const mVolDays = Number(localStorage.getItem('currencyMatrixVolDays')) || 30;
-      let url = `http://localhost:8000/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&hours=${mHours}&volDays=${mVolDays}`;
+      let url = `http://localhost:8000/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}`;
       if (viewMode === 'backtest' && window.currentSimulatedTime) {
         url += `&end_time=${window.currentSimulatedTime}`;
       }
