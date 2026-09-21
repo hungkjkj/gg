@@ -804,14 +804,19 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
             percentile = np.mean(vol_arr < current_vol) * 100
             vol_percentile = round(percentile, 2)
             
-            # Tính Mom Percentile (Dựa trên điểm sức mạnh thuần túy)
-            current_score = scores_arr[-1]
+            # Tính Mom Percentile (Nhân điểm sức mạnh với RVOL của cửa sổ n_hours)
+            scores_np = np.array(scores_arr)
+            vol_np = np.array(vol_arr)
+            
+            mean_vol = np.mean(vol_np)
+            rvol = vol_np / mean_vol if mean_vol > 0 else np.ones_like(vol_np)
+            weighted_scores = scores_np * rvol
+            current_weighted = weighted_scores[-1]
             
             # Phân phối trong cùng nhóm dấu (Tăng hoặc Giảm)
-            scores_np = np.array(scores_arr)
-            same_sign_mask = (np.sign(scores_np) == np.sign(current_score))
-            same_sign_scores = np.abs(scores_np[same_sign_mask])
-            current_abs = np.abs(current_score)
+            same_sign_mask = (np.sign(weighted_scores) == np.sign(current_weighted))
+            same_sign_scores = np.abs(weighted_scores[same_sign_mask])
+            current_abs = np.abs(current_weighted)
             
             if len(same_sign_scores) > 0:
                 pct = np.mean(same_sign_scores <= current_abs) * 100
