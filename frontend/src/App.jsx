@@ -32,7 +32,7 @@ const customTickMarkFormatter = (time, tickMarkType) => {
     return `${dayStr} ${hh}:${mm}`;
 };
 
-const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, showSdBands, showMomFlipChart }) => {
+const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
   const [momFlipData, setMomFlipData] = useState([]);
   const chartContainerRef = useRef(null);
   const momentumChartContainerRef = useRef(null);
@@ -120,8 +120,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   // Keep track of playback speed for the interval
   const playbackSpeedRef = useRef(1);
   useEffect(() => { playbackSpeedRef.current = playbackSpeed; }, [playbackSpeed]);
-
-  // Fetch News Data
+// Fetch News Data
   const fetchNews = async () => {
     try {
       const response = await axios.get(`http://localhost:8000/api/v1/news`, {
@@ -721,9 +720,19 @@ useEffect(() => {
           });
         }
       };
+
+    const resizeObserver = new ResizeObserver(() => {
+        handleResize();
+    });
+
+    if (chartContainerRef.current) resizeObserver.observe(chartContainerRef.current);
+    if (momentumChartContainerRef.current) resizeObserver.observe(momentumChartContainerRef.current);
+    if (volumeChartContainerRef.current) resizeObserver.observe(volumeChartContainerRef.current);
+
     window.addEventListener('resize', handleResize);
 
     return () => {
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       try { chart.remove(); } catch (e) {}
       try { momentumChart.remove(); } catch (e) {}
@@ -1450,6 +1459,7 @@ useEffect(() => {
       
       const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H4' ? 14400 : timeframe === 'D1' ? 86400 : 3600;
       simulatedTimeRef.current += tfSec;
+      window.currentSimulatedTime = simulatedTimeRef.current;
       
       // Bỏ qua Thứ 7, Chủ Nhật để Backtest không bị "treo" (trừ Crypto)
       const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
@@ -1476,6 +1486,7 @@ useEffect(() => {
           
           if (skip) {
               simulatedTimeRef.current += (jumpHours * 3600) - (m * 60) - s;
+      window.currentSimulatedTime = simulatedTimeRef.current;
           }
       }
       
@@ -1536,6 +1547,7 @@ useEffect(() => {
     }
     const targetTimestamp = Math.floor(new Date(backtestDate).getTime() / 1000);
     simulatedTimeRef.current = targetTimestamp;
+    window.currentSimulatedTime = simulatedTimeRef.current;
     backtestWeekRef.current = getWeekMonday(targetTimestamp);
     setIsPlaying(false);
     isPlayingRef.current = false;
@@ -1666,12 +1678,12 @@ useEffect(() => {
         </div>
         
         {/* Momentum Chart */}
-        <div style={{ flex: 1, position: 'relative', width: '100%', borderTop: '2px solid var(--border-color)' }}>
+        <div style={{ flex: showMomChart ? 1 : 0, display: showMomChart ? 'block' : 'none', position: 'relative', width: '100%', borderTop: '2px solid var(--border-color)' }}>
           <div ref={momentumChartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
         </div>
         
         {/* Normalized Volume Chart */}
-        <div style={{ flex: 1, position: 'relative', width: '100%', borderTop: '2px solid var(--border-color)' }}>
+        <div style={{ flex: showVolChart ? 1 : 0, display: showVolChart ? 'block' : 'none', position: 'relative', width: '100%', borderTop: '2px solid var(--border-color)' }}>
           <div ref={volumeChartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
           <canvas 
             ref={volumeCanvasRef} 
@@ -2529,6 +2541,12 @@ function App() {
   const [chartType, setChartType] = useState(localStorage.getItem('chartType') || 'candles');
   const [showSdBands, setShowSdBands] = useState(localStorage.getItem('showSdBands') !== 'false');
   const [showMomFlipChart, setShowMomFlipChart] = useState(false);
+  const [showVolChart, setShowVolChart] = useState(localStorage.getItem('showVolChart') !== 'false');
+  const [showMomChart, setShowMomChart] = useState(localStorage.getItem('showMomChart') !== 'false');
+  const [showMatrixBubble, setShowMatrixBubble] = useState(localStorage.getItem('showMatrixBubble') === 'true');
+  const [bubbleMatrixData, setBubbleMatrixData] = useState(null);
+  
+
   
   const [configs, setConfigs] = useState(() => ({
     pct1: 70,
@@ -2571,6 +2589,27 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [availableSymbols, setAvailableSymbols] = useState(DEFAULT_SYMBOLS);
+
+  useEffect(() => {
+    if (!showMatrixBubble) return;
+    const fetchBubbleMatrix = () => {
+      const bTime = configs.brokerTimezone || 'Europe/Athens';
+      const mHours = Number(localStorage.getItem('currencyMatrixHours')) || 24;
+      const mVolDays = Number(localStorage.getItem('currencyMatrixVolDays')) || 30;
+      let url = `http://localhost:8000/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&hours=${mHours}&volDays=${mVolDays}`;
+      if (viewMode === 'backtest' && window.currentSimulatedTime) {
+        url += `&end_time=${window.currentSimulatedTime}`;
+      }
+      axios.get(url).then(res => {
+        if (res.data && res.data.ranking) {
+          setBubbleMatrixData(res.data.ranking);
+        }
+      }).catch(err => console.error(err));
+    };
+    fetchBubbleMatrix();
+    const interval = setInterval(fetchBubbleMatrix, 2000);
+    return () => clearInterval(interval);
+  }, [showMatrixBubble, viewMode, configs.brokerTimezone]);
 
   useEffect(() => {
     axios.get('http://localhost:8000/api/v1/symbols')
@@ -2627,6 +2666,13 @@ function App() {
         setShowSdBands={setShowSdBands} 
         showMomFlip={showMomFlipChart} 
         setShowMomFlip={setShowMomFlipChart} 
+        showVolChart={showVolChart}
+        setShowVolChart={setShowVolChart}
+        showMomChart={showMomChart}
+        setShowMomChart={setShowMomChart}
+        showMatrixBubble={showMatrixBubble}
+        setShowMatrixBubble={setShowMatrixBubble}
+        bubbleMatrixData={bubbleMatrixData}
       />
 
       {showSettings && (
@@ -2679,6 +2725,8 @@ function App() {
               <option value="H1">1 Hour</option>
               <option value="H4">4 Hours</option>
               <option value="D1">Daily</option>
+              <option value="W1">Weekly</option>
+              <option value="MN1">Monthly</option>
             </select>
           </div>
           
@@ -2818,9 +2866,9 @@ function App() {
         <div className="chart-container">
           <div className="chart-wrapper" style={{ overflow: (viewMode === 'matrix' || viewMode === 'catalyst') ? 'auto' : 'hidden' }}>
             {viewMode === 'chart' || viewMode === 'backtest' ? (
-              <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} showSdBands={showSdBands} showMomFlipChart={showMomFlipChart} />
+              <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} showSdBands={showSdBands} showMomFlipChart={showMomFlipChart} showVolChart={showVolChart} showMomChart={showMomChart} />
             ) : viewMode === 'matrix' ? (
-              <MatrixComponent simulatedTime={null} brokerTimezone={configs.brokerTimezone || 'Europe/Athens'} />
+              <MatrixComponent simulatedTime={null} brokerTimezone={configs.brokerTimezone || 'Europe/Athens'} matrixHours={configs.matrixHours || 24} matrixVolDays={configs.matrixVolDays || 30} />
             ) : (
               <CatalystTab configs={configs} />
             )}

@@ -243,7 +243,9 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         'M30': 1800,
         'H1': 3600,
         'H4': 14400,
-        'D1': 86400
+        'D1': 86400,
+        'W1': 604800,
+        'MN1': 2592000
     }
     tf_seconds = tf_mapping.get(timeframe.upper(), 3600)
     
@@ -367,11 +369,16 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         has_m1 = False
 
     # Manual Time Shift requested by user
-    df['time'] = df['time'] + (timeShiftHours * 3600)
+    is_macro_tf = timeframe.upper() in ['D1', 'W1', 'MN1']
+    if not is_macro_tf:
+        df['time'] = df['time'] + (timeShiftHours * 3600)
     
     # --- Tính toán Background Sessions (Á, Âu, Mỹ) ---
     # true_utc_series is the actual UTC time of the candle
-    true_utc_series = pd.to_datetime(df['time'] - (timeShiftHours * 3600), unit='s', utc=True)
+    if not is_macro_tf:
+        true_utc_series = pd.to_datetime(df['time'] - (timeShiftHours * 3600), unit='s', utc=True)
+    else:
+        true_utc_series = pd.to_datetime(df['time'], unit='s', utc=True)
     # user_local_series is the user's physical local time (based on browserOffsetHours)
     user_local_series = true_utc_series + pd.Timedelta(hours=browserOffsetHours)
     
@@ -514,7 +521,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
 
     if bin_size <= 0:
         bin_size = 0.0001
-    tf_sec_map = { "M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400, "D1": 86400 }
+    tf_sec_map = { "M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400, "D1": 86400, "W1": 604800, "MN1": 2592000 }
     tf_seconds = tf_sec_map.get(timeframe.upper(), 3600)
     timeout_sec = max(timeoutHours * 3600, tf_seconds * 3)
     
@@ -697,13 +704,14 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         currencies = ["XAU", "XAG", "USD"]
         pairs = ["XAUUSD", "XAGUSD", "XAUXAG"]
     else:
-        currencies = ["EUR", "GBP", "AUD", "NZD", "JPY", "USD"]
+        currencies = ["EUR", "GBP", "AUD", "NZD", "JPY", "USD", "GI"]
         pairs = [
             "EURUSD", "GBPUSD", "AUDUSD", "NZDUSD", "USDJPY",
             "EURGBP", "EURAUD", "EURNZD", "EURJPY",
             "GBPAUD", "GBPNZD", "GBPJPY",
             "AUDNZD", "AUDJPY",
-            "NZDJPY"
+            "NZDJPY",
+            "GLOBAL_INDEX"
         ]
     
     scores = {c: 0.0 for c in currencies}
@@ -728,65 +736,98 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
             if pd.isna(current_vwma) or pd.isna(past_vwma) or past_vwma == 0:
                 return None
                 
-            diff_pct = ((current_vwma - past_vwma) / past_vwma) * 100
+            diff_pct_current = ((current_vwma - past_vwma) / past_vwma) * 100
             
-            base_currency = pair[:3]
-            quote_currency = pair[3:]
+            if pair == "GLOBAL_INDEX":
+                base_currency = "GI"
+                quote_currency = "NONE"
+                diff_pct_current *= 5
+                df['diff_pct'] = (df['vwma'] - df['vwma'].shift(n_hours)) / df['vwma'].shift(n_hours) * 500
+            else:
+                base_currency = pair[:3]
+                quote_currency = pair[3:]
+                df['diff_pct'] = (df['vwma'] - df['vwma'].shift(n_hours)) / df['vwma'].shift(n_hours) * 100
             
-            hist_vol = df['vol_rolling'].iloc[-(vol_days * 24):].values
+            diff_array = df['diff_pct'].iloc[-(vol_days * 24):].fillna(0).values
+            vol_array = df['vol_rolling'].iloc[-(vol_days * 24):].fillna(0).values
             
-            return (pair, diff_pct, base_currency, quote_currency, hist_vol)
+            return (pair, diff_pct_current, base_currency, quote_currency, diff_array, vol_array)
         return None
 
     # Chạy song song đa luồng để lấy dữ liệu 15 cặp siêu tốc
     with concurrent.futures.ThreadPoolExecutor(max_workers=total_pairs) as executor:
         results = list(executor.map(process_pair, pairs))
         
-    vol_series_by_currency = {c: [] for c in currencies}
+    scores_hist = {c: [] for c in currencies}
+    vol_hist = {c: [] for c in currencies}
     
     for res in results:
         if res:
-            pair, diff_pct, base_currency, quote_currency, hist_vol = res
+            pair, diff_pct_current, base_currency, quote_currency, diff_array, vol_array = res
+            
             if base_currency in scores:
-                scores[base_currency] += diff_pct
-                if len(vol_series_by_currency[base_currency]) == 0:
-                    vol_series_by_currency[base_currency] = hist_vol.copy()
+                scores[base_currency] += diff_pct_current
+                if len(scores_hist[base_currency]) == 0:
+                    scores_hist[base_currency] = diff_array.copy()
+                    vol_hist[base_currency] = vol_array.copy()
                 else:
-                    length = min(len(vol_series_by_currency[base_currency]), len(hist_vol))
-                    vol_series_by_currency[base_currency][-length:] += hist_vol[-length:]
+                    length = min(len(scores_hist[base_currency]), len(diff_array))
+                    scores_hist[base_currency][-length:] += diff_array[-length:]
+                    vol_hist[base_currency][-length:] += vol_array[-length:]
                     
             if quote_currency in scores:
-                scores[quote_currency] -= diff_pct
-                if len(vol_series_by_currency[quote_currency]) == 0:
-                    vol_series_by_currency[quote_currency] = hist_vol.copy()
+                scores[quote_currency] -= diff_pct_current
+                if len(scores_hist[quote_currency]) == 0:
+                    scores_hist[quote_currency] = -diff_array.copy()
+                    vol_hist[quote_currency] = vol_array.copy()
                 else:
-                    length = min(len(vol_series_by_currency[quote_currency]), len(hist_vol))
-                    vol_series_by_currency[quote_currency][-length:] += hist_vol[-length:]
+                    length = min(len(scores_hist[quote_currency]), len(diff_array))
+                    scores_hist[quote_currency][-length:] -= diff_array[-length:]
+                    vol_hist[quote_currency][-length:] += vol_array[-length:]
                 
             matrix_data.append({
                 "pair": pair,
-                "change_pct": round(diff_pct, 4)
+                "change_pct": round(diff_pct_current, 4) if not pd.isna(diff_pct_current) else 0
             })
 
-    # Xếp hạng currencies và tính Vol Percentile
+    # Xếp hạng currencies và tính Vol Percentile & Mom Percentile
     import numpy as np
     ranked_currencies = []
     for c in currencies:
-        vol_arr = vol_series_by_currency[c]
+        vol_arr = vol_hist[c]
+        scores_arr = scores_hist[c]
+        
         vol_percentile = 0.0
-        if len(vol_arr) > 0:
+        mom_percentile = 0.0
+        if len(vol_arr) > 0 and len(scores_arr) > 0:
             current_vol = vol_arr[-1]
             # Tính phần trăm số nến trong lịch sử nhỏ hơn khối lượng hiện tại
             percentile = np.mean(vol_arr < current_vol) * 100
             vol_percentile = round(percentile, 2)
             
+            # Tính Mom Percentile (Nhân điểm sức mạnh cho rvol)
+            weighted_scores = np.array(scores_arr) * np.array(vol_arr)
+            current_weighted = weighted_scores[-1]
+            
+            # Phân phối trong cùng nhóm dấu
+            same_sign_mask = (np.sign(weighted_scores) == np.sign(current_weighted))
+            same_sign_scores = np.abs(weighted_scores[same_sign_mask])
+            current_abs = np.abs(current_weighted)
+            
+            if len(same_sign_scores) > 0:
+                pct = np.mean(same_sign_scores <= current_abs) * 100
+                mom_percentile = round(pct, 2)
+                if current_weighted < 0:
+                    mom_percentile = -mom_percentile
+            
         ranked_currencies.append({
             "currency": c,
             "score": round(scores[c], 4),
-            "vol_percentile": vol_percentile
+            "vol_percentile": vol_percentile,
+            "mom_percentile": mom_percentile
         })
         
-    ranked_currencies = sorted(ranked_currencies, key=lambda x: x["score"], reverse=True)
+    ranked_currencies = sorted(ranked_currencies, key=lambda x: (x["mom_percentile"], x["score"]), reverse=True)
     
     MATRIX_PROGRESS[matrix_type] = 100.0
     return {

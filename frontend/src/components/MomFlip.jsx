@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createChart } from 'lightweight-charts';
 
-export const AssistiveTouch = ({ showSdBands, setShowSdBands, showMomFlip, setShowMomFlip }) => {
+export const AssistiveTouch = ({ showSdBands, setShowSdBands, showMomFlip, setShowMomFlip, showVolChart, setShowVolChart, showMomChart, setShowMomChart, showMatrixBubble, setShowMatrixBubble, bubbleMatrixData }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ x: window.innerWidth - 80, y: window.innerHeight - 150 });
   const [isDragging, setIsDragging] = useState(false);
@@ -70,12 +70,52 @@ export const AssistiveTouch = ({ showSdBands, setShowSdBands, showMomFlip, setSh
         }}>
           <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
             <input type="checkbox" checked={showSdBands} onChange={e => { setShowSdBands(e.target.checked); localStorage.setItem('showSdBands', e.target.checked); }} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
-            Bật/Tắt Dải SD
+            Dải SD
           </label>
           <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
             <input type="checkbox" checked={showMomFlip} onChange={e => setShowMomFlip(e.target.checked)} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
             Biểu đồ Momentum Flip
           </label>
+          <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
+            <input type="checkbox" checked={showVolChart} onChange={e => { setShowVolChart(e.target.checked); localStorage.setItem('showVolChart', e.target.checked); }} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
+            Biểu đồ Volume
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
+            <input type="checkbox" checked={showMomChart} onChange={e => { setShowMomChart(e.target.checked); localStorage.setItem('showMomChart', e.target.checked); }} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
+            Biểu đồ Momentum
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
+            <input type="checkbox" checked={showMatrixBubble} onChange={e => { setShowMatrixBubble(e.target.checked); localStorage.setItem('showMatrixBubble', e.target.checked); }} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
+            Xếp hạng Matrix
+          </label>
+          
+          {showMatrixBubble && bubbleMatrixData && (
+            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)', maxHeight: '300px', overflowY: 'auto' }}>
+              <table style={{ width: '100%', fontSize: '13px', color: '#e2e8f0', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    <th style={{ textAlign: 'left', paddingBottom: '4px' }}>#</th>
+                    <th style={{ textAlign: 'left', paddingBottom: '4px' }}>Cur</th>
+                    <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Mom %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bubbleMatrixData.map((item, idx) => {
+                      let momColor = '#e2e8f0';
+                      if (item.mom_percentile >= 50) momColor = '#4ade80';
+                      else if (item.mom_percentile <= -50) momColor = '#f87171';
+                      
+                      return (
+                    <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <td style={{ padding: '6px 0' }}>{idx + 1}</td>
+                      <td style={{ padding: '6px 0', fontWeight: 'bold' }}>{item.currency}</td>
+                      <td style={{ padding: '6px 0', textAlign: 'right', color: momColor }}>{item.mom_percentile > 0 ? '+' : ''}{item.mom_percentile != null ? item.mom_percentile.toFixed(2) : 0}%</td>
+                    </tr>
+                  )})}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
       <div 
