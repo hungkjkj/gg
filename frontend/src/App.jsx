@@ -701,24 +701,30 @@ useEffect(() => {
 
     // Resize handler
     const handleResize = () => {
-        if (chartContainerRef.current && chart) {
-          chart.applyOptions({
-            width: chartContainerRef.current.clientWidth,
-            height: chartContainerRef.current.clientHeight,
-          });
-        }
-        if (momentumChartContainerRef.current && momentumChart) {
-          momentumChart.applyOptions({
-            width: momentumChartContainerRef.current.clientWidth,
-            height: momentumChartContainerRef.current.clientHeight,
-          });
-        }
-        if (volumeChartContainerRef.current && volumeChart) {
-          volumeChart.applyOptions({
-            width: volumeChartContainerRef.current.clientWidth,
-            height: volumeChartContainerRef.current.clientHeight,
-          });
-        }
+        try {
+          if (chartContainerRef.current && chart) {
+            chart.applyOptions({
+              width: chartContainerRef.current.clientWidth,
+              height: chartContainerRef.current.clientHeight,
+            });
+          }
+        } catch(e) {}
+        try {
+          if (momentumChartContainerRef.current && momentumChart) {
+            momentumChart.applyOptions({
+              width: momentumChartContainerRef.current.clientWidth,
+              height: momentumChartContainerRef.current.clientHeight,
+            });
+          }
+        } catch(e) {}
+        try {
+          if (volumeChartContainerRef.current && volumeChart) {
+            volumeChart.applyOptions({
+              width: volumeChartContainerRef.current.clientWidth,
+              height: volumeChartContainerRef.current.clientHeight,
+            });
+          }
+        } catch(e) {}
       };
 
     const resizeObserver = new ResizeObserver(() => {
