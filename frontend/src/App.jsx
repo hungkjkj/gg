@@ -2740,7 +2740,10 @@ function App() {
             <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Cặp tiền tệ (Symbol)</label>
             <select value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ width: '100%' }}>
               <optgroup label="Chỉ số Tổng hợp">
-                <option value="GLOBAL_INDEX">Thị trường chung (GLOBAL INDEX)</option>
+                <option value="GLOBAL_INDEX">Thị trường chung (FX GI)</option>
+                <option value="US_STOCKS_GI">Chỉ số Cổ phiếu Mỹ (US Stocks GI)</option>
+                <option value="COMMODITIES_GI">Chỉ số Hàng hóa (Commodities GI)</option>
+                <option value="CRYPTO_GI">Chỉ số Tiền điện tử (Crypto GI)</option>
               </optgroup>
               {availableSymbols ? (
                 Object.keys(availableSymbols).map(group => (
@@ -2823,7 +2826,10 @@ function App() {
                 onChange={e => setAlertSymbol(e.target.value)}
                 style={{ padding: '6px', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'white', maxWidth: '85px', fontSize: '0.8rem' }}
               >
-                <option value="GLOBAL_INDEX">GI</option>
+                <option value="GLOBAL_INDEX">FX GI</option>
+                <option value="US_STOCKS_GI">US Stocks GI</option>
+                <option value="COMMODITIES_GI">Commodities GI</option>
+                <option value="CRYPTO_GI">Crypto GI</option>
                 {availableSymbols ? (
                   Object.keys(availableSymbols).map(group => (
                     <optgroup key={group} label={group}>
