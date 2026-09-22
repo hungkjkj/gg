@@ -838,13 +838,12 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
             weighted_scores = scores_np * rvol
             current_weighted = weighted_scores[-1]
             
-            # Phân phối trong cùng nhóm dấu (Tăng hoặc Giảm)
-            same_sign_mask = (np.sign(weighted_scores) == np.sign(current_weighted))
-            same_sign_scores = np.abs(weighted_scores[same_sign_mask])
+            # Phân phối động lượng chuẩn (so với toàn bộ lịch sử thăng giáng)
+            all_abs_scores = np.abs(weighted_scores)
             current_abs = np.abs(current_weighted)
             
-            if len(same_sign_scores) > 0:
-                pct = np.mean(same_sign_scores <= current_abs) * 100
+            if len(all_abs_scores) > 0:
+                pct = np.mean(all_abs_scores <= current_abs) * 100
                 mom_percentile = round(pct, 2)
                 if current_weighted < 0:
                     mom_percentile = -mom_percentile
