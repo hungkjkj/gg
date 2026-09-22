@@ -1986,7 +1986,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone }) => {
         <input 
           type="number" 
           value={matrixHours} 
-          onChange={e => setMatrixHours(Number(e.target.value))} 
+          onChange={e => { const val = Number(e.target.value); setMatrixHours(val); localStorage.setItem('currencyMatrixHours', val.toString()); }}
           style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '80px' }}
         />
         
@@ -1994,7 +1994,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone }) => {
         <input 
           type="number" 
           value={matrixVolDays} 
-          onChange={e => setMatrixVolDays(Number(e.target.value))} 
+          onChange={e => { const val = Number(e.target.value); setMatrixVolDays(val); localStorage.setItem('currencyMatrixVolDays', val.toString()); }}
           style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '80px' }}
         />
         <button 
