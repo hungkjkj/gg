@@ -84,6 +84,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const canvasRef = useRef(null);
   const volumeCanvasRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const updateOverlaysRef = useRef(null);
   const lastUpdateTimeRef = useRef(0);
 
   // Backtest State
@@ -593,6 +594,7 @@ useEffect(() => {
       
       // Sync crosshairs
       const handleCrosshairMove = (param, targetCharts, targetSeries) => {
+        if (updateOverlaysRef.current) updateOverlaysRef.current();
         if (!param.point || !param.time) {
           targetCharts.forEach(c => c.clearCrosshairPosition());
           return;
@@ -654,6 +656,7 @@ useEffect(() => {
     
     // Theo dõi hành động cuộn của người dùng
     chart.timeScale().subscribeVisibleLogicalRangeChange((logicalRange) => {
+      if (updateOverlaysRef.current) updateOverlaysRef.current();
       if (logicalRange && candlestickSeriesRef.current) {
         const data = candlestickSeriesRef.current.data();
         if (data && data.length > 0) {
@@ -785,6 +788,7 @@ useEffect(() => {
   
   // Hàm cập nhật toạ độ HTML Overlay liên tục
   const updateOverlays = () => {
+    updateOverlaysRef.current = updateOverlays;
     try {
       if (chartRef.current && candlestickSeriesRef.current && canvasRef.current && chartContainerRef.current) {
         const timeScale = chartRef.current.timeScale();
@@ -818,6 +822,7 @@ useEffect(() => {
           const barSpacing = timeScale.options().barSpacing || 6;
           for (let i = 0; i < sessionDataRef.current.length; i++) {
              const session = sessionDataRef.current[i];
+             if (session.time < minTime || session.time > maxTime) continue; // CULLING OFF-SCREEN SESSIONS
              const x = timeScale.timeToCoordinate(session.time);
              if (x !== null) {
                ctx.fillStyle = session.color;
@@ -885,6 +890,7 @@ useEffect(() => {
                ctx.lineWidth = 1.5;
                for (let i = 0; i < volStatsRef.current.v_lines.length; i++) {
                   const line = volStatsRef.current.v_lines[i];
+                  if (line.time < minTime || line.time > maxTime) continue; // CULLING OFF-SCREEN
                   const x = timeScale.timeToCoordinate(line.time);
                   if (x !== null) {
                     ctx.beginPath();
@@ -902,17 +908,11 @@ useEffect(() => {
       drawVerticalLines(volumeChartRef, volumeCanvasRef, volumeChartContainerRef);
     } catch (e) {
     }
-    animationFrameRef.current = requestAnimationFrame(updateOverlays);
   };
 
   useEffect(() => {
-    if (vpBoxes.length > 0) {
-      animationFrameRef.current = requestAnimationFrame(updateOverlays);
-    }
-    return () => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    };
-  }, [vpBoxes]);
+    updateOverlaysRef.current = updateOverlays;
+  }, [vpBoxes, chartType, showSdBands, volStats]);
 
   const handleGoToLatest = () => {
     if (chartRef.current && candlestickSeriesRef.current) {
@@ -1258,6 +1258,8 @@ useEffect(() => {
             if (formattedData.length > 0) {
               lastUpdateTimeRef.current = Math.max(lastUpdateTimeRef.current, formattedData[formattedData.length - 1].time);
             }
+            
+            if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 50);
           } else {
             if (formattedData.length > 0) {
               lastUpdateTimeRef.current = formattedData[formattedData.length - 1].time;
@@ -1327,6 +1329,8 @@ useEffect(() => {
               vol50Ref.current.setData(v50.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
               vol15Ref.current.setData(v15.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             }
+            
+            if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 50);
             
             const totalCandles = formattedData.length;
             
