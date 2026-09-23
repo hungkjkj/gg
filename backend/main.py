@@ -252,7 +252,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     vwap_window = max(1, int((vwapLength * 3600) / tf_seconds))
     mom_window = max(1, int((momLength * 3600) / tf_seconds))
     ma_vol_window = max(1, int((maVolLength * 3600) / tf_seconds))
-    mom_ma_window = max(1, int((momMaLength * 3600) / tf_seconds))
+    mom_ma_window = mom_window
 
     
     # --- 1. VWAP & SD Bands ---
@@ -331,7 +331,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     # Tính toán các đường xác suất Momentum (Momentum đã chuẩn hóa theo median)
     df['mom_raw'] = df['mom_raw_raw'] / rolling_median_mom
     df['abs_mom'] = df['abs_mom_raw'] / rolling_median_mom
-    df['mom_ma'] = pd.Series(df['mom_raw']).rolling(window=mom_ma_window, min_periods=1).mean()
+    df['mom_ma'] = pd.Series(df['abs_mom']).rolling(window=mom_ma_window, min_periods=1).mean()
     
     df['mom_lvl1'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct1 / 100.0)
     df['mom_lvl2'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct2 / 100.0)

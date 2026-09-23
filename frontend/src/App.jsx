@@ -565,31 +565,30 @@ useEffect(() => {
           isSyncingRight = true;
           if (momentumChart) momentumChart.timeScale().setVisibleLogicalRange(range);
           if (volumeChart) volumeChart.timeScale().setVisibleLogicalRange(range);
-          isSyncingMid = false;
-          isSyncingRight = false;
         }
+        isSyncingLeft = false;
       });
 
       momentumChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (updateOverlaysRef.current) updateOverlaysRef.current();
         if (range && !isSyncingMid) {
           isSyncingLeft = true;
           isSyncingRight = true;
           if (chart) chart.timeScale().setVisibleLogicalRange(range);
           if (volumeChart) volumeChart.timeScale().setVisibleLogicalRange(range);
-          isSyncingLeft = false;
-          isSyncingRight = false;
         }
+        isSyncingMid = false;
       });
       
       volumeChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (updateOverlaysRef.current) updateOverlaysRef.current();
         if (range && !isSyncingRight) {
           isSyncingLeft = true;
           isSyncingMid = true;
           if (chart) chart.timeScale().setVisibleLogicalRange(range);
           if (momentumChart) momentumChart.timeScale().setVisibleLogicalRange(range);
-          isSyncingLeft = false;
-          isSyncingMid = false;
         }
+        isSyncingRight = false;
       });
       
       // Sync crosshairs
@@ -890,7 +889,6 @@ useEffect(() => {
                ctx.lineWidth = 1.5;
                for (let i = 0; i < volStatsRef.current.v_lines.length; i++) {
                   const line = volStatsRef.current.v_lines[i];
-                  if (line.time < minTime || line.time > maxTime) continue; // CULLING OFF-SCREEN
                   const x = timeScale.timeToCoordinate(line.time);
                   if (x !== null) {
                     ctx.beginPath();
@@ -985,7 +983,6 @@ useEffect(() => {
         
         // Bỏ qua nếu response trả về dữ liệu của symbol/timeframe cũ (Race condition)
         if (response.data.symbol && (response.data.symbol !== symbolRef.current || response.data.timeframe !== timeframeRef.current)) {
-        setLoading(false);
             return;
         }
 
@@ -1259,7 +1256,7 @@ useEffect(() => {
               lastUpdateTimeRef.current = Math.max(lastUpdateTimeRef.current, formattedData[formattedData.length - 1].time);
             }
             
-            if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 50);
+            if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 200);
           } else {
             if (formattedData.length > 0) {
               lastUpdateTimeRef.current = formattedData[formattedData.length - 1].time;
@@ -1330,7 +1327,7 @@ useEffect(() => {
               vol15Ref.current.setData(v15.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             }
             
-            if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 50);
+            if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 200);
             
             const totalCandles = formattedData.length;
             
@@ -1855,13 +1852,18 @@ useEffect(() => {
   );
 };
 
-const MatrixComponent = ({ simulatedTime, brokerTimezone }) => {
+const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, initialMatrixVolDays, onSaveMatrixSettings }) => {
   const [matrixData, setMatrixData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [matrixHours, setMatrixHours] = useState(Number(localStorage.getItem('currencyMatrixHours')) || 24);
-  const [matrixVolDays, setMatrixVolDays] = useState(Number(localStorage.getItem('currencyMatrixVolDays')) || 30);
+  const [matrixHours, setMatrixHours] = useState(initialMatrixHours || Number(localStorage.getItem('currencyMatrixHours')) || 24);
+  const [matrixVolDays, setMatrixVolDays] = useState(initialMatrixVolDays || Number(localStorage.getItem('currencyMatrixVolDays')) || 30);
   const [matrixType, setMatrixType] = useState((localStorage.getItem('matrixType') === 'currency' ? 'fx' : localStorage.getItem('matrixType')) || 'fx');
+
+  useEffect(() => {
+    if (initialMatrixHours) setMatrixHours(initialMatrixHours);
+    if (initialMatrixVolDays) setMatrixVolDays(initialMatrixVolDays);
+  }, [initialMatrixHours, initialMatrixVolDays]);
 
   useEffect(() => {
     let interval;
@@ -1880,6 +1882,9 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone }) => {
 
 
   const fetchMatrix = async (force = false) => {
+    if (force && onSaveMatrixSettings) {
+      onSaveMatrixSettings(matrixHours, matrixVolDays);
+    }
     // Không dùng cache nếu đang ở chế độ backtest
     if (!force && !simulatedTime) {
       const cached = localStorage.getItem(`matrixCache_${matrixType}`);
@@ -2163,10 +2168,6 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
           <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Chu kỳ Động lượng (momLength)</label>
             <input type="number" value={local.momLength} onChange={e => handleChange('momLength', Number(e.target.value))} style={styleInput} />
-          </div>
-          <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel} title="Chu kỳ của đường MA (màu trắng) chạy đè trên biểu đồ Momentum">Chu kỳ MA Động lượng (momMaLength)</label>
-            <input type="number" value={local.momMaLength} onChange={e => handleChange('momMaLength', Number(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Chu kỳ Ma trận chung (Giờ)</label>
@@ -2498,6 +2499,13 @@ function App() {
   
   const knownTriggeredRef = useRef(new Set());
 
+  const handleSaveMatrixSettings = (hours, volDays) => {
+    const newConfigs = { ...configs, matrixHours: hours, matrixVolDays: volDays };
+    setConfigs(newConfigs);
+    axios.post('http://localhost:8000/api/v1/configs', newConfigs)
+      .catch(err => console.error("Error saving configs to backend", err));
+  };
+
   const fetchAlerts = async () => {
     try {
       const res = await axios.get(`http://localhost:8000/api/v1/alerts?_t=${Date.now()}`);
@@ -2616,8 +2624,9 @@ function App() {
     momPct2: 75,
     momPct3: 50,
     maVolLength: 2,
-    momMaLength: 3,
     smaMomLength: 10,
+    matrixHours: 24,
+    matrixVolDays: 30,
     volPct1: 85.0,
     volPct2: 75.0,
     volPct3: 50.0,
@@ -2643,8 +2652,8 @@ function App() {
     if (!showMatrixBubble) return;
     const fetchBubbleMatrix = () => {
       const bTime = configs.brokerTimezone || 'Europe/Athens';
-      const mHours = Number(localStorage.getItem('currencyMatrixHours')) || 24;
-      const mVolDays = Number(localStorage.getItem('currencyMatrixVolDays')) || 30;
+      const mHours = configs.matrixHours || 24;
+      const mVolDays = configs.matrixVolDays || 30;
       const mType = localStorage.getItem('matrixType') || 'fx';
       let url = `http://localhost:8000/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}`;
       if (viewMode === 'backtest' && window.currentSimulatedTime) {
@@ -2659,7 +2668,7 @@ function App() {
     fetchBubbleMatrix();
     const interval = setInterval(fetchBubbleMatrix, 2000);
     return () => clearInterval(interval);
-  }, [showMatrixBubble, viewMode, configs.brokerTimezone]);
+  }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixVolDays]);
 
   useEffect(() => {
     axios.get('http://localhost:8000/api/v1/symbols')
@@ -2924,7 +2933,13 @@ function App() {
             {viewMode === 'chart' || viewMode === 'backtest' ? (
               <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} showSdBands={showSdBands} showMomFlipChart={showMomFlipChart} showVolChart={showVolChart} showMomChart={showMomChart} />
             ) : viewMode === 'matrix' ? (
-              <MatrixComponent simulatedTime={null} brokerTimezone={configs.brokerTimezone || 'Europe/Athens'} matrixHours={configs.matrixHours || 24} matrixVolDays={configs.matrixVolDays || 30} />
+              <MatrixComponent 
+                simulatedTime={null} 
+                brokerTimezone={configs.brokerTimezone || 'Europe/Athens'} 
+                initialMatrixHours={configs.matrixHours} 
+                initialMatrixVolDays={configs.matrixVolDays} 
+                onSaveMatrixSettings={handleSaveMatrixSettings}
+              />
             ) : (
               <CatalystTab configs={configs} />
             )}
