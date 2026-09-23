@@ -217,7 +217,6 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     import numpy as np
     import pandas as pd
     
-    symbol = symbol.upper()
     df = get_historical_data(symbol, timeframe, count, end_time, brokerTimezone)
     
     if df is None or df.empty:
