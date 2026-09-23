@@ -204,7 +204,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
               rvolLookbackDays: int = 10, peakVolLookbackDays: int = 60,
               momLength: int = 20, matrixLookbackHours: float = 89.0,
               momPct1: float = 85.0, momPct2: float = 75.0, momPct3: float = 50.0,
-              maVolLength: int = 2, momMaLength: int = 3, momFlipFilterPct: float = 75.0, momFlipVolFilterPct: float = 50.0,
+              maVolLength: int = 2, momMaLength: int = 3, smaMomLength: int = 10, momFlipFilterPct: float = 75.0, momFlipVolFilterPct: float = 50.0,
               volPct1: float = 85.0, volPct2: float = 75.0, volPct3: float = 50.0, volPct4: float = 15.0,
               timeShiftHours: float = 0.0, browserOffsetHours: float = 7.0, autoDst: bool = True,
               asiaStart: str = "07:00", asiaEnd: str = "10:00",
@@ -294,8 +294,11 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     rolling_median_mom = df['abs_mom_raw'].rolling(window=lookback_candles, min_periods=1).median().replace(0, np.nan).fillna(1e-9)
     
     # --- Momentum Flip ---
-    # hệ số flip = động lượng hiện tại / động lượng trước đó
-    flip_ratio = df['abs_mom_raw'] / df['abs_mom_raw'].shift(1).replace(0, np.nan).fillna(1e-9)
+    # SMA Moment: trung bình cộng độ lớn momentum của N nến gần nhất (không tính nến hiện tại)
+    sma_mom_window = max(1, smaMomLength)
+    sma_mom = df['abs_mom_raw'].shift(1).rolling(window=sma_mom_window, min_periods=1).mean().replace(0, np.nan).fillna(1e-9)
+    # hệ số flip = động lượng hiện tại / SMA moment (so sánh với trung bình N nến thay vì chỉ 1 nến trước)
+    flip_ratio = df['abs_mom_raw'] / sma_mom
     # nhân động lượng hiện tại / median động lượng, rồi nhân với hệ số flip
     mom_flip_metric = (df['abs_mom_raw'] / rolling_median_mom) * flip_ratio
     
@@ -303,16 +306,14 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     filter_threshold = df['abs_mom_raw'].rolling(window=lookback_candles, min_periods=1).quantile(momFlipFilterPct / 100.0)
     mom_valid_mask = df['abs_mom_raw'] >= filter_threshold
     
-    import numpy as np
-    
     # 2. Tạo Series volume chỉ chứa những nến thoả mãn mom
-    vol_valid = df['tick_volume'].where(mom_valid_mask, np.nan)
+    vol_valid = df['value'].where(mom_valid_mask, np.nan)
     
     # 3. Tính ngưỡng lọc volume trên chính nhóm đã lọc mom
     vol_filter_threshold = vol_valid.rolling(window=lookback_candles, min_periods=1).quantile(momFlipVolFilterPct / 100.0)
     
     # 4. Valid mask cuối cùng là thoả mãn cả hai
-    valid_mask = mom_valid_mask & (df['tick_volume'] >= vol_filter_threshold)
+    valid_mask = mom_valid_mask & (df['value'] >= vol_filter_threshold)
 
     mom_flip_metric_valid = mom_flip_metric.where(valid_mask, np.nan)
     
@@ -530,8 +531,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
 
     if bin_size <= 0:
         bin_size = 0.0001
-    tf_sec_map = { "M1": 60, "M5": 300, "M15": 900, "H1": 3600, "H4": 14400, "D1": 86400, "W1": 604800, "MN1": 2592000 }
-    tf_seconds = tf_sec_map.get(timeframe.upper(), 3600)
+    # Dùng lại tf_seconds đã tính ở trên (dòng 250) để tránh ghi đè và thiếu M30
     timeout_sec = max(timeoutHours * 3600, tf_seconds * 3)
     
     # --- Calculate D-VP Cutoff Time ---
@@ -543,7 +543,9 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         
     # --- Fetch M1 data for Precise D-VP ---
     if has_m1:
-        df_m1['time'] = df_m1['time'] + (timeShiftHours * 3600)
+        # Chỉ shift M1 time trên TF thường, macro TF (D1/W1/MN1) không shift
+        if not is_macro_tf:
+            df_m1['time'] = df_m1['time'] + (timeShiftHours * 3600)
         df_m1_filtered = df_m1[df_m1['time'] >= dvp_cutoff_time]
         times = df_m1_filtered['time'].values
         highs = df_m1_filtered['high'].values
@@ -680,8 +682,6 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df = df[existing_cols]
         
     # Chuyển Dataframe sang dictionary (Thay thế NaN, Inf bằng None để JSON tương thích)
-    import pandas as pd
-    import numpy as np
     for col in df.columns:
         if pd.api.types.is_numeric_dtype(df[col]):
             df[col] = df[col].replace([np.inf, -np.inf], np.nan)

@@ -201,7 +201,9 @@ def _fetch_raw_data(symbol: str, timeframe: str, count: int = 1000, end_time: in
                 except Exception:
                     # Fallback if timezone is invalid
                     broker_dt = utc_dt
-                end_time_broker = int(broker_dt.tz_localize(None).timestamp())
+                # Fix: tính naive broker timestamp trực tiếp, tránh .timestamp() interpret theo system TZ
+                naive_broker = broker_dt.replace(tzinfo=None)
+                end_time_broker = int((naive_broker - pd.Timestamp("1970-01-01")).total_seconds())
                 rates = mt5.copy_rates_from(real_sym, tf, end_time_broker, count)
             else:
                 rates = mt5.copy_rates_from_pos(real_sym, tf, 0, count)

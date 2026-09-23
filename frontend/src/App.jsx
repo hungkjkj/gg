@@ -2184,6 +2184,10 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
             <label style={styleLabel}>Xác suất Trung vị (momPct3)</label>
             <input type="number" value={local.momPct3} onChange={e => handleChange('momPct3', Number(e.target.value))} style={styleInput} />
           </div>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel} title="Số nến dùng để tính trung bình Độ lớn Momentum. So sánh momentum hiện tại với trung bình N nến trước để đo mức tăng/giảm tương đối.">Chu kỳ SMA Moment cho Flip (Nến)</label>
+            <input type="number" value={local.smaMomLength} onChange={e => handleChange('smaMomLength', Number(e.target.value))} style={styleInput} />
+          </div>
           <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #334155' }}>
             <label style={styleLabel}>Mức lọc động lượng cho Flip (%)</label>
             <input type="number" value={local.momFlipFilterPct} onChange={e => handleChange('momFlipFilterPct', Number(e.target.value))} style={styleInput} title="Chỉ lấy những nến có Momentum lớn hơn mức này để phân phối Flip" />
@@ -2613,6 +2617,7 @@ function App() {
     momPct3: 50,
     maVolLength: 2,
     momMaLength: 3,
+    smaMomLength: 10,
     volPct1: 85.0,
     volPct2: 75.0,
     volPct3: 50.0,
