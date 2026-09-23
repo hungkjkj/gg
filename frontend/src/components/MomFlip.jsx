@@ -97,6 +97,7 @@ export const AssistiveTouch = ({ showSdBands, setShowSdBands, showMomFlip, setSh
                     <th style={{ textAlign: 'left', paddingBottom: '4px' }}>#</th>
                     <th style={{ textAlign: 'left', paddingBottom: '4px' }}>Cur</th>
                     <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Mom %</th>
+                    <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Vol %</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -105,11 +106,16 @@ export const AssistiveTouch = ({ showSdBands, setShowSdBands, showMomFlip, setSh
                       if (item.mom_percentile >= 50) momColor = '#4ade80';
                       else if (item.mom_percentile <= -50) momColor = '#f87171';
                       
+                      let volColor = '#e2e8f0';
+                      if (item.vol_percentile >= 75) volColor = '#4ade80';
+                      else if (item.vol_percentile <= 20) volColor = '#f87171';
+                      
                       return (
                     <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                       <td style={{ padding: '6px 0' }}>{idx + 1}</td>
                       <td style={{ padding: '6px 0', fontWeight: 'bold' }}>{item.currency}</td>
                       <td style={{ padding: '6px 0', textAlign: 'right', color: momColor }}>{item.mom_percentile > 0 ? '+' : ''}{item.mom_percentile != null ? item.mom_percentile.toFixed(2) : 0}%</td>
+                      <td style={{ padding: '6px 0', textAlign: 'right', color: volColor }}>{item.vol_percentile != null ? item.vol_percentile.toFixed(2) : 0}%</td>
                     </tr>
                   )})}
                 </tbody>
