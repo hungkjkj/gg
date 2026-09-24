@@ -59,8 +59,8 @@ def send_email(symbol, price, note, direction, alert_type="price"):
     receiver_email = config['emailReceiver']
     
     val_str = f"{price}%" if alert_type == "mom" else str(price)
-    subject_type = "Mom %" if alert_type == "mom" else "giá"
-    body_type = "mức Mom %" if alert_type == "mom" else "mức giá"
+    subject_type = "% Mom Flip" if alert_type == "mom" else "giá"
+    body_type = "mức % Mom Flip" if alert_type == "mom" else "mức giá"
     
     try:
         msg = MIMEMultipart()
@@ -93,7 +93,7 @@ def send_email(symbol, price, note, direction, alert_type="price"):
         print("Lỗi gửi email backend:", str(e))
         return False
 
-LATEST_MOM_DATA = {}
+LATEST_MOM_FLIP_DATA = {}
 alert_prev_prices = {}
 
 async def alert_worker():
@@ -126,9 +126,21 @@ async def alert_worker():
                         continue
                     current_value = ticks[sym].get("bid") or ticks[sym].get("last")
                 elif alert_type == "mom":
-                    if sym not in LATEST_MOM_DATA:
+                    try:
+                        import time
+                        if not hasattr(alert_worker, "last_mom_fetch"):
+                            alert_worker.last_mom_fetch = {}
+                        now = time.time()
+                        if now - alert_worker.last_mom_fetch.get(sym, 0) > 60:
+                            import main
+                            # Fetch with small count to be fast and update LATEST_MOM_FLIP_DATA
+                            await asyncio.to_thread(main.get_ohlcv, sym, "H1", 300)
+                            alert_worker.last_mom_fetch[sym] = now
+                    except Exception as e:
+                        print("Error fetching OHLCV for mom alert:", e)
+                    if sym not in LATEST_MOM_FLIP_DATA:
                         continue
-                    current_value = LATEST_MOM_DATA[sym]
+                    current_value = LATEST_MOM_FLIP_DATA[sym]
                     
                 if current_value is None: continue
                 

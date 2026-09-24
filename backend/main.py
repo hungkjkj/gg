@@ -688,6 +688,12 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df = df.replace({np.nan: None})
     records = df.to_dict(orient="records")
     
+    # Save the latest mom_flip for alert checking
+    if len(records) > 0 and 'mom_flip' in records[-1] and records[-1]['mom_flip'] is not None:
+        import alert_service
+        alert_service.LATEST_MOM_FLIP_DATA[symbol] = round(records[-1]['mom_flip'], 2)
+        
+
     return ORJSONResponse(content={
         "symbol": symbol, 
         "timeframe": timeframe, 
@@ -873,12 +879,6 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         "ranking": ranked_currencies,
         "pairs_data": matrix_data
     }
-    
-    # Update Mom data for alerts
-    import alert_service
-    for c in ranked_currencies:
-        if "currency" in c and "mom_percentile" in c:
-            alert_service.LATEST_MOM_DATA[c["currency"]] = c["mom_percentile"]
             
     _MATRIX_CACHE[cache_key] = result
     _MATRIX_CACHE_TIME[cache_key] = current_time
