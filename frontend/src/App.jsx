@@ -1764,6 +1764,7 @@ useEffect(() => {
               className="context-menu-item"
               onClick={() => {
                 setCustomAlertModal({
+                  type: 'price',
                   price: contextMenu.price.toFixed(5),
                   symbol: contextMenu.symbol
                 });
@@ -1771,6 +1772,19 @@ useEffect(() => {
               }}
             >
               ⏰ Thêm cảnh báo giá...
+            </div>
+            <div 
+              className="context-menu-item"
+              onClick={() => {
+                setCustomAlertModal({
+                  type: 'mom',
+                  price: '75',
+                  symbol: contextMenu.symbol
+                });
+                closeContextMenu();
+              }}
+            >
+              🌊 Thêm cảnh báo % Mom Flip...
             </div>
           </div>
         )}
@@ -1788,7 +1802,9 @@ useEffect(() => {
               boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
               display: 'flex', flexDirection: 'column', gap: '15px'
             }}>
-              <h3 style={{ margin: 0, color: 'white' }}>Thêm cảnh báo giá</h3>
+              <h3 style={{ margin: 0, color: 'white' }}>
+                {customAlertModal.type === 'mom' ? 'Thêm cảnh báo % Mom Flip' : 'Thêm cảnh báo giá'}
+              </h3>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' }}>Cặp giao dịch</label>
@@ -1796,11 +1812,13 @@ useEffect(() => {
               </div>
               
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' }}>Mức giá</label>
+                <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' }}>
+                  {customAlertModal.type === 'mom' ? 'Mức % Mom Flip' : 'Mức giá'}
+                </label>
                 <input 
-                  type="text" 
+                  type="number" 
                   value={customAlertModal.price} 
-                  readOnly 
+                  onChange={(e) => setCustomAlertModal({...customAlertModal, price: e.target.value})}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'white', fontWeight: 'bold' }} 
                 />
               </div>
@@ -1818,6 +1836,7 @@ useEffect(() => {
                       if (handleAddAlert) {
                         handleAddAlert({
                             symbol: customAlertModal.symbol,
+                            type: customAlertModal.type || 'price',
                             price: parseFloat(customAlertModal.price),
                             note: alertNoteInput
                         });
@@ -1836,6 +1855,7 @@ useEffect(() => {
                   if (handleAddAlert) {
                     handleAddAlert({
                         symbol: customAlertModal.symbol,
+                        type: customAlertModal.type || 'price',
                         price: parseFloat(customAlertModal.price),
                         note: alertNoteInput
                     });
