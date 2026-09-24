@@ -2585,6 +2585,7 @@ function App() {
 
   const [newAlertPrice, setNewAlertPrice] = useState('');
   const [newAlertNote, setNewAlertNote] = useState('');
+  const [newAlertType, setNewAlertType] = useState('price');
   const [alertSymbol, setAlertSymbol] = useState(symbol);
   
   useEffect(() => {
@@ -2860,9 +2861,17 @@ function App() {
                   <option value="EURUSD">EURUSD</option>
                 )}
               </select>
+              <select
+                value={newAlertType}
+                onChange={e => setNewAlertType(e.target.value)}
+                style={{ padding: '6px', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'white', maxWidth: '75px', fontSize: '0.8rem' }}
+              >
+                <option value="price">Giá</option>
+                <option value="mom">Mom %</option>
+              </select>
               <input 
                 type="number" 
-                placeholder="Giá" 
+                placeholder={newAlertType === 'price' ? "Giá" : "Mom %"} 
                 value={newAlertPrice}
                 onChange={e => setNewAlertPrice(e.target.value)}
                 style={{ flex: 1, padding: '6px', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'white', minWidth: 0 }}
@@ -2881,7 +2890,7 @@ function App() {
                 style={{ padding: '6px 12px' }}
                 onClick={() => {
                   if(!newAlertPrice) return;
-                  handleAddAlert({ symbol: alertSymbol, price: parseFloat(newAlertPrice), note: newAlertNote });
+                  handleAddAlert({ symbol: alertSymbol, type: newAlertType, price: parseFloat(newAlertPrice), note: newAlertNote });
                   setNewAlertPrice('');
                   setNewAlertNote('');
                 }}
@@ -2894,7 +2903,8 @@ function App() {
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <div>
                       <span style={{ color: a.status==='active' ? '#eab308' : '#94a3b8', fontWeight: 'bold' }}>{a.symbol}</span>
-                      <span style={{ marginLeft: '5px' }}>{a.price}</span>
+                      <span style={{ margin: '0 5px', fontSize: '0.75rem', color: '#94a3b8' }}>{a.type === 'mom' ? 'Mom' : '@'}</span>
+                      <span style={{ marginLeft: '2px', color: '#4ade80' }}>{a.type === 'mom' ? a.price + '%' : a.price}</span>
                       {a.status === 'triggered' && <span style={{ marginLeft: '5px', color: '#ef4444' }}>(Triggered)</span>}
                     </div>
                     {a.note && <span style={{ color: '#94a3b8', fontSize: '0.75rem', marginTop: '2px', fontStyle: 'italic' }}>{a.note}</span>}

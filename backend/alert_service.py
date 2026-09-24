@@ -49,7 +49,7 @@ def get_email_config():
             pass
     return None
 
-def send_email(symbol, price, note, direction):
+def send_email(symbol, price, note, direction, alert_type="price"):
     config = get_email_config()
     if not config or not config.get('emailSender') or not config.get('emailPassword'):
         return False
@@ -58,18 +58,23 @@ def send_email(symbol, price, note, direction):
     sender_password = config['emailPassword']
     receiver_email = config['emailReceiver']
     
+    val_str = f"{price}%" if alert_type == "mom" else str(price)
+    subject_type = "Mom %" if alert_type == "mom" else "giá"
+    body_type = "mức Mom %" if alert_type == "mom" else "mức giá"
+    
     try:
         msg = MIMEMultipart()
         msg['From'] = sender_email
         msg['To'] = receiver_email
-        msg['Subject'] = f"🚨 Cảnh báo giá: {symbol} {direction} {price}"
+        msg['Subject'] = f"🚨 Cảnh báo {subject_type}: {symbol} {direction} {val_str}"
         
         html = f"""
         <html>
             <body style="font-family: Arial, sans-serif; padding: 20px;">
                 <h2 style="color: #d9534f;">🚨 Cảnh báo kích hoạt!</h2>
                 <p>Mã giao dịch: <strong>{symbol}</strong></p>
-                <p>Trạng thái: <strong>{direction}</strong> mức giá <strong>{price}</strong></p>
+                <p>Loại cảnh báo: <strong>{subject_type}</strong></p>
+                <p>Trạng thái: <strong>{direction}</strong> {body_type} <strong>{val_str}</strong></p>
                 <p>Ghi chú: {note if note else "Không có"}</p>
                 <br/>
                 <p><em>Email tự động từ hệ thống Quant Trading Dashboard.</em></p>
@@ -88,6 +93,7 @@ def send_email(symbol, price, note, direction):
         print("Lỗi gửi email backend:", str(e))
         return False
 
+LATEST_MOM_DATA = {}
 alert_prev_prices = {}
 
 async def alert_worker():
@@ -100,7 +106,7 @@ async def alert_worker():
                 await asyncio.sleep(2)
                 continue
                 
-            symbols = list(set([a["symbol"] for a in active_alerts]))
+            symbols = list(set([a["symbol"] for a in active_alerts if a.get("type", "price") == "price"]))
             ticks = {}
             for sym in symbols:
                 # MT5 service get_tick is synchronous
@@ -112,35 +118,43 @@ async def alert_worker():
             
             for alert in active_alerts:
                 sym = alert["symbol"]
-                if sym not in ticks:
-                    continue
+                alert_type = alert.get("type", "price")
                 
-                # Bi price format
-                current_price = ticks[sym].get("bid") or ticks[sym].get("last")
-                if not current_price: continue
+                current_value = None
+                if alert_type == "price":
+                    if sym not in ticks:
+                        continue
+                    current_value = ticks[sym].get("bid") or ticks[sym].get("last")
+                elif alert_type == "mom":
+                    if sym not in LATEST_MOM_DATA:
+                        continue
+                    current_value = LATEST_MOM_DATA[sym]
+                    
+                if current_value is None: continue
                 
                 alert_id = str(alert["id"])
-                prev_price = alert_prev_prices.get(alert_id)
-                target_price = alert["price"]
+                prev_value = alert_prev_prices.get(alert_id)
+                target_value = alert["price"] # Using price field for the target value
                 
-                if prev_price is not None:
+                if prev_value is not None:
                     # Check crossover
                     direction = ""
-                    if prev_price < target_price and current_price >= target_price:
+                    if prev_value < target_value and current_value >= target_value:
                         direction = "Vượt lên trên"
-                    elif prev_price > target_price and current_price <= target_price:
+                    elif prev_value > target_value and current_value <= target_value:
                         direction = "Cắt xuống dưới"
                         
                     if direction:
                         # Triggered
                         alert["status"] = "triggered"
                         triggered_any = True
-                        print(f"Alert Triggered for {sym} at {current_price} ({direction})")
+                        val_str = f"{current_value}%" if alert_type == "mom" else str(current_value)
+                        print(f"Alert Triggered for {sym} at {val_str} ({direction})")
                         
                         # Background email
-                        asyncio.create_task(asyncio.to_thread(send_email, sym, target_price, alert.get("note", ""), direction))
+                        asyncio.create_task(asyncio.to_thread(send_email, sym, target_value, alert.get("note", ""), direction, alert_type))
                 
-                alert_prev_prices[alert_id] = current_price
+                alert_prev_prices[alert_id] = current_value
                 
             if triggered_any:
                 save_alerts()

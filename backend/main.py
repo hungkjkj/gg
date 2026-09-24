@@ -80,6 +80,7 @@ class AlertModel(BaseModel):
     price: float
     note: str
     status: str
+    type: str = "price"
 
 @app.get("/api/v1/alerts")
 def get_alerts():
@@ -872,6 +873,13 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         "ranking": ranked_currencies,
         "pairs_data": matrix_data
     }
+    
+    # Update Mom data for alerts
+    import alert_service
+    for c in ranked_currencies:
+        if "currency" in c and "mom_percentile" in c:
+            alert_service.LATEST_MOM_DATA[c["currency"]] = c["mom_percentile"]
+            
     _MATRIX_CACHE[cache_key] = result
     _MATRIX_CACHE_TIME[cache_key] = current_time
     return result
