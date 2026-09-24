@@ -1867,7 +1867,7 @@ useEffect(() => {
             </div>
           </div>
         )}
-        {showMomFlipChart && <MomFlipChartComponent data={momFlipData} mainChart={chartRef.current} mainSeries={candlestickSeriesRef.current} />}
+        {showMomFlipChart && <MomFlipChartComponent data={momFlipData} mainChart={chartRef.current} mainSeries={candlestickSeriesRef.current} alerts={alerts} symbol={symbol} />}
       </div>
   );
 };

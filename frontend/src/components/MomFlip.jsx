@@ -146,10 +146,11 @@ export const AssistiveTouch = ({ showSdBands, setShowSdBands, showMomFlip, setSh
   );
 };
 
-export const MomFlipChartComponent = ({ data, mainChart, mainSeries }) => {
+export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, symbol }) => {
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
+  const priceLinesRef = useRef([]);
   const [position, setPosition] = useState({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 - 125 });
   const dragRef = useRef(null);
   
@@ -202,6 +203,32 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries }) => {
     
     return () => { ro.disconnect(); chart.remove(); };
   }, []);
+  
+  useEffect(() => {
+    if (!seriesRef.current || !alerts || !symbol) return;
+    
+    // Clear old lines
+    priceLinesRef.current.forEach(line => {
+      try {
+        seriesRef.current.removePriceLine(line);
+      } catch (e) {}
+    });
+    priceLinesRef.current = [];
+    
+    // Add new lines for mom flip alerts
+    const momAlerts = alerts.filter(a => a.symbol === symbol && a.type === 'mom');
+    momAlerts.forEach(alert => {
+      const line = seriesRef.current.createPriceLine({
+        price: alert.price,
+        color: alert.status === 'active' ? '#eab308' : '#94a3b8',
+        lineWidth: 1,
+        lineStyle: 1,
+        axisLabelVisible: true,
+        title: `Alert: ${alert.price}%`,
+      });
+      priceLinesRef.current.push(line);
+    });
+  }, [alerts, symbol]);
   
   useEffect(() => {
     if (!mainChart || !chartRef.current || !mainSeries || !seriesRef.current) return;
