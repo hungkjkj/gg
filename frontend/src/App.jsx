@@ -2666,7 +2666,7 @@ function App() {
       }).catch(err => console.error(err));
     };
     fetchBubbleMatrix();
-    const interval = setInterval(fetchBubbleMatrix, 2000);
+    const interval = setInterval(fetchBubbleMatrix, 60000);
     return () => clearInterval(interval);
   }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixVolDays]);
 

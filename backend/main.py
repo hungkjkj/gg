@@ -698,6 +698,8 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     })
 
 MATRIX_PROGRESS = {"currency": 0.0, "crypto": 0.0, "metals": 0.0}
+_MATRIX_CACHE = {}
+_MATRIX_CACHE_TIME = {}
 
 @app.get("/api/v1/matrix/progress")
 def get_matrix_progress(matrix_type: str = "currency"):
@@ -705,6 +707,14 @@ def get_matrix_progress(matrix_type: str = "currency"):
 
 @app.get("/api/v1/matrix")
 async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str = "fx", end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
+    import time
+    cache_key = f"{n_hours}_{vol_days}_{matrix_type}_{end_time}_{brokerTimezone}"
+    current_time = time.time()
+    
+    # Cache for 10 seconds to prevent concurrent overlap and UI progress reset
+    if cache_key in _MATRIX_CACHE and current_time - _MATRIX_CACHE_TIME.get(cache_key, 0) < 10:
+        return _MATRIX_CACHE[cache_key]
+        
     import json
     config_path = os.path.join(os.path.dirname(__file__), "app_configs.json")
     try:
@@ -857,11 +867,14 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
     ranked_currencies = sorted(ranked_currencies, key=lambda x: (x["mom_percentile"], x["score"]), reverse=True)
     
     MATRIX_PROGRESS[matrix_type] = 100.0
-    return {
+    result = {
         "n_hours": n_hours,
         "ranking": ranked_currencies,
         "pairs_data": matrix_data
     }
+    _MATRIX_CACHE[cache_key] = result
+    _MATRIX_CACHE_TIME[cache_key] = current_time
+    return result
 
 # Serve Frontend SPA
 FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
