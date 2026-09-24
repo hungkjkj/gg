@@ -81,6 +81,7 @@ class AlertModel(BaseModel):
     note: str
     status: str
     type: str = "price"
+    timeframe: str = ""
 
 @app.get("/api/v1/alerts")
 def get_alerts():
@@ -691,7 +692,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     # Save the latest mom_flip for alert checking
     if len(records) > 0 and 'mom_flip' in records[-1] and records[-1]['mom_flip'] is not None:
         import alert_service
-        alert_service.LATEST_MOM_FLIP_DATA[symbol] = round(records[-1]['mom_flip'], 2)
+        alert_service.LATEST_MOM_FLIP_DATA[f"{symbol}_{timeframe}"] = round(records[-1]['mom_flip'], 2)
         
 
     return ORJSONResponse(content={

@@ -126,21 +126,28 @@ async def alert_worker():
                         continue
                     current_value = ticks[sym].get("bid") or ticks[sym].get("last")
                 elif alert_type == "mom":
+                    tf = alert.get("timeframe", "H1")
+                    if not tf: tf = "H1"
                     try:
                         import time
                         if not hasattr(alert_worker, "last_mom_fetch"):
                             alert_worker.last_mom_fetch = {}
                         now = time.time()
-                        if now - alert_worker.last_mom_fetch.get(sym, 0) > 60:
+                        
+                        # Cache key for fetching so we don't spam 
+                        fetch_key = f"{sym}_{tf}"
+                        if now - alert_worker.last_mom_fetch.get(fetch_key, 0) > 60:
                             import main
                             # Fetch with small count to be fast and update LATEST_MOM_FLIP_DATA
-                            await asyncio.to_thread(main.get_ohlcv, sym, "H1", 300)
-                            alert_worker.last_mom_fetch[sym] = now
+                            await asyncio.to_thread(main.get_ohlcv, sym, tf, 300)
+                            alert_worker.last_mom_fetch[fetch_key] = now
                     except Exception as e:
                         print("Error fetching OHLCV for mom alert:", e)
-                    if sym not in LATEST_MOM_FLIP_DATA:
+                        
+                    data_key = f"{sym}_{tf}"
+                    if data_key not in LATEST_MOM_FLIP_DATA:
                         continue
-                    current_value = LATEST_MOM_FLIP_DATA[sym]
+                    current_value = LATEST_MOM_FLIP_DATA[data_key]
                     
                 if current_value is None: continue
                 

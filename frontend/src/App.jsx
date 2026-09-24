@@ -1837,6 +1837,7 @@ useEffect(() => {
                         handleAddAlert({
                             symbol: customAlertModal.symbol,
                             type: customAlertModal.type || 'price',
+                            timeframe: timeframe,
                             price: parseFloat(customAlertModal.price),
                             note: alertNoteInput
                         });
@@ -1856,6 +1857,7 @@ useEffect(() => {
                     handleAddAlert({
                         symbol: customAlertModal.symbol,
                         type: customAlertModal.type || 'price',
+                        timeframe: timeframe,
                         price: parseFloat(customAlertModal.price),
                         note: alertNoteInput
                     });
@@ -2910,7 +2912,7 @@ function App() {
                 style={{ padding: '6px 12px' }}
                 onClick={() => {
                   if(!newAlertPrice) return;
-                  handleAddAlert({ symbol: alertSymbol, type: newAlertType, price: parseFloat(newAlertPrice), note: newAlertNote });
+                  handleAddAlert({ symbol: alertSymbol, type: newAlertType, timeframe: timeframe, price: parseFloat(newAlertPrice), note: newAlertNote });
                   setNewAlertPrice('');
                   setNewAlertNote('');
                 }}
