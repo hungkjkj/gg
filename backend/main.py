@@ -159,11 +159,7 @@ def get_backtest_news(symbol: str, timestamp: int):
         all_events = news_service.get_backtest_news(timestamp)
         
         # Lọc theo cặp tiền
-        currencies = []
-        if len(symbol) >= 6:
-            currencies = [symbol[0:3].upper(), symbol[3:6].upper()]
-        else:
-            currencies = [symbol.upper()]
+        currencies = news_service.extract_currencies(symbol)
             
         filtered = []
         for ev in all_events:
@@ -763,30 +759,31 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         if df is None or df.empty or len(df) < n_hours:
             return None
             
-        df['vwma'] = (df['close'] * df['tick_volume']).rolling(window=n_hours, min_periods=1).sum() / df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
+        df['hlc3'] = (df['high'] + df['low'] + df['close']) / 3
+        df['vwma'] = (df['hlc3'] * df['tick_volume']).rolling(window=n_hours, min_periods=1).sum() / df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
         df['vol_rolling'] = df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
         
         if len(df) > n_hours:
             current_vwma = df['vwma'].iloc[-1]
-            past_vwma = df['vwma'].iloc[-n_hours]
+            past_hlc3 = df['hlc3'].iloc[-n_hours]
             
-            if pd.isna(current_vwma) or pd.isna(past_vwma) or past_vwma == 0:
+            if pd.isna(current_vwma) or pd.isna(past_hlc3) or past_hlc3 == 0:
                 return None
                 
-            diff_pct_current = ((current_vwma - past_vwma) / past_vwma) * 100
+            diff_pct_current = ((current_vwma - past_hlc3) / past_hlc3) * 100
             
             if pair == "GLOBAL_INDEX":
                 base_currency = "GI"
                 quote_currency = "NONE"
-                df['diff_pct'] = (df['vwma'] - df['vwma'].shift(n_hours)) / df['vwma'].shift(n_hours) * 100
+                df['diff_pct'] = (df['vwma'] - df['hlc3'].shift(n_hours)) / df['hlc3'].shift(n_hours) * 100
             elif matrix_type != "fx" and matrix_type != "currency":
                 base_currency = pair
                 quote_currency = "NONE"
-                df['diff_pct'] = (df['vwma'] - df['vwma'].shift(n_hours)) / df['vwma'].shift(n_hours) * 100
+                df['diff_pct'] = (df['vwma'] - df['hlc3'].shift(n_hours)) / df['hlc3'].shift(n_hours) * 100
             else:
                 base_currency = pair[:3]
                 quote_currency = pair[3:]
-                df['diff_pct'] = (df['vwma'] - df['vwma'].shift(n_hours)) / df['vwma'].shift(n_hours) * 100
+                df['diff_pct'] = (df['vwma'] - df['hlc3'].shift(n_hours)) / df['hlc3'].shift(n_hours) * 100
             
             diff_array = df['diff_pct'].iloc[-(vol_days * 24):].fillna(0).values
             vol_array = df['vol_rolling'].iloc[-(vol_days * 24):].fillna(0).values

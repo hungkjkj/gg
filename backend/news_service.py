@@ -53,21 +53,30 @@ def _parse_year_from_week(week):
         return int(m.group(1))
     return datetime.datetime.now().year
 
+def extract_currencies(symbol: str):
+    valid_fx = ["EUR", "GBP", "AUD", "NZD", "JPY", "USD", "CHF", "CAD", "CNY"]
+    if len(symbol) >= 6:
+        base = symbol[0:3].upper()
+        quote = symbol[3:6].upper()
+        if base in valid_fx or quote in valid_fx:
+            return [base, quote]
+    return ["USD"]
+
 def scrape_ff_week(week='this'):
     url = f'https://www.forexfactory.com/calendar?week={week}'
-    req = urllib.request.Request(url, headers={
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Cookie': 'fftimezoneoffset=0; ff_timezone=0;'
-    })
+    
     try:
-        html = urllib.request.urlopen(req, timeout=15).read().decode('utf-8', errors='ignore')
+        import cloudscraper
+        scraper = cloudscraper.create_scraper()
+        # cloudscraper will handle CF bypass and cookies
+        response = scraper.get(url, timeout=20)
+        if response.status_code != 200:
+            print(f"Scrape error for week={week}: Status {response.status_code}")
+            return []
+        html = response.text
     except Exception as e:
         print(f"Scrape error for week={week}: {e}")
         return []
-        
-    # Calculate local system timezone offset to UTC (removed)
-    
-        
     soup = BeautifulSoup(html, 'html.parser')
     
     # Step 1: Extract event JSON data (contains UTC timestamps as 'dateline')
@@ -161,6 +170,10 @@ def get_backtest_news(timestamp):
     Cache vĩnh viễn vì dữ liệu quá khứ không thay đổi."""
     global HISTORY_CACHE
     
+    # Guard: timestamp=0 hoặc quá nhỏ (trước năm 2000) là không hợp lệ
+    if not timestamp or timestamp < 946684800:  # 946684800 = 2000-01-01
+        return []
+    
     all_events = []
     
     # Tính tuần hiện tại và tuần tiếp theo
@@ -205,7 +218,11 @@ def fetch_ff_calendar():
         
     print("Fetching new Catalyst data from ForexFactory...")
     events_this = scrape_ff_week('this')
-    events_next = scrape_ff_week('next')
+    
+    # Chỉ tải tuần sau nếu hôm nay là Chủ Nhật (weekday() == 6) hoặc Thứ Bảy (5)
+    events_next = []
+    if datetime.datetime.now().weekday() >= 5:
+        events_next = scrape_ff_week('next')
     
     all_events = events_this + events_next
     if len(all_events) > 0:
@@ -227,11 +244,7 @@ def get_news_for_symbol(symbol: str):
     if not events:
         return []
         
-    currencies = []
-    if len(symbol) >= 6:
-        currencies = [symbol[0:3].upper(), symbol[3:6].upper()]
-    else:
-        currencies = [symbol.upper()]
+    currencies = extract_currencies(symbol)
         
     filtered = []
     for ev in events:

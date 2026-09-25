@@ -173,6 +173,24 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
       lineWidth: 2,
     });
     
+    // Add price line series for divergence comparison
+    const priceSeries = chart.addLineSeries({
+      color: 'rgba(148, 163, 184, 0.5)', // Muted color for background price line
+      lineWidth: 1,
+      priceScaleId: 'priceScale',
+      crosshairMarkerVisible: false,
+      priceLineVisible: false,
+    });
+    
+    chart.priceScale('priceScale').applyOptions({
+      visible: false, // Hide the price scale so it doesn't clutter the flip chart
+      autoScale: true,
+    });
+    
+    seriesRef.current = series;
+    chartRef.current.priceSeries = priceSeries; // attach to ref to update later
+
+    
     series.createPriceLine({
         price: 75,
         color: '#f59e0b',
@@ -291,7 +309,10 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
 
   useEffect(() => {
     if (seriesRef.current && data && data.length > 0) {
-      seriesRef.current.setData(data);
+      seriesRef.current.setData(data.map(d => ({time: d.time, value: d.value})));
+      if (chartRef.current && chartRef.current.priceSeries) {
+          chartRef.current.priceSeries.setData(data.map(d => ({time: d.time, value: d.close})));
+      }
     }
   }, [data]);
 

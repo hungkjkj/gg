@@ -138,8 +138,22 @@ async def alert_worker():
                         fetch_key = f"{sym}_{tf}"
                         if now - alert_worker.last_mom_fetch.get(fetch_key, 0) > 60:
                             import main
+                            # Read configs to match chart parameters
+                            configs = get_email_config() or {}
+                            # Extract kwargs for get_ohlcv
+                            kwargs = {
+                                'maVolLength': configs.get('maVolLength', 2),
+                                'momMaLength': configs.get('momMaLength', 3),
+                                'smaMomLength': configs.get('smaMomLength', 10),
+                                'momFlipFilterPct': configs.get('momFlipFilterPct', 75.0),
+                                'momFlipVolFilterPct': configs.get('momFlipVolFilterPct', 50.0),
+                                'volPct1': configs.get('volPct1', 85.0),
+                                'volPct2': configs.get('volPct2', 75.0),
+                                'volPct3': configs.get('volPct3', 50.0),
+                                'volPct4': configs.get('volPct4', 15.0),
+                            }
                             # Fetch with small count to be fast and update LATEST_MOM_FLIP_DATA
-                            await asyncio.to_thread(main.get_ohlcv, sym, tf, 300)
+                            await asyncio.to_thread(main.get_ohlcv, sym, tf, 300, 0, False, **kwargs)
                             alert_worker.last_mom_fetch[fetch_key] = now
                     except Exception as e:
                         print("Error fetching OHLCV for mom alert:", e)

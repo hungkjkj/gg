@@ -952,6 +952,13 @@ useEffect(() => {
         bandwidthHistoryRef.current = [];
         setVpBoxes([]);
         setVolStats(null);
+        volStatsRef.current = null;
+        sessionDataRef.current = [];
+        if (newsSeriesRef.current) {
+            try {
+                newsSeriesRef.current.setMarkers([]);
+            } catch (e) {}
+        }
     }
     
     if (!isPolling) {
@@ -1002,8 +1009,7 @@ useEffect(() => {
 
         const newMomFlip = rawData.filter(d => d.mom_flip != null && !isNaN(d.mom_flip)).map(d => ({
           time: d.time,
-          value: d.mom_flip
-        })).sort((a,b)=>a.time - b.time);
+          value: d.mom_flip, close: d.close })).sort((a,b)=>a.time - b.time);
 
         if (!isPolling) {
             setMomFlipData(newMomFlip);
@@ -1161,13 +1167,18 @@ useEffect(() => {
         const sortedHl2Raw = rawData.filter(d => d.hl2 != null && !isNaN(d.hl2)).sort((a,b)=>a.time-b.time);
         const fairValueData = sortedHl2Raw.map((item, index, arr) => {
           let col = "rgba(128, 128, 128, 0.8)";
-          if (index > 0 || lastHl2ColorRef.current === null) {
+          if (index < arr.length - 1) {
+            // Look ahead: color this segment based on direction from current to next
+            if (arr[index + 1].hl2 >= item.hl2) col = "rgba(0, 255, 0, 1)";
+            else col = "rgba(255, 0, 0, 1)";
+          } else {
+            // Last point: determine color by comparing with previous point
             if (index > 0) {
               if (item.hl2 >= arr[index - 1].hl2) col = "rgba(0, 255, 0, 1)";
               else col = "rgba(255, 0, 0, 1)";
+            } else if (lastHl2ColorRef.current !== null) {
+              col = lastHl2ColorRef.current;
             }
-          } else {
-            col = lastHl2ColorRef.current;
           }
           return { time: item.time, value: item.hl2, color: col };
         });
@@ -1183,12 +1194,20 @@ useEffect(() => {
             bandwidthHistory.push(rawBandwidth);
             
             let col = "rgba(128, 128, 128, 0.9)"; 
-            if (index > 0) {
-                const prevRawBandwidth = arr[index - 1].upper_band - arr[index - 1].lower_band;
-                if (rawBandwidth >= prevRawBandwidth) col = "rgba(0, 230, 118, 0.9)";
+            if (index < arr.length - 1) {
+                // Look ahead: color based on next bandwidth vs current
+                const nextRawBandwidth = arr[index + 1].upper_band - arr[index + 1].lower_band;
+                if (nextRawBandwidth >= rawBandwidth) col = "rgba(0, 230, 118, 0.9)";
                 else col = "rgba(255, 23, 68, 0.9)";
-            } else if (lastSdColorRef.current !== null) {
-                col = lastSdColorRef.current;
+            } else {
+                // Last point: fallback to comparing with previous
+                if (index > 0) {
+                    const prevRawBandwidth = arr[index - 1].upper_band - arr[index - 1].lower_band;
+                    if (rawBandwidth >= prevRawBandwidth) col = "rgba(0, 230, 118, 0.9)";
+                    else col = "rgba(255, 23, 68, 0.9)";
+                } else if (lastSdColorRef.current !== null) {
+                    col = lastSdColorRef.current;
+                }
             }
             
             let fillColor = "rgba(128, 128, 128, 0.15)";
@@ -1417,6 +1436,13 @@ useEffect(() => {
             if (maVolSeriesRef.current) maVolSeriesRef.current.setData([]);
             setVpBoxes([]);
             setVolStats(null);
+            volStatsRef.current = null;
+            sessionDataRef.current = [];
+            if (newsSeriesRef.current) {
+                try {
+                    newsSeriesRef.current.setMarkers([]);
+                } catch (e) {}
+            }
         }
       } finally {
         if (!isPolling) {
@@ -2043,12 +2069,13 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       {/* Bảng xếp hạng đồng tiền */}
       <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px' }}>
         <h2 style={{ marginBottom: '20px', color: '#60a5fa' }}>Xếp hạng Sức mạnh Tiền tệ ({matrixHours}H)</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
+        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '16px 0', textAlign: 'left' }}>
+           <thead>
             <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
               <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hạng</th>
               <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Đồng tiền</th>
               <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Điểm sức mạnh (Score)</th>
+              <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>% Mom</th>
               <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Khối lượng (Top %)</th>
             </tr>
           </thead>
@@ -2059,12 +2086,20 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
               if (item.vol_percentile >= 75) volColor = '#4ade80'; // Xanh lá sáng
               else if (item.vol_percentile <= 20) volColor = '#f87171'; // Đỏ nhạt
               
+              // Color logic cho Mom Percentile
+              let momColor = 'var(--text-primary)';
+              if (item.mom_percentile >= 50) momColor = '#4ade80';
+              else if (item.mom_percentile <= -50) momColor = '#f87171';
+              
               return (
               <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                 <td style={{ padding: '12px 0', fontWeight: 'bold' }}>#{index + 1}</td>
                 <td style={{ padding: '12px 0' }}>{item.currency}</td>
                 <td style={{ padding: '12px 0', color: item.score > 0 ? 'var(--up-color)' : (item.score < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
                   {item.score > 0 ? '+' : ''}{item.score.toFixed(2)}
+                </td>
+                <td style={{ padding: '12px 0', color: momColor, fontWeight: Math.abs(item.mom_percentile || 0) >= 50 ? 'bold' : 'normal' }}>
+                  {item.mom_percentile > 0 ? '+' : ''}{item.mom_percentile != null ? item.mom_percentile.toFixed(2) : '0.00'}%
                 </td>
                 <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal' }}>
                   {item.vol_percentile}%
