@@ -156,7 +156,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
 
   // Apply News Markers
   useEffect(() => {
-    if (newsSeriesRef.current && (newsData.length > 0 || (volStatsRef.current && volStatsRef.current.v_lines))) {
+    if (newsSeriesRef.current) {
       const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
 
       // Align news to timeframe grid to prevent blank gaps in chart
@@ -1900,13 +1900,22 @@ useEffect(() => {
   );
 };
 
-const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, initialMatrixVolDays, onSaveMatrixSettings }) => {
+const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, initialMatrixVolDays, onSaveMatrixSettings, symbol }) => {
   const [matrixData, setMatrixData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [matrixHours, setMatrixHours] = useState(initialMatrixHours || Number(localStorage.getItem('currencyMatrixHours')) || 24);
   const [matrixVolDays, setMatrixVolDays] = useState(initialMatrixVolDays || Number(localStorage.getItem('currencyMatrixVolDays')) || 30);
   const [matrixType, setMatrixType] = useState((localStorage.getItem('matrixType') === 'currency' ? 'fx' : localStorage.getItem('matrixType')) || 'fx');
+
+  // Tự động đổi nhóm tài sản theo symbol đang xem
+  useEffect(() => {
+    if (symbol) {
+      const autoType = getMatrixTypeForSymbol(symbol);
+      setMatrixType(autoType);
+      localStorage.setItem('matrixType', autoType);
+    }
+  }, [symbol]);
 
   useEffect(() => {
     if (initialMatrixHours) setMatrixHours(initialMatrixHours);
@@ -2512,6 +2521,20 @@ const CatalystTab = ({ configs }) => {
   );
 };
 
+// Helper: tự động xác định loại matrix dựa trên symbol đang xem
+const getMatrixTypeForSymbol = (sym) => {
+  if (!sym) return 'fx';
+  const s = sym.toUpperCase();
+  // Crypto
+  if (s.includes('BTC') || s.includes('ETH') || s.includes('SOL') || s.includes('XRP') || s.includes('DOGE') || s.includes('ADA') || s.includes('DOT') || s.includes('LINK') || s.includes('BNB') || s.includes('AVAX')) return 'crypto';
+  // Commodities
+  if (s.includes('GOLD') || s.includes('XAU') || s.includes('SILVER') || s.includes('XAG') || s.includes('OIL') || s.includes('BRENT') || s.includes('WTI') || s.includes('NATGAS') || s.includes('COPPER') || s.includes('PLATINUM') || s.includes('PALLADIUM')) return 'commodities';
+  // US Stocks / Indices  
+  if (s.includes('NASDAQ') || s.includes('US500') || s.includes('US30') || s.includes('US100') || s.includes('SPX') || s.includes('DJI') || s.includes('NDX') || s === 'NAS100' || s.includes('AAPL') || s.includes('TSLA') || s.includes('MSFT') || s.includes('AMZN') || s.includes('GOOG') || s.includes('META') || s.includes('NVDA') || s.includes('DAX') || s.includes('FTSE') || s.includes('JP225') || s.includes('NIKKEI')) return 'us_stocks';
+  // Forex (default) - các cặp tiền tệ
+  return 'fx';
+};
+
 const DEFAULT_SYMBOLS = {
   "15 Cặp tiền tệ chính": [
     {name: "EURUSD", description: "Euro vs US Dollar"},
@@ -2712,7 +2735,7 @@ function App() {
       const bTime = configs.brokerTimezone || 'Europe/Athens';
       const mHours = configs.matrixHours || 24;
       const mVolDays = configs.matrixVolDays || 30;
-      const mType = localStorage.getItem('matrixType') || 'fx';
+      const mType = getMatrixTypeForSymbol(symbol);
       let url = `http://localhost:8000/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}`;
       if (viewMode === 'backtest' && window.currentSimulatedTime) {
         url += `&end_time=${window.currentSimulatedTime}`;
@@ -2726,7 +2749,7 @@ function App() {
     fetchBubbleMatrix();
     const interval = setInterval(fetchBubbleMatrix, 60000);
     return () => clearInterval(interval);
-  }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixVolDays]);
+  }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixVolDays, symbol]);
 
   useEffect(() => {
     axios.get('http://localhost:8000/api/v1/symbols')
@@ -3006,6 +3029,7 @@ function App() {
                 initialMatrixHours={configs.matrixHours} 
                 initialMatrixVolDays={configs.matrixVolDays} 
                 onSaveMatrixSettings={handleSaveMatrixSettings}
+                symbol={symbol}
               />
             ) : (
               <CatalystTab configs={configs} />
