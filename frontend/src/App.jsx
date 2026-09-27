@@ -189,12 +189,15 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       
       const futureTimes = [];
       let t = currentTime + tfSec;
-      while (t <= maxFutureTime) {
+      let futureBars = 0;
+      const MIN_FUTURE_BARS = 150;
+      while (t <= maxFutureTime || futureBars < MIN_FUTURE_BARS) {
          const date = new Date(t * 1000);
          const day = date.getUTCDay();
          // Bỏ qua Thứ 7 (6) và Chủ Nhật (0)
          if (day !== 0 && day !== 6) {
              futureTimes.push({ time: t, value: 0 });
+             futureBars++;
          }
          t += tfSec;
       }
