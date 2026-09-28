@@ -752,12 +752,19 @@ useEffect(() => {
 
     window.addEventListener('resize', handleResize);
 
-    return () => {
+      return () => {
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
-      try { chart.remove(); } catch (e) {}
-      try { momentumChart.remove(); } catch (e) {}
-      try { volumeChart.remove(); } catch (e) {}
+      
+      const c1 = chart;
+      const c2 = momentumChart;
+      const c3 = volumeChart;
+      setTimeout(() => {
+          try { if (c1) c1.remove(); } catch (e) {}
+          try { if (c2) c2.remove(); } catch (e) {}
+          try { if (c3) c3.remove(); } catch (e) {}
+      }, 0);
+      
       chartRef.current = null;
       momentumChartRef.current = null;
       volumeChartRef.current = null;
