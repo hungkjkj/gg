@@ -186,6 +186,7 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
       visible: false, // Hide the price scale so it doesn't clutter the flip chart
       autoScale: true,
     });
+    chartRef.current = chart;
     
     seriesRef.current = series;
     chartRef.current.priceSeries = priceSeries; // attach to ref to update later
@@ -219,7 +220,11 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
     });
     ro.observe(chartContainerRef.current);
     
-    return () => { ro.disconnect(); chart.remove(); };
+    return () => { 
+        ro.disconnect(); 
+        const c = chart;
+        setTimeout(() => { try { if (c) c.remove(); } catch(e) {} }, 0);
+    };
   }, []);
   
   useEffect(() => {
