@@ -224,7 +224,8 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
     
     return () => { 
         ro.disconnect(); 
-        try { if (chart) chart.remove(); } catch(e) {}
+        const c = chart;
+        setTimeout(() => { try { if (c) c.remove(); } catch(e) {} }, 0);
     };
   }, []);
   
