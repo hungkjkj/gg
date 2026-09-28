@@ -871,11 +871,29 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         
     ranked_currencies = sorted(ranked_currencies, key=lambda x: (x["mom_percentile"], x["score"]), reverse=True)
     
+    # Tính ma trận tương quan (Correlation Matrix)
+    corr_matrix = []
+    if len(currencies) > 1:
+        # Tìm chiều dài tối thiểu để tránh lỗi chênh lệch độ dài mảng
+        min_len = min([len(scores_hist[c]) for c in currencies if len(scores_hist[c]) > 0], default=0)
+        if min_len > 0:
+            hist_dict = {c: scores_hist[c][-min_len:] for c in currencies if len(scores_hist[c]) >= min_len}
+            df_corr = pd.DataFrame(hist_dict).corr()
+            
+            for c1 in df_corr.index:
+                row = {"currency": c1}
+                for c2 in df_corr.columns:
+                    val = df_corr.loc[c1, c2]
+                    row[c2] = round(val, 2) if not pd.isna(val) else 0.0
+                corr_matrix.append(row)
+
     MATRIX_PROGRESS[matrix_type] = 100.0
     result = {
         "n_hours": n_hours,
         "ranking": ranked_currencies,
-        "pairs_data": matrix_data
+        "pairs_data": matrix_data,
+        "corr_matrix": corr_matrix,
+        "currencies": currencies
     }
             
     _MATRIX_CACHE[cache_key] = result

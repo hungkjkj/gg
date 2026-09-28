@@ -2152,6 +2152,52 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         </table>
       </div>
       </div>
+      
+      {/* Ma trận Tương quan */}
+      {matrixData.corr_matrix && matrixData.corr_matrix.length > 0 && (
+        <div style={{ marginTop: '40px', background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', overflowX: 'auto' }}>
+          <h2 style={{ marginBottom: '20px', color: '#f472b6' }}>Ma trận Tương quan (Correlation Matrix)</h2>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.9rem' }}>
+            <thead>
+              <tr>
+                <th style={{ padding: '10px', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}></th>
+                {matrixData.currencies.map(c => (
+                  <th key={c} style={{ padding: '10px', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>{c}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {matrixData.corr_matrix.map(row => (
+                <tr key={row.currency}>
+                  <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontWeight: 'bold', textAlign: 'left', color: 'var(--text-secondary)' }}>{row.currency}</td>
+                  {matrixData.currencies.map(c => {
+                    const val = row[c];
+                    let bgColor = 'transparent';
+                    if (val === 1 || row.currency === c) {
+                      bgColor = 'rgba(255, 255, 255, 0.1)';
+                    } else if (val >= 0.8) {
+                      bgColor = 'rgba(74, 222, 128, 0.4)'; // strong positive
+                    } else if (val >= 0.5) {
+                      bgColor = 'rgba(74, 222, 128, 0.2)'; // positive
+                    } else if (val <= -0.8) {
+                      bgColor = 'rgba(248, 113, 113, 0.4)'; // strong negative
+                    } else if (val <= -0.5) {
+                      bgColor = 'rgba(248, 113, 113, 0.2)'; // negative
+                    }
+                    
+                    return (
+                      <td key={c} style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)', background: bgColor, color: val > 0 ? '#4ade80' : (val < 0 ? '#f87171' : 'white') }}>
+                        {val != null ? val.toFixed(2) : '-'}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
     </div>
   );
 };
