@@ -150,6 +150,7 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
+  const priceSeriesRef = useRef(null);
   const priceLinesRef = useRef([]);
   const [position, setPosition] = useState({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 - 125 });
   const dragRef = useRef(null);
@@ -189,7 +190,8 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
     chartRef.current = chart;
     
     seriesRef.current = series;
-    chartRef.current.priceSeries = priceSeries; // attach to ref to update later
+    priceSeriesRef.current = priceSeries; // store in dedicated ref
+
 
     
     series.createPriceLine({
@@ -222,8 +224,7 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
     
     return () => { 
         ro.disconnect(); 
-        const c = chart;
-        setTimeout(() => { try { if (c) c.remove(); } catch(e) {} }, 0);
+        try { if (chart) chart.remove(); } catch(e) {}
     };
   }, []);
   
@@ -315,8 +316,8 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
   useEffect(() => {
     if (seriesRef.current && data && data.length > 0) {
       seriesRef.current.setData(data.map(d => ({time: d.time, value: d.value})));
-      if (chartRef.current && chartRef.current.priceSeries) {
-          chartRef.current.priceSeries.setData(data.map(d => ({time: d.time, value: d.close})));
+      if (priceSeriesRef.current) {
+          priceSeriesRef.current.setData(data.map(d => ({time: d.time, value: d.close})));
       }
     }
   }, [data]);
