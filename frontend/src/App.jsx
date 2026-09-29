@@ -2255,8 +2255,12 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
             <input type="number" value={local.timeoutHours} onChange={(e) => handleChange('timeoutHours', parseFloat(e.target.value))} style={styleInput} step="0.1" />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Chu kỳ tính D-VP (Số giờ giới hạn vẽ DVP)</label>
-            <input type="number" value={local.dvpLookbackHours} onChange={(e) => handleChange('dvpLookbackHours', parseInt(e.target.value))} style={styleInput} step="24" />
+            <label style={styleLabel}>Chu kỳ tính D-VP (Số ngày giới hạn vẽ DVP)</label>
+            <input type="number" value={local.dvpLookbackDays !== undefined ? local.dvpLookbackDays : 5} onChange={(e) => handleChange('dvpLookbackDays', parseInt(e.target.value))} style={styleInput} step="1" />
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Target Volume % (Tính Money Flow)</label>
+            <input type="number" value={local.mfTargetPct !== undefined ? local.mfTargetPct : 50} onChange={e => handleChange('mfTargetPct', Number(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Top Level 1 (Màu Đỏ) %</label>
@@ -2742,7 +2746,8 @@ function App() {
     fixedPips: 10.0,
     rowCount: 50,
     timeoutHours: 1.0,
-    dvpLookbackHours: 120,
+    dvpLookbackDays: 5,
+    mfTargetPct: 50.0,
     vwapLength: 89,
     vwapMult: 2.0,
     momLength: 20,

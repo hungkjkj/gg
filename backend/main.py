@@ -197,7 +197,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
               end_time: int = 0, latest_only: bool = False,
               pct1: float = 75.0, pct2: float = 85.0, 
               gridMode: str = "auto", fixedPips: float = 10.0,
-              rowCount: int = 50, timeoutHours: float = 1.0, dvpLookbackHours: float = 120.0,
+              rowCount: int = 50, timeoutHours: float = 1.0, dvpLookbackDays: float = 5.0, mfTargetPct: float = 50.0,
               vwapLength: int = 89, vwapMult: float = 2.0,
               rvolLookbackDays: int = 10, peakVolLookbackDays: int = 60,
               momLength: int = 20, matrixLookbackHours: float = 89.0,
@@ -265,7 +265,45 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['upper_band'] = df['vwap'] + (df['stdev'] * vwapMult)
     df['lower_band'] = df['vwap'] - (df['stdev'] * vwapMult)
     
-    df['hl2'] = (df['high'] + df['low']) / 2.0
+    # --- Money Flow: Constant-VWMA thay cho hl2 ---
+    if len(df) > 0:
+        lookback_sec = dvpLookbackDays * 24 * 3600
+        last_time_val = df['time'].iloc[-1]
+        start_time_val = last_time_val - lookback_sec
+        df_lookback = df[df['time'] >= start_time_val]
+        
+        timeout_candles = max(1, int((timeoutHours * 3600) / tf_seconds))
+        rolling_vols = df_lookback['value'].rolling(timeout_candles, min_periods=1).sum()
+        
+        if len(rolling_vols) > 0:
+            V = np.percentile(rolling_vols.dropna(), mfTargetPct)
+        else:
+            V = 1.0
+        V = max(V, 1.0)
+        
+        cum_vol = df['value'].cumsum().values
+        cum_vwap_vol = df['vwap_vol'].cumsum().values
+        target_v = cum_vol - V
+        
+        idx_start_minus_1 = np.searchsorted(cum_vol, target_v, side='right') - 1
+        
+        hl2_vals = np.zeros(len(df))
+        for i in range(len(df)):
+            idx = idx_start_minus_1[i]
+            if idx >= 0:
+                sum_vol = cum_vol[i] - cum_vol[idx]
+                sum_vwap_vol = cum_vwap_vol[i] - cum_vwap_vol[idx]
+            else:
+                sum_vol = cum_vol[i]
+                sum_vwap_vol = cum_vwap_vol[i]
+                
+            if sum_vol > 0:
+                hl2_vals[i] = sum_vwap_vol / sum_vol
+            else:
+                hl2_vals[i] = df['hlc3'].iloc[i]
+        df['hl2'] = hl2_vals
+    else:
+        df['hl2'] = (df['high'] + df['low']) / 2.0
     
     # --- 2. Momentum & Normalized Volume (indi2.txt) ---
     df['body_mom'] = df['close'] - df['open']
@@ -532,9 +570,9 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     timeout_sec = max(timeoutHours * 3600, tf_seconds * 3)
     
     # --- Calculate D-VP Cutoff Time ---
-    if dvpLookbackHours > 0 and len(df) > 0:
+    if dvpLookbackDays > 0 and len(df) > 0:
         last_time = df['time'].iloc[-1]
-        dvp_cutoff_time = last_time - (dvpLookbackHours * 3600)
+        dvp_cutoff_time = last_time - (dvpLookbackDays * 24 * 3600)
     else:
         dvp_cutoff_time = 0
         
