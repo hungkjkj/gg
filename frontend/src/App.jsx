@@ -2737,6 +2737,7 @@ function App() {
   const [timeframe, setTimeframe] = useState('H1');
   const [viewMode, setViewMode] = useState('chart'); // 'chart' hoặc 'matrix'
   const [chartType, setChartType] = useState(localStorage.getItem('chartType') || 'candles');
+  const [chartTheme, setChartTheme] = useState(localStorage.getItem('chartTheme') || 'dark');
   const [showSdBands, setShowSdBands] = useState(localStorage.getItem('showSdBands') !== 'false');
   const [showMomFlipChart, setShowMomFlipChart] = useState(false);
   const [showVolChart, setShowVolChart] = useState(localStorage.getItem('showVolChart') !== 'false');
@@ -2747,6 +2748,7 @@ function App() {
 
   
   const [configs, setConfigs] = useState(() => ({
+    chartTheme: 'dark',
     pct1: 70,
     pct2: 85,
     gridMode: 'auto',
@@ -2957,6 +2959,18 @@ function App() {
             </select>
           </div>
           
+          <div style={{ marginTop: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Màu nền biểu đồ (Theme)</label>
+            <select value={chartTheme} onChange={(e) => {
+              setChartTheme(e.target.value);
+              localStorage.setItem('chartTheme', e.target.value);
+            }} style={{ width: '100%' }}>
+              <option value="dark">Tối (Mặc định)</option>
+              <option value="sunset">Hoàng Hôn (Sunset)</option>
+              <option value="night">Thành phố (Night)</option>
+            </select>
+          </div>
+          
 
           
           <div style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
@@ -3090,7 +3104,7 @@ function App() {
         </header>
         
         <div className="chart-container">
-          <div className="chart-wrapper" style={{ overflow: (viewMode === 'matrix' || viewMode === 'catalyst') ? 'auto' : 'hidden' }}>
+          <div className={`chart-wrapper theme-${chartTheme}`} style={{ overflow: (viewMode === 'matrix' || viewMode === 'catalyst') ? 'auto' : 'hidden' }}>
             {viewMode === 'chart' || viewMode === 'backtest' ? (
               <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} showSdBands={showSdBands} showMomFlipChart={showMomFlipChart} showVolChart={showVolChart} showMomChart={showMomChart} />
             ) : viewMode === 'matrix' ? (

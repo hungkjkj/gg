@@ -112,6 +112,18 @@ body {
   min-height: 0;
 }
 
+.chart-wrapper.theme-dark {
+  background: rgba(15, 23, 42, 0.6) !important;
+}
+
+.chart-wrapper.theme-sunset {
+  background: linear-gradient(180deg, #b83280 0%, #e84c6c 30%, #f67a49 60%, #faa634 100%) !important;
+}
+
+.chart-wrapper.theme-night {
+  background: linear-gradient(180deg, #0b0f19 0%, #1a1b38 40%, #272147 70%, #3e1e52 100%) !important;
+}
+
 /* Beautiful Inputs & Buttons */
 button {
   background: rgba(255, 255, 255, 0.05);
