@@ -40,6 +40,48 @@ def delete_alert(alert_id):
     alerts_data = [a for a in alerts_data if str(a.get("id")) != str(alert_id)]
     save_alerts()
 
+STRATEGIES_FILE = "strategies.json"
+strategies_data = []
+
+def load_strategies():
+    global strategies_data
+    if os.path.exists(STRATEGIES_FILE):
+        try:
+            with open(STRATEGIES_FILE, "r") as f:
+                strategies_data = json.load(f)
+        except:
+            strategies_data = []
+    else:
+        strategies_data = []
+
+def save_strategies():
+    global strategies_data
+    with open(STRATEGIES_FILE, "w") as f:
+        json.dump(strategies_data, f)
+
+def get_strategies():
+    return strategies_data
+
+def add_strategy(strategy):
+    global strategies_data
+    strategies_data.append(strategy)
+    save_strategies()
+    return strategy
+
+def update_strategy(strategy_id, updated_data):
+    global strategies_data
+    for i, s in enumerate(strategies_data):
+        if str(s.get("id")) == str(strategy_id):
+            strategies_data[i] = {**s, **updated_data}
+            save_strategies()
+            return strategies_data[i]
+    return None
+
+def delete_strategy(strategy_id):
+    global strategies_data
+    strategies_data = [s for s in strategies_data if str(s.get("id")) != str(strategy_id)]
+    save_strategies()
+
 def get_email_config():
     if os.path.exists(CONFIG_FILE):
         try:

@@ -41,6 +41,7 @@ def startup_event():
     
     # Khởi động trình quét cảnh báo ngầm
     asyncio.create_task(alert_service.alert_worker())
+    asyncio.create_task(strategy_worker())
 
 @app.on_event("shutdown")
 def shutdown_event():
@@ -95,6 +96,37 @@ def create_alert(alert: AlertModel):
 def delete_alert(alert_id: int):
     alert_service.delete_alert(alert_id)
     return {"status": "success"}
+
+class StrategyModel(BaseModel):
+    id: str
+    symbol: str
+    timeframe: str
+    steps: list
+    expiration_hours: float
+    current_step_index: int = 0
+    status: str = "active"
+    configs: dict = {}
+
+@app.get("/api/v1/strategies")
+def get_strategies():
+    return alert_service.get_strategies()
+
+@app.post("/api/v1/strategies")
+def create_strategy(strategy: StrategyModel):
+    s_dict = strategy.dict()
+    import time
+    s_dict['created_at'] = time.time()
+    return alert_service.add_strategy(s_dict)
+
+@app.delete("/api/v1/strategies/{strategy_id}")
+def delete_strategy(strategy_id: str):
+    alert_service.delete_strategy(strategy_id)
+    return {"status": "success"}
+
+@app.put("/api/v1/strategies/{strategy_id}/reset")
+def reset_strategy(strategy_id: str):
+    return alert_service.update_strategy(strategy_id, {"current_step_index": 0, "status": "active"})
+
 
 import news_service
 
@@ -953,6 +985,121 @@ if os.path.exists(FRONTEND_DIST):
         if os.path.exists(file_path) and os.path.isfile(file_path):
             return FileResponse(file_path)
         return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+
+async def strategy_worker():
+    print("Started Strategy Worker")
+    import time
+    while True:
+        try:
+            strategies = alert_service.get_strategies()
+            active_strategies = [s for s in strategies if s.get("status") == "active"]
+            if not active_strategies:
+                await asyncio.sleep(10)
+                continue
+                
+            targets = {}
+            for strat in active_strategies:
+                key = (strat.get('symbol'), strat.get('timeframe'))
+                if key not in targets:
+                    targets[key] = []
+                targets[key].append(strat)
+                
+            for (symbol, timeframe), strats in targets.items():
+                try:
+                    if not symbol or not timeframe: continue
+                    configs = strats[0].get('configs', {})
+                    if not configs:
+                        configs = get_configs()
+                        
+                    allowed_keys = ['pct1', 'pct2', 'gridMode', 'fixedPips', 'rowCount', 'timeoutHours', 'dvpLookbackDays', 'mfTargetPct', 'mfTimeoutMins', 'vwapLength', 'vwapMult', 'rvolLookbackDays', 'peakVolLookbackDays', 'momLength', 'matrixLookbackHours', 'momPct1', 'momPct2', 'momPct3', 'maVolLength', 'momMaLength', 'smaMomLength', 'momFlipFilterPct', 'momFlipVolFilterPct', 'volPct1', 'volPct2', 'volPct3', 'volPct4', 'timeShiftHours', 'browserOffsetHours', 'autoDst', 'asiaStart', 'asiaEnd', 'euroStart', 'euroEnd', 'usStart', 'usEnd', 'brokerTimezone']
+                    kwargs = {k: v for k, v in configs.items() if k in allowed_keys}
+                    
+                    ohlcv_res = get_ohlcv(symbol=symbol, timeframe=timeframe, count=1000, latest_only=True, **kwargs)
+                    
+                    if not ohlcv_res: continue
+                    records = ohlcv_res.get("data", [])
+                    indicators = ohlcv_res.get("indicators", {})
+                    vp_boxes = indicators.get("vp_boxes", [])
+                    
+                    if not records: continue
+                    latest_candle = records[-1]
+                    
+                    c_close = latest_candle.get("close", 0)
+                    c_high = latest_candle.get("high", 0)
+                    c_low = latest_candle.get("low", 0)
+                    c_hl2 = latest_candle.get("hl2", c_close)
+                    
+                    for strat in strats:
+                        steps = strat.get("steps", [])
+                        current_step_index = strat.get("current_step_index", 0)
+                        
+                        if current_step_index >= len(steps):
+                            continue
+                            
+                        created_at = strat.get("created_at", time.time())
+                        exp_hours = strat.get("expiration_hours", 24)
+                        if (time.time() - created_at) > (exp_hours * 3600):
+                            strat["status"] = "expired"
+                            alert_service.update_strategy(strat['id'], strat)
+                            continue
+
+                        step = steps[current_step_index]
+                        step_type = step.get("type")
+                        step_val = step.get("value")
+                        met = False
+                        
+                        if step_type in ["touch_dvp", "mf_touch_dvp", "exit_dvp", "mf_exit_dvp"]:
+                            target_high = c_high
+                            target_low = c_low
+                            if step_type.startswith("mf_"):
+                                target_high = c_hl2
+                                target_low = c_hl2
+                                
+                            if "touch_dvp" in step_type:
+                                for box in vp_boxes:
+                                    top = box['price'] + box['height']/2
+                                    bottom = box['price'] - box['height']/2
+                                    if target_high >= bottom and target_low <= top:
+                                        met = True
+                                        strat['last_touched_dvp'] = box
+                                        break
+                            elif "exit_dvp" in step_type:
+                                box = strat.get('last_touched_dvp')
+                                if box:
+                                    top = box['price'] + box['height']/2
+                                    bottom = box['price'] - box['height']/2
+                                    if target_low > top or target_high < bottom:
+                                        met = True
+                        elif step_type == "mom_lt":
+                            mom = latest_candle.get("mom_raw", 0)
+                            if mom <= float(step_val if step_val else 0): met = True
+                        elif step_type == "mom_gt":
+                            mom = latest_candle.get("mom_raw", 0)
+                            if mom >= float(step_val if step_val else 0): met = True
+                        elif step_type == "mom_flip_gt":
+                            mf = latest_candle.get("mom_flip", 0)
+                            if mf >= float(step_val if step_val else 0): met = True
+                        elif step_type == "mom_flip_lt":
+                            mf = latest_candle.get("mom_flip", 0)
+                            if mf <= float(step_val if step_val else 0): met = True
+                        elif step_type == "rvol_gt":
+                            rvol = latest_candle.get("rvol", 0)
+                            if rvol >= float(step_val if step_val else 0): met = True
+                            
+                        if met:
+                            strat["current_step_index"] += 1
+                            if strat["current_step_index"] >= len(steps):
+                                strat["status"] = "completed"
+                                alert_service.send_email(strat['symbol'], c_close, f"Chiến lược '{strat.get('name', 'Strategy Builder')}' đã hoàn thành tất cả các bước ({len(steps)} bước) tại giá {c_close}!", "HOÀN THÀNH", "strategy")
+                            alert_service.update_strategy(strat['id'], strat)
+                            
+                except Exception as e:
+                    print(f"Strategy evaluate error for {symbol} {timeframe}: {e}")
+                    
+            await asyncio.sleep(5)
+        except Exception as e:
+            print(f"Strategy worker loop error: {e}")
+            await asyncio.sleep(5)
 
 if __name__ == "__main__":
     import uvicorn

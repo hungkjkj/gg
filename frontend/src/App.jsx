@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import axios from 'axios';
 import { AssistiveTouch, MomFlipChartComponent } from './components/MomFlip';
+import StrategyBuilderTab from './components/StrategyBuilderTab';
 import './index.css';
 
 const customTimeFormatter = (time) => {
@@ -3043,6 +3044,12 @@ function App() {
             >
               📅 Lịch Catalyst
             </button>
+            <button 
+              onClick={() => setViewMode('strategy')}
+              style={{ width: '100%', marginBottom: '10px', textAlign: 'left', background: viewMode === 'strategy' ? 'rgba(59, 130, 246, 0.2)' : '' }}
+            >
+              🛠 Strategy Builder
+            </button>
             <button onClick={() => setShowSettings(true)} style={{ width: '100%', textAlign: 'left' }}>⚙️ Indicator Settings</button>
           </div>
           <div style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
@@ -3140,7 +3147,7 @@ function App() {
             >
               ☰
             </button>
-            {viewMode === 'chart' ? `${symbol} • ${timeframe}` : viewMode === 'backtest' ? `${symbol} • ${timeframe} (Backtest Mode)` : viewMode === 'catalyst' ? 'Lịch Tin tức Catalyst' : 'Currency Strength Matrix'}
+            {viewMode === 'chart' ? `${symbol} • ${timeframe}` : viewMode === 'backtest' ? `${symbol} • ${timeframe} (Backtest Mode)` : viewMode === 'catalyst' ? 'Lịch Tin tức Catalyst' : viewMode === 'strategy' ? 'Strategy Builder' : 'Currency Strength Matrix'}
           </div>
           <div className="toolbar">
             
@@ -3148,7 +3155,7 @@ function App() {
         </header>
         
         <div className="chart-container">
-          <div className={`chart-wrapper theme-${chartTheme}`} style={{ overflow: (viewMode === 'matrix' || viewMode === 'catalyst') ? 'auto' : 'hidden' }}>
+          <div className={`chart-wrapper theme-${chartTheme}`} style={{ overflow: (viewMode === 'matrix' || viewMode === 'catalyst' || viewMode === 'strategy') ? 'auto' : 'hidden' }}>
             {viewMode === 'chart' || viewMode === 'backtest' ? (
               <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} showSdBands={showSdBands} showMomFlipChart={showMomFlipChart} showVolChart={showVolChart} showMomChart={showMomChart} />
             ) : viewMode === 'matrix' ? (
@@ -3160,8 +3167,10 @@ function App() {
                 onSaveMatrixSettings={handleSaveMatrixSettings}
                 symbol={symbol}
               />
-            ) : (
+            ) : viewMode === 'catalyst' ? (
               <CatalystTab configs={configs} />
+            ) : (
+              <StrategyBuilderTab symbol={symbol} timeframe={timeframe} configs={configs} />
             )}
           </div>
         </div>
