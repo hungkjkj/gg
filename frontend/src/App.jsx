@@ -2395,8 +2395,8 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
             </div>
 
             <div style={{ marginTop: '10px' }}>
-              <label style={styleLabel}>Chu kỳ MA Volume</label>
-              <input type="number" value={local.maVolLength !== undefined ? local.maVolLength : 2} onChange={e => handleChange('maVolLength', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} />
+              <label style={styleLabel}>Chu kỳ MA Volume (Phút)</label>
+              <input type="number" value={local.maVolLength !== undefined ? local.maVolLength : 120} onChange={e => handleChange('maVolLength', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} />
             </div>
             <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
               <div style={{ flex: 1 }}>
@@ -2814,7 +2814,7 @@ function App() {
     momPct1: 85,
     momPct2: 75,
     momPct3: 50,
-    maVolLength: 2,
+    maVolLength: 120,
     smaMomLength: 10,
     matrixHours: 24,
     matrixVolDays: 30,

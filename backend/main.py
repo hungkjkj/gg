@@ -248,7 +248,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     
     vwap_window = max(1, int((vwapLength * 3600) / tf_seconds))
     mom_window = max(1, int((momLength * 3600) / tf_seconds))
-    ma_vol_window = max(1, int((maVolLength * 3600) / tf_seconds))
+    ma_vol_window = max(1, int((maVolLength * 60) / tf_seconds))
     mom_ma_window = mom_window
 
     
