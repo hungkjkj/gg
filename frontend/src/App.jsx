@@ -2259,6 +2259,10 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
             <input type="number" value={local.dvpLookbackDays !== undefined ? local.dvpLookbackDays : 5} onChange={(e) => handleChange('dvpLookbackDays', parseInt(e.target.value))} style={styleInput} step="1" />
           </div>
           <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Target Volume (Số nến mẫu)</label>
+            <input type="number" value={local.mfTargetCandles !== undefined ? local.mfTargetCandles : 10} onChange={e => handleChange('mfTargetCandles', Number(e.target.value))} style={styleInput} />
+          </div>
+          <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Target Volume % (Tính Money Flow)</label>
             <input type="number" value={local.mfTargetPct !== undefined ? local.mfTargetPct : 50} onChange={e => handleChange('mfTargetPct', Number(e.target.value))} style={styleInput} />
           </div>
@@ -2747,6 +2751,7 @@ function App() {
     rowCount: 50,
     timeoutHours: 1.0,
     dvpLookbackDays: 5,
+    mfTargetCandles: 10,
     mfTargetPct: 50.0,
     vwapLength: 89,
     vwapMult: 2.0,
