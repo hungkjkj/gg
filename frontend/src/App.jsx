@@ -2263,6 +2263,10 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
             <input type="number" value={local.mfTargetPct !== undefined ? local.mfTargetPct : 50} onChange={e => handleChange('mfTargetPct', Number(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
+            <label style={styleLabel}>Chu kỳ tính Target Volume (Phút)</label>
+            <input type="number" value={local.mfTimeoutMins !== undefined ? local.mfTimeoutMins : 120} onChange={e => handleChange('mfTimeoutMins', parseInt(e.target.value))} style={styleInput} />
+          </div>
+          <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Top Level 1 (Màu Đỏ) %</label>
             <input type="number" value={local.pct1} onChange={e => handleChange('pct1', Number(e.target.value))} style={styleInput} />
           </div>
@@ -2748,6 +2752,7 @@ function App() {
     timeoutHours: 1.0,
     dvpLookbackDays: 5,
     mfTargetPct: 50.0,
+    mfTimeoutMins: 120.0,
     vwapLength: 89,
     vwapMult: 2.0,
     momLength: 20,
