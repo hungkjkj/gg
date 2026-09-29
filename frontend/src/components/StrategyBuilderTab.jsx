@@ -104,16 +104,14 @@ const StrategyBuilderTab = ({ symbol: currentSymbol, timeframe: currentTimeframe
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '5px' }}>Khung giờ (TF)</label>
-            <select value={newTimeframe} onChange={e => setNewTimeframe(e.target.value)} style={{ padding: '8px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-color)', width: '80px' }}>
-              <option value="M1">M1</option>
-              <option value="M5">M5</option>
-              <option value="M15">M15</option>
-              <option value="M30">M30</option>
-              <option value="H1">H1</option>
-              <option value="H4">H4</option>
-              <option value="D1">D1</option>
-              <option value="W1">W1</option>
-              <option value="MN1">MN1</option>
+            <select value={newTimeframe} onChange={e => setNewTimeframe(e.target.value)} style={{ padding: '8px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-color)', width: '120px' }}>
+              <option value="M5">5 Minutes</option>
+              <option value="M15">15 Minutes</option>
+              <option value="H1">1 Hour</option>
+              <option value="H4">4 Hours</option>
+              <option value="D1">Daily</option>
+              <option value="W1">Weekly</option>
+              <option value="MN1">Monthly</option>
             </select>
           </div>
           <div>
