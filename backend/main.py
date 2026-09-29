@@ -197,7 +197,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
               end_time: int = 0, latest_only: bool = False,
               pct1: float = 75.0, pct2: float = 85.0, 
               gridMode: str = "auto", fixedPips: float = 10.0,
-              rowCount: int = 50, timeoutHours: float = 1.0, dvpLookbackDays: float = 5.0, mfTargetCandles: int = 10, mfTargetPct: float = 50.0,
+              rowCount: int = 50, timeoutHours: float = 1.0, dvpLookbackDays: float = 5.0, mfTargetPct: float = 50.0,
               vwapLength: int = 89, vwapMult: float = 2.0,
               rvolLookbackDays: int = 10, peakVolLookbackDays: int = 60,
               momLength: int = 20, matrixLookbackHours: float = 89.0,
@@ -272,8 +272,8 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         start_time_val = last_time_val - lookback_sec
         df_lookback = df[df['time'] >= start_time_val]
         
-        mf_candles = max(1, mfTargetCandles)
-        rolling_vols = df_lookback['value'].rolling(mf_candles, min_periods=mf_candles).sum().dropna()
+        timeout_candles = max(1, int((timeoutHours * 3600) / tf_seconds))
+        rolling_vols = df_lookback['value'].rolling(timeout_candles, min_periods=timeout_candles).sum().dropna()
         
         if len(rolling_vols) > 0:
             V = np.percentile(rolling_vols, mfTargetPct)
