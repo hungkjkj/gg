@@ -404,6 +404,10 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['mom_lvl2'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct2 / 100.0)
     df['mom_lvl3'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct3 / 100.0)
     
+    # Tính xếp hạng phần trăm của Động lượng (có dấu: -100% đến 100%)
+    df['mom_percent_rank'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).apply(calc_percent_rank_np, raw=True) * np.sign(df['mom_raw_raw'])
+
+    
     # --- Tính toán Normalized Volume ---
     df['vol_median'] = df['value'].rolling(window=lookback_candles, min_periods=1).median()
     df['norm_vol'] = np.where(df['vol_median'] > 0, df['value'] / df['vol_median'], 0)
@@ -744,7 +748,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     if latest_only:
         df = df.tail(2)
         
-    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'spread']
+    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_percent_rank', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'spread']
     existing_cols = [c for c in cols_to_keep if c in df.columns]
     df = df[existing_cols]
         
@@ -1071,10 +1075,10 @@ async def strategy_worker():
                                     if target_low > top or target_high < bottom:
                                         met = True
                         elif step_type == "mom_lt":
-                            mom = latest_candle.get("mom_raw", 0)
+                            mom = latest_candle.get("mom_percent_rank", 0)
                             if mom <= float(step_val if step_val else 0): met = True
                         elif step_type == "mom_gt":
-                            mom = latest_candle.get("mom_raw", 0)
+                            mom = latest_candle.get("mom_percent_rank", 0)
                             if mom >= float(step_val if step_val else 0): met = True
                         elif step_type == "mom_flip_gt":
                             mf = latest_candle.get("mom_flip", 0)
