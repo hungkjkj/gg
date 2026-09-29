@@ -50,6 +50,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const fairValueSeriesRef = useRef(null);
   const upperBandSeriesRef = useRef(null);
   const lowerBandSeriesRef = useRef(null);
+  const sdFillSeriesRef = useRef(null);
   const momentumSeriesRef = useRef(null);
   
   // Các đường xác suất Momentum
@@ -443,6 +444,20 @@ useEffect(() => {
       },
     });
 
+    const sdFillSeries = chart.addCandlestickSeries({
+      upColor: 'rgba(128, 128, 128, 0.15)',
+      downColor: 'rgba(128, 128, 128, 0.15)',
+      borderVisible: false,
+      wickVisible: false,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      priceFormat: {
+        type: 'price',
+        precision: precision,
+        minMove: minMove,
+      },
+    });
+
     const candlestickSeries = chart.addCandlestickSeries({
       upColor: '#00e676',
       downColor: '#ff1744',
@@ -693,6 +708,7 @@ useEffect(() => {
     fairValueSeriesRef.current = fairValueSeries;
     upperBandSeriesRef.current = upperBandSeries;
     lowerBandSeriesRef.current = lowerBandSeries;
+    sdFillSeriesRef.current = sdFillSeries;
     momentumSeriesRef.current = momentumSeries;
     momentumChartRef.current = momentumChart;
     volumeChartRef.current = volumeChart;
@@ -790,6 +806,7 @@ useEffect(() => {
     if (fairValueSeriesRef.current) fairValueSeriesRef.current.applyOptions({ visible: chartType === 'money_flow' });
     if (upperBandSeriesRef.current) upperBandSeriesRef.current.applyOptions({ visible: showSdBands });
     if (lowerBandSeriesRef.current) lowerBandSeriesRef.current.applyOptions({ visible: showSdBands });
+    if (sdFillSeriesRef.current) sdFillSeriesRef.current.applyOptions({ visible: showSdBands });
   }, [chartType, showSdBands]);
   
   // Hàm cập nhật toạ độ HTML Overlay liên tục
@@ -1193,6 +1210,7 @@ useEffect(() => {
 
         const upperBandData = [];
         const lowerBandData = [];
+        const sdFillData = [];
         const bandwidthHistory = [...bandwidthHistoryRef.current];
         
         const sortedRawForSD = rawData.filter(d => d.upper_band != null && d.lower_band != null && !isNaN(d.upper_band)).sort((a,b)=>a.time-b.time);
@@ -1224,20 +1242,24 @@ useEffect(() => {
             upperBandData.push({ 
                 time: item.time, 
                 value: item.upper_band, 
-                lineColor: col,
-                topColor: fillColor,
-                bottomColor: fillColor
+                color: col
             });
             lowerBandData.push({ 
                 time: item.time, 
                 value: item.lower_band, 
-                lineColor: col,
-                topColor: '#090e19',
-                bottomColor: '#090e19'
+                color: col
+            });
+            sdFillData.push({
+                time: item.time,
+                open: item.upper_band,
+                high: Math.max(item.upper_band, item.lower_band),
+                low: Math.min(item.upper_band, item.lower_band),
+                close: item.lower_band,
+                color: fillColor
             });
         });
         if (upperBandData.length > 0) {
-          lastSdColorRef.current = upperBandData[upperBandData.length - 1].lineColor;
+          lastSdColorRef.current = upperBandData[upperBandData.length - 1].color;
         }
         bandwidthHistoryRef.current = bandwidthHistory.slice(-10); // Keep last 10
         
@@ -1258,6 +1280,7 @@ useEffect(() => {
             if (fairValueSeriesRef.current) fairValueData.forEach(d => safeUpdate(fairValueSeriesRef.current, d));
             upperBandData.forEach(d => safeUpdate(upperBandSeriesRef.current, d));
             lowerBandData.forEach(d => safeUpdate(lowerBandSeriesRef.current, d));
+            sdFillData.forEach(d => safeUpdate(sdFillSeriesRef.current, d));
             momentumData.forEach(d => safeUpdate(momentumSeriesRef.current, d));
             
             if (mom85UpRef.current) {
@@ -1295,6 +1318,7 @@ useEffect(() => {
             if (fairValueSeriesRef.current) fairValueSeriesRef.current.setData(fairValueData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             upperBandSeriesRef.current.setData(upperBandData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             lowerBandSeriesRef.current.setData(lowerBandData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            sdFillSeriesRef.current.setData(sdFillData.filter(d => d && Number.isFinite(d.high) && Number.isFinite(d.time)));
             momentumSeriesRef.current.setData(momentumData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             
             // Cập nhật đường Spread (Bid / Ask)
