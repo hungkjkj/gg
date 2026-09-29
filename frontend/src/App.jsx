@@ -385,7 +385,7 @@ useEffect(() => {
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#94a3b8',
+        textColor: '#f8fafc',
       },
       grid: {
         vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
@@ -417,7 +417,8 @@ useEffect(() => {
       minMove = 0.01;
     }
 
-    const upperBandSeries = chart.addAreaSeries({
+    const upperBandSeries = chart.addLineSeries({
+      color: 'rgba(239, 68, 68, 0.8)',
       lineWidth: 2,
       lineStyle: 2, // 2 = Dashed
       priceLineVisible: false,
@@ -429,7 +430,8 @@ useEffect(() => {
       },
     });
     
-    const lowerBandSeries = chart.addAreaSeries({
+    const lowerBandSeries = chart.addLineSeries({
+      color: 'rgba(16, 185, 129, 0.8)',
       lineWidth: 2,
       lineStyle: 2, // 2 = Dashed
       priceLineVisible: false,
@@ -494,7 +496,7 @@ useEffect(() => {
       const momentumChart = createChart(momentumChartContainerRef.current, {
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
-          textColor: '#94a3b8',
+          textColor: '#f8fafc',
         },
         grid: {
           vertLines: { color: 'rgba(255, 255, 255, 0.03)' },
@@ -528,7 +530,7 @@ useEffect(() => {
       const volumeChart = createChart(volumeChartContainerRef.current, {
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
-          textColor: '#94a3b8',
+          textColor: '#f8fafc',
         },
         grid: {
           vertLines: { color: 'rgba(255, 255, 255, 0.03)' },
