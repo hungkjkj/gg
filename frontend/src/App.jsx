@@ -2256,7 +2256,7 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
           </div>
           <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Chu kỳ tính D-VP (Số ngày giới hạn vẽ DVP)</label>
-            <input type="number" value={local.dvpLookbackDays !== undefined ? local.dvpLookbackDays : 5} onChange={(e) => handleChange('dvpLookbackDays', parseInt(e.target.value))} style={styleInput} step="1" />
+            <input type="number" value={local.dvpLookbackDays !== undefined ? local.dvpLookbackDays : 5} onChange={(e) => handleChange('dvpLookbackDays', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} step="1" />
           </div>
           <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Target Volume % (Tính Money Flow)</label>
@@ -2264,7 +2264,7 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
           </div>
           <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Chu kỳ tính Target Volume (Phút)</label>
-            <input type="number" value={local.mfTimeoutMins !== undefined ? local.mfTimeoutMins : 120} onChange={e => handleChange('mfTimeoutMins', parseInt(e.target.value))} style={styleInput} />
+            <input type="number" value={local.mfTimeoutMins !== undefined ? local.mfTimeoutMins : 120} onChange={e => handleChange('mfTimeoutMins', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Top Level 1 (Màu Đỏ) %</label>
@@ -2338,7 +2338,7 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
             {local.volMode === 'rvol' && (
               <div style={{ marginTop: '10px' }}>
                 <label style={styleLabel}>Chu kỳ RVol (Số Ngày)</label>
-                <input type="number" value={local.rvolLookbackDays} onChange={e => handleChange('rvolLookbackDays', parseInt(e.target.value))} style={styleInput} title="Số ngày dùng để tính trung bình khối lượng của chính giờ này" />
+                <input type="number" value={local.rvolLookbackDays !== undefined ? local.rvolLookbackDays : 10} onChange={e => handleChange('rvolLookbackDays', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} title="Số ngày dùng để tính trung bình khối lượng của chính giờ này" />
               </div>
             )}
 
@@ -2349,7 +2349,7 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
 
             <div style={{ marginTop: '10px' }}>
               <label style={styleLabel}>Chu kỳ MA Volume</label>
-              <input type="number" value={local.maVolLength} onChange={e => handleChange('maVolLength', parseInt(e.target.value))} style={styleInput} />
+              <input type="number" value={local.maVolLength !== undefined ? local.maVolLength : 2} onChange={e => handleChange('maVolLength', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} />
             </div>
             <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
               <div style={{ flex: 1 }}>
