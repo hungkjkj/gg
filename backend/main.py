@@ -273,10 +273,10 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         df_lookback = df[df['time'] >= start_time_val]
         
         timeout_candles = max(1, int((timeoutHours * 3600) / tf_seconds))
-        rolling_vols = df_lookback['value'].rolling(timeout_candles, min_periods=1).sum()
+        rolling_vols = df_lookback['value'].rolling(timeout_candles, min_periods=timeout_candles).sum().dropna()
         
         if len(rolling_vols) > 0:
-            V = np.percentile(rolling_vols.dropna(), mfTargetPct)
+            V = np.percentile(rolling_vols, mfTargetPct)
         else:
             V = 1.0
         V = max(V, 1.0)
