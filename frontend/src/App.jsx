@@ -808,6 +808,18 @@ useEffect(() => {
     if (lowerBandSeriesRef.current) lowerBandSeriesRef.current.applyOptions({ visible: showSdBands });
     if (sdFillSeriesRef.current) sdFillSeriesRef.current.applyOptions({ visible: showSdBands });
   }, [chartType, showSdBands]);
+
+  useEffect(() => {
+    if (candlestickSeriesRef.current) {
+      const isSunset = configs.chartTheme === 'sunset';
+      candlestickSeriesRef.current.applyOptions({
+        upColor: isSunset ? '#ffffff' : '#00e676',
+        downColor: isSunset ? '#1f2937' : '#ff1744',
+        wickUpColor: isSunset ? '#ffffff' : '#00e676',
+        wickDownColor: isSunset ? '#1f2937' : '#ff1744',
+      });
+    }
+  }, [configs.chartTheme]);
   
   // Hàm cập nhật toạ độ HTML Overlay liên tục
   const updateOverlays = () => {
@@ -1213,6 +1225,12 @@ useEffect(() => {
         const sdFillData = [];
         const bandwidthHistory = [...bandwidthHistoryRef.current];
         
+        const isSunset = configs.chartTheme === 'sunset';
+        const colUp = isSunset ? "rgba(255, 255, 255, 0.9)" : "rgba(0, 230, 118, 0.9)";
+        const colDn = isSunset ? "rgba(31, 41, 55, 0.9)" : "rgba(255, 23, 68, 0.9)";
+        const fillUp = isSunset ? "rgba(255, 255, 255, 0.25)" : "rgba(0, 230, 118, 0.25)";
+        const fillDn = isSunset ? "rgba(31, 41, 55, 0.25)" : "rgba(255, 23, 68, 0.15)";
+        
         const sortedRawForSD = rawData.filter(d => d.upper_band != null && d.lower_band != null && !isNaN(d.upper_band)).sort((a,b)=>a.time-b.time);
         sortedRawForSD.forEach((item, index, arr) => {
             const rawBandwidth = item.upper_band - item.lower_band;
@@ -1222,22 +1240,22 @@ useEffect(() => {
             if (index < arr.length - 1) {
                 // Look ahead: color based on next bandwidth vs current
                 const nextRawBandwidth = arr[index + 1].upper_band - arr[index + 1].lower_band;
-                if (nextRawBandwidth >= rawBandwidth) col = "rgba(0, 230, 118, 0.9)";
-                else col = "rgba(255, 23, 68, 0.9)";
+                if (nextRawBandwidth >= rawBandwidth) col = colUp;
+                else col = colDn;
             } else {
                 // Last point: fallback to comparing with previous
                 if (index > 0) {
                     const prevRawBandwidth = arr[index - 1].upper_band - arr[index - 1].lower_band;
-                    if (rawBandwidth >= prevRawBandwidth) col = "rgba(0, 230, 118, 0.9)";
-                    else col = "rgba(255, 23, 68, 0.9)";
+                    if (rawBandwidth >= prevRawBandwidth) col = colUp;
+                    else col = colDn;
                 } else if (lastSdColorRef.current !== null) {
                     col = lastSdColorRef.current;
                 }
             }
             
             let fillColor = "rgba(128, 128, 128, 0.15)";
-            if (col === "rgba(0, 230, 118, 0.9)") fillColor = "rgba(0, 230, 118, 0.25)";
-            else if (col === "rgba(255, 23, 68, 0.9)") fillColor = "rgba(255, 23, 68, 0.15)";
+            if (col === colUp) fillColor = fillUp;
+            else if (col === colDn) fillColor = fillDn;
             
             upperBandData.push({ 
                 time: item.time, 
