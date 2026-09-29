@@ -1508,6 +1508,7 @@ useEffect(() => {
       const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H4' ? 14400 : timeframe === 'D1' ? 86400 : 3600;
       simulatedTimeRef.current += tfSec;
       window.currentSimulatedTime = simulatedTimeRef.current;
+      window.dispatchEvent(new Event('simulatedTimeChanged'));
       
       // Bỏ qua Thứ 7, Chủ Nhật để Backtest không bị "treo" (trừ Crypto)
       const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
@@ -1535,6 +1536,7 @@ useEffect(() => {
           if (skip) {
               simulatedTimeRef.current += (jumpHours * 3600) - (m * 60) - s;
       window.currentSimulatedTime = simulatedTimeRef.current;
+      window.dispatchEvent(new Event('simulatedTimeChanged'));
           }
       }
       
@@ -1596,6 +1598,7 @@ useEffect(() => {
     const targetTimestamp = Math.floor(new Date(backtestDate).getTime() / 1000);
     simulatedTimeRef.current = targetTimestamp;
     window.currentSimulatedTime = simulatedTimeRef.current;
+    window.dispatchEvent(new Event('simulatedTimeChanged'));
     backtestWeekRef.current = getWeekMonday(targetTimestamp);
     setIsPlaying(false);
     isPlayingRef.current = false;
@@ -2807,9 +2810,16 @@ function App() {
         }
       }).catch(err => console.error(err));
     };
+    
     fetchBubbleMatrix();
     const interval = setInterval(fetchBubbleMatrix, 60000);
-    return () => clearInterval(interval);
+    
+    window.addEventListener('simulatedTimeChanged', fetchBubbleMatrix);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('simulatedTimeChanged', fetchBubbleMatrix);
+    };
   }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixVolDays, symbol]);
 
   useEffect(() => {
