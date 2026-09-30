@@ -3,6 +3,7 @@ import { createChart, ColorType } from 'lightweight-charts';
 import axios from 'axios';
 import { AssistiveTouch, MomFlipChartComponent } from './components/MomFlip';
 import StrategyBuilderTab from './components/StrategyBuilderTab';
+import RrTool from './components/RrTool';
 import './index.css';
 
 const customTimeFormatter = (time) => {
@@ -68,6 +69,42 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const maVolSeriesRef = useRef(null);
   
   const [contextMenu, setContextMenu] = useState(null);
+  const [rrTools, setRrTools] = useState([]);
+
+  const addRrTool = (type, price, time) => {
+    let tfSeconds = 3600;
+    if (timeframe === 'M1') tfSeconds = 60;
+    if (timeframe === 'M5') tfSeconds = 300;
+    if (timeframe === 'M15') tfSeconds = 900;
+    if (timeframe === 'H1') tfSeconds = 3600;
+    if (timeframe === 'H4') tfSeconds = 14400;
+    if (timeframe === 'D1') tfSeconds = 86400;
+    
+    const toolTimePrimitive = typeof time === 'object' ? (time.timestamp || new Date(`${time.year}-${time.month}-${time.day}`).getTime()/1000) : time;
+    const endTime = toolTimePrimitive + (tfSeconds * 20);
+    
+    const offset = price * 0.002;
+    
+    const newTool = {
+      id: Date.now().toString(),
+      type,
+      entryPrice: price,
+      targetPrice: type === 'long' ? price + offset*2 : price - offset*2,
+      stopPrice: type === 'long' ? price - offset : price + offset,
+      time: toolTimePrimitive,
+      endTime: endTime
+    };
+    setRrTools(prev => [...prev, newTool]);
+  };
+
+  const updateRrTool = (id, updates) => {
+    setRrTools(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+  };
+
+  const deleteRrTool = (id) => {
+    setRrTools(prev => prev.filter(t => t.id !== id));
+  };
+
   const [customAlertModal, setCustomAlertModal] = useState(null);
   const [alertNoteInput, setAlertNoteInput] = useState('');
   const vol85Ref = useRef(null);
@@ -1780,9 +1817,19 @@ useEffect(() => {
               onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 1)'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.8)'}
             >
-              &#8250;|
             </button>
           )}
+
+          {rrTools.map(tool => (
+            <RrTool 
+              key={tool.id} 
+              tool={tool} 
+              chart={chartRef.current} 
+              series={candlestickSeriesRef.current} 
+              onDelete={() => deleteRrTool(tool.id)} 
+              onUpdate={updateRrTool} 
+            />
+          ))}
         </div>
         
         {/* Momentum Chart */}
@@ -1876,6 +1923,24 @@ useEffect(() => {
               }}
             >
               🌊 Thêm cảnh báo % Mom Flip...
+            </div>
+            <div 
+              className="context-menu-item"
+              onClick={() => {
+                addRrTool('long', contextMenu.price, contextMenu.time);
+                closeContextMenu();
+              }}
+            >
+              📈 Thêm RR Mua (Long)
+            </div>
+            <div 
+              className="context-menu-item"
+              onClick={() => {
+                addRrTool('short', contextMenu.price, contextMenu.time);
+                closeContextMenu();
+              }}
+            >
+              📉 Thêm RR Bán (Short)
             </div>
           </div>
         )}
