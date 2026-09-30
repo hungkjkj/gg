@@ -307,7 +307,8 @@ def get_historical_data(symbol: str, timeframe: str, count: int = 1000, end_time
             group_map = {
                 "US_STOCKS_GI": "us_stocks",
                 "COMMODITIES_GI": "commodities",
-                "CRYPTO_GI": "crypto"
+                "CRYPTO_GI": "crypto",
+                "USD_ASSETS_GI": "usd_assets"
             }
             group_key = group_map.get(symbol)
             if not group_key: return pd.DataFrame()
