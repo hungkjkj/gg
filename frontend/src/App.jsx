@@ -2081,7 +2081,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       {/* Header điều khiển */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '15px', background: 'var(--bg-panel)', padding: '15px 20px', borderRadius: '12px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: '10px', marginRight: '15px', borderRight: '1px solid #4b5563', paddingRight: '15px' }}>
-          {['fx', 'us_stocks', 'commodities', 'crypto'].map(type => (
+          {['fx', 'us_stocks', 'commodities', 'crypto', 'usd_assets'].map(type => (
             <button
               key={type}
               onClick={() => setMatrixType(type)}
@@ -2096,7 +2096,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                 fontSize: '0.9rem'
               }}
             >
-              {type === 'fx' ? 'Forex' : type === 'us_stocks' ? 'Cổ phiếu Mỹ' : type === 'commodities' ? 'Hàng hóa' : 'Crypto'}
+              {type === 'fx' ? 'Forex' : type === 'us_stocks' ? 'Cổ phiếu Mỹ' : type === 'commodities' ? 'Hàng hóa' : type === 'crypto' ? 'Crypto' : 'USD vs Assets'}
             </button>
           ))}
         </div>
