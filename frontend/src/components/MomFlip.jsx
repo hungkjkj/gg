@@ -257,30 +257,21 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
   
   useEffect(() => {
     if (!mainChart || !chartRef.current || !mainSeries || !seriesRef.current) return;
-    const mainTimeScale = mainChart.timeScale();
-    const flipTimeScale = chartRef.current.timeScale();
 
-    let isSyncingRange = false;
-    const handleMainRange = () => {
-      if (isSyncingRange) return;
-      isSyncingRange = true;
-      flipTimeScale.setVisibleLogicalRange(mainTimeScale.getVisibleLogicalRange());
-      isSyncingRange = false;
-    };
-    const handleFlipRange = () => {
-      if (isSyncingRange) return;
-      isSyncingRange = true;
-      mainTimeScale.setVisibleLogicalRange(flipTimeScale.getVisibleLogicalRange());
-      isSyncingRange = false;
+    const timeToPrimitive = (t) => {
+        if (typeof t === 'object' && t !== null) return t.year * 10000 + t.month * 100 + t.day;
+        return t;
     };
 
     const findDataByTime = (time) => {
         if (!data || data.length === 0) return null;
+        const target = timeToPrimitive(time);
         let l = 0, r = data.length - 1;
         while (l <= r) {
             let m = Math.floor((l + r) / 2);
-            if (data[m].time === time) return data[m];
-            if (data[m].time < time) l = m + 1;
+            let current = timeToPrimitive(data[m].time);
+            if (current === target) return data[m];
+            if (current < target) l = m + 1;
             else r = m - 1;
         }
         return null;
@@ -323,14 +314,10 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
         isSyncingCrosshair = false;
     };
 
-    mainTimeScale.subscribeVisibleLogicalRangeChange(handleMainRange);
-    flipTimeScale.subscribeVisibleLogicalRangeChange(handleFlipRange);
     mainChart.subscribeCrosshairMove(handleMainCrosshairMove);
     chartRef.current.subscribeCrosshairMove(handleFlipCrosshairMove);
 
     return () => {
-      mainTimeScale.unsubscribeVisibleLogicalRangeChange(handleMainRange);
-      flipTimeScale.unsubscribeVisibleLogicalRangeChange(handleFlipRange);
       mainChart.unsubscribeCrosshairMove(handleMainCrosshairMove);
       chartRef.current.unsubscribeCrosshairMove(handleFlipCrosshairMove);
     };
