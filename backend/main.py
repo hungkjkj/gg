@@ -759,7 +759,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         alert_service.LATEST_MOM_FLIP_DATA[f"{symbol}_{timeframe}"] = {
             'value': round(records[-1]['mom_flip'], 2),
             'time': records[-1]['time'],
-            'prev_value': round(records[-2]['mom_flip'], 2) if len(records) > 1 else round(records[-1]['mom_flip'], 2)
+            'prev_value': round(records[-2]['mom_flip'], 2) if len(records) > 1 and records[-2].get('mom_flip') is not None else round(records[-1]['mom_flip'], 2)
         }
         
 
