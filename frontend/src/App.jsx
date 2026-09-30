@@ -1044,9 +1044,11 @@ useEffect(() => {
         rawData = uniqueRaw;
 
 
-        const newMomFlip = rawData.filter(d => d.mom_flip != null && !isNaN(d.mom_flip)).map(d => ({
+        const newMomFlip = rawData.map(d => ({
           time: d.time,
-          value: d.mom_flip, close: d.close })).sort((a,b)=>a.time - b.time);
+          value: (d.mom_flip != null && !isNaN(d.mom_flip)) ? d.mom_flip : 0, 
+          close: d.close 
+        })).sort((a,b)=>a.time - b.time);
 
         if (!isPolling) {
             setMomFlipData(newMomFlip);

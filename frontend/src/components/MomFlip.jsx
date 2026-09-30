@@ -258,6 +258,23 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
   useEffect(() => {
     if (!mainChart || !chartRef.current || !mainSeries || !seriesRef.current) return;
 
+    const mainTimeScale = mainChart.timeScale();
+    const flipTimeScale = chartRef.current.timeScale();
+
+    let isSyncingRange = false;
+    const handleMainRange = () => {
+      if (isSyncingRange) return;
+      isSyncingRange = true;
+      flipTimeScale.setVisibleLogicalRange(mainTimeScale.getVisibleLogicalRange());
+      isSyncingRange = false;
+    };
+    const handleFlipRange = () => {
+      if (isSyncingRange) return;
+      isSyncingRange = true;
+      mainTimeScale.setVisibleLogicalRange(flipTimeScale.getVisibleLogicalRange());
+      isSyncingRange = false;
+    };
+
     const timeToPrimitive = (t) => {
         if (typeof t === 'object' && t !== null) return t.year * 10000 + t.month * 100 + t.day;
         return t;
@@ -314,10 +331,14 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
         isSyncingCrosshair = false;
     };
 
+    mainTimeScale.subscribeVisibleLogicalRangeChange(handleMainRange);
+    flipTimeScale.subscribeVisibleLogicalRangeChange(handleFlipRange);
     mainChart.subscribeCrosshairMove(handleMainCrosshairMove);
     chartRef.current.subscribeCrosshairMove(handleFlipCrosshairMove);
 
     return () => {
+      mainTimeScale.unsubscribeVisibleLogicalRangeChange(handleMainRange);
+      flipTimeScale.unsubscribeVisibleLogicalRangeChange(handleFlipRange);
       mainChart.unsubscribeCrosshairMove(handleMainCrosshairMove);
       chartRef.current.unsubscribeCrosshairMove(handleFlipCrosshairMove);
     };
