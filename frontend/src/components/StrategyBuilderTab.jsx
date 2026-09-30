@@ -62,6 +62,7 @@ const StrategyBuilderTab = ({ symbol: currentSymbol, timeframe: currentTimeframe
   const [newSymbol, setNewSymbol] = useState(currentSymbol);
   const [newTimeframe, setNewTimeframe] = useState(currentTimeframe);
   const [expirationHours, setExpirationHours] = useState(24);
+  const [barCloseOnly, setBarCloseOnly] = useState(true);
   const [steps, setSteps] = useState([]);
   
   useEffect(() => {
@@ -100,6 +101,7 @@ const StrategyBuilderTab = ({ symbol: currentSymbol, timeframe: currentTimeframe
       timeframe: newTimeframe,
       steps: steps,
       expiration_hours: expirationHours,
+      bar_close_only: barCloseOnly,
       current_step_index: 0,
       status: 'active',
       configs: configs
@@ -168,6 +170,12 @@ const StrategyBuilderTab = ({ symbol: currentSymbol, timeframe: currentTimeframe
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '5px' }}>Thời gian chờ tối đa (Giờ)</label>
             <input type="number" value={expirationHours} onChange={e => setExpirationHours(Number(e.target.value))} style={{ padding: '8px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-color)', width: '150px' }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '8px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.9rem', color: '#94a3b8', gap: '6px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={barCloseOnly} onChange={e => setBarCloseOnly(e.target.checked)} style={{ transform: 'scale(1.2)' }} />
+              Chỉ kiểm tra khi Đóng nến (Bar Close)
+            </label>
           </div>
         </div>
 

@@ -157,16 +157,38 @@ async def alert_worker():
                     ticks[sym] = tick
                     
             triggered_any = False
+            any_state_changed = False
             
             for alert in active_alerts:
                 sym = alert["symbol"]
                 alert_type = alert.get("type", "price")
                 
                 current_value = None
+                state_changed = False
+                
                 if alert_type == "price":
-                    if sym not in ticks:
-                        continue
-                    current_value = ticks[sym].get("bid") or ticks[sym].get("last")
+                    if alert.get("bar_close_only"):
+                        tf = alert.get("timeframe", "H1")
+                        import mt5_service
+                        import pandas as pd
+                        try:
+                            rates = await asyncio.to_thread(mt5_service._fetch_raw_data, sym, tf, 2, 0)
+                            if rates is not None and not rates.empty and len(rates) >= 2:
+                                current_forming_time = int(rates.iloc[-1]['time']) if 'time' in rates.columns else 0
+                                if alert.get("last_forming_time") == current_forming_time:
+                                    continue
+                                current_value = float(rates.iloc[-2]['close'])
+                                alert["last_forming_time"] = current_forming_time
+                                any_state_changed = True
+                            else:
+                                continue
+                        except Exception as e:
+                            print("Error fetching OHLCV for price bar_close_only alert:", e)
+                            continue
+                    else:
+                        if sym not in ticks:
+                            continue
+                        current_value = ticks[sym].get("bid") or ticks[sym].get("last")
                 elif alert_type == "mom":
                     tf = alert.get("timeframe", "H1")
                     if not tf: tf = "H1"
@@ -203,7 +225,19 @@ async def alert_worker():
                     data_key = f"{sym}_{tf}"
                     if data_key not in LATEST_MOM_FLIP_DATA:
                         continue
-                    current_value = LATEST_MOM_FLIP_DATA[data_key]
+                    mom_data = LATEST_MOM_FLIP_DATA[data_key]
+                    if isinstance(mom_data, dict):
+                        if alert.get("bar_close_only"):
+                            current_forming_time = mom_data.get('time')
+                            if alert.get("last_forming_time") == current_forming_time:
+                                continue
+                            current_value = mom_data.get('prev_value')
+                            alert["last_forming_time"] = current_forming_time
+                            any_state_changed = True
+                        else:
+                            current_value = mom_data.get('value')
+                    else:
+                        current_value = mom_data
                     
                 if current_value is None: continue
                 
@@ -231,7 +265,7 @@ async def alert_worker():
                 
                 alert_prev_prices[alert_id] = current_value
                 
-            if triggered_any:
+            if triggered_any or any_state_changed:
                 save_alerts()
                 
         except Exception as e:

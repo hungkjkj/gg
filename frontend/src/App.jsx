@@ -2784,6 +2784,7 @@ function App() {
 
   const [newAlertPrice, setNewAlertPrice] = useState('');
   const [newAlertNote, setNewAlertNote] = useState('');
+  const [newAlertBarCloseOnly, setNewAlertBarCloseOnly] = useState(true);
   const [newAlertType, setNewAlertType] = useState('price');
   const [alertSymbol, setAlertSymbol] = useState(symbol);
   
@@ -3113,12 +3114,15 @@ function App() {
                 onChange={e => setNewAlertNote(e.target.value)}
                 style={{ flex: 1, padding: '6px', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'white' }}
               />
+              <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.8rem', color: '#94a3b8', gap: '4px' }}>
+                <input type="checkbox" checked={newAlertBarCloseOnly} onChange={e => setNewAlertBarCloseOnly(e.target.checked)} /> Đóng nến
+              </label>
               <button 
                 className="primary" 
                 style={{ padding: '6px 12px' }}
                 onClick={() => {
                   if(!newAlertPrice) return;
-                  handleAddAlert({ symbol: alertSymbol, type: newAlertType, timeframe: timeframe, price: parseFloat(newAlertPrice), note: newAlertNote });
+                  handleAddAlert({ symbol: alertSymbol, type: newAlertType, timeframe: timeframe, price: parseFloat(newAlertPrice), note: newAlertNote, bar_close_only: newAlertBarCloseOnly });
                   setNewAlertPrice('');
                   setNewAlertNote('');
                 }}

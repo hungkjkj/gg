@@ -756,7 +756,11 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     # Save the latest mom_flip for alert checking
     if len(records) > 0 and 'mom_flip' in records[-1] and records[-1]['mom_flip'] is not None:
         import alert_service
-        alert_service.LATEST_MOM_FLIP_DATA[f"{symbol}_{timeframe}"] = round(records[-1]['mom_flip'], 2)
+        alert_service.LATEST_MOM_FLIP_DATA[f"{symbol}_{timeframe}"] = {
+            'value': round(records[-1]['mom_flip'], 2),
+            'time': records[-1]['time'],
+            'prev_value': round(records[-2]['mom_flip'], 2) if len(records) > 1 else round(records[-1]['mom_flip'], 2)
+        }
         
 
     return ORJSONResponse(content={
@@ -1024,14 +1028,27 @@ async def strategy_worker():
                     vp_boxes = indicators.get("vp_boxes", [])
                     
                     if not records: continue
-                    latest_candle = records[-1]
-                    
-                    c_close = latest_candle.get("close", 0)
-                    c_high = latest_candle.get("high", 0)
-                    c_low = latest_candle.get("low", 0)
-                    c_hl2 = latest_candle.get("hl2", c_close)
                     
                     for strat in strats:
+                        latest_candle = records[-1]
+                        current_forming_time = latest_candle.get("time")
+                        
+                        if strat.get("bar_close_only"):
+                            if strat.get("last_forming_time") == current_forming_time:
+                                continue
+                            if len(records) < 2:
+                                continue
+                            eval_candle = records[-2]
+                            strat["last_forming_time"] = current_forming_time
+                            alert_service.update_strategy(strat['id'], strat)
+                        else:
+                            eval_candle = latest_candle
+                            
+                        c_close = eval_candle.get("close", 0)
+                        c_high = eval_candle.get("high", 0)
+                        c_low = eval_candle.get("low", 0)
+                        c_hl2 = eval_candle.get("hl2", c_close)
+
                         steps = strat.get("steps", [])
                         current_step_index = strat.get("current_step_index", 0)
                         
@@ -1076,19 +1093,19 @@ async def strategy_worker():
                                 if not in_any:
                                     met = True
                         elif step_type == "mom_lt":
-                            mom = latest_candle.get("mom_percent_rank", 0)
+                            mom = eval_candle.get("mom_percent_rank", 0)
                             if mom <= float(step_val if step_val else 0): met = True
                         elif step_type == "mom_gt":
-                            mom = latest_candle.get("mom_percent_rank", 0)
+                            mom = eval_candle.get("mom_percent_rank", 0)
                             if mom >= float(step_val if step_val else 0): met = True
                         elif step_type == "mom_flip_gt":
-                            mf = latest_candle.get("mom_flip", 0)
+                            mf = eval_candle.get("mom_flip", 0)
                             if mf >= float(step_val if step_val else 0): met = True
                         elif step_type == "mom_flip_lt":
-                            mf = latest_candle.get("mom_flip", 0)
+                            mf = eval_candle.get("mom_flip", 0)
                             if mf <= float(step_val if step_val else 0): met = True
                         elif step_type == "rvol_gt":
-                            rvol = latest_candle.get("rvol", 0)
+                            rvol = eval_candle.get("rvol", 0)
                             if rvol >= float(step_val if step_val else 0): met = True
                             
                         if met:
