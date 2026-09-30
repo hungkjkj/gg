@@ -9,6 +9,7 @@ from typing import List, Optional
 import concurrent.futures
 
 # Nhập các hàm từ service MT5
+import mt5_service
 from mt5_service import initialize_mt5, get_historical_data, shutdown_mt5, get_tick, _get_real_symbol
 
 app = FastAPI(title="Quant Trading Dashboard API")
