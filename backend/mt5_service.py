@@ -118,13 +118,15 @@ def get_all_symbols():
         })
         
 
-    # Add synthetic symbols
-    res['Currency Indices'] = [
-        {"name": k, "description": f"Synthetic {k.split('_')[0]} Index"} for k in SYNTHETIC_INDICES.keys()
+    # Add synthetic symbols at the beginning
+    new_res = {}
+    new_res['Chỉ số Tiền tệ (Currency Indices)'] = [
+        {"name": k, "description": f"Chỉ số {k.split('_')[0]} (Synthetic)"} for k in SYNTHETIC_INDICES.keys()
     ]
+    new_res.update(res)
     
-    _ALL_SYMBOLS_CACHE = res
-    return res
+    _ALL_SYMBOLS_CACHE = new_res
+    return new_res
 
 def get_tick(symbol: str):
     """Lấy tick hiện tại của một symbol"""
