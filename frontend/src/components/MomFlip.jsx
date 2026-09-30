@@ -274,6 +274,18 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
       isSyncingRange = false;
     };
 
+    const findDataByTime = (time) => {
+        if (!data || data.length === 0) return null;
+        let l = 0, r = data.length - 1;
+        while (l <= r) {
+            let m = Math.floor((l + r) / 2);
+            if (data[m].time === time) return data[m];
+            if (data[m].time < time) l = m + 1;
+            else r = m - 1;
+        }
+        return null;
+    };
+
     let isSyncingCrosshair = false;
     const handleMainCrosshairMove = (param) => {
         if (isSyncingCrosshair) return;
@@ -282,9 +294,14 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
             return;
         }
         isSyncingCrosshair = true;
-        try {
-            chartRef.current.setCrosshairPosition(0, param.time, seriesRef.current);
-        } catch(e) {}
+        const item = findDataByTime(param.time);
+        if (item) {
+            try {
+                chartRef.current.setCrosshairPosition(item.value, param.time, seriesRef.current);
+            } catch(e) {}
+        } else {
+            chartRef.current.clearCrosshairPosition();
+        }
         isSyncingCrosshair = false;
     };
 
@@ -295,9 +312,14 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
             return;
         }
         isSyncingCrosshair = true;
-        try {
-            mainChart.setCrosshairPosition(0, param.time, mainSeries);
-        } catch(e) {}
+        const item = findDataByTime(param.time);
+        if (item && item.close) {
+            try {
+                mainChart.setCrosshairPosition(item.close, param.time, mainSeries);
+            } catch(e) {}
+        } else {
+            mainChart.clearCrosshairPosition();
+        }
         isSyncingCrosshair = false;
     };
 
@@ -312,7 +334,7 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
       mainChart.unsubscribeCrosshairMove(handleMainCrosshairMove);
       chartRef.current.unsubscribeCrosshairMove(handleFlipCrosshairMove);
     };
-  }, [mainChart, mainSeries]);
+  }, [mainChart, mainSeries, data]);
 
   useEffect(() => {
     if (seriesRef.current && data && data.length > 0) {
