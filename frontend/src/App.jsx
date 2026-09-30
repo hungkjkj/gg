@@ -1175,11 +1175,16 @@ useEffect(() => {
         const sortedRawForMaVol = rawData.filter(d => d.ma_vol != null && !isNaN(d.ma_vol)).sort((a,b)=>a.time-b.time);
         const maVolData = sortedRawForMaVol.map((i, index, arr) => {
           let col = "rgba(128, 128, 128, 0.8)";
-          if (index > 0) {
-            if (i.ma_vol >= arr[index - 1].ma_vol) col = "rgba(0, 255, 0, 1)"; // Lên màu xanh lá
-            else col = "rgba(255, 0, 0, 1)"; // Xuống màu đỏ
-          } else if (lastMaVolColorRef.current !== null) {
-            col = lastMaVolColorRef.current;
+          if (index < arr.length - 1) {
+            if (arr[index + 1].ma_vol >= i.ma_vol) col = "rgba(0, 255, 0, 1)";
+            else col = "rgba(255, 0, 0, 1)";
+          } else {
+            if (index > 0) {
+              if (i.ma_vol >= arr[index - 1].ma_vol) col = "rgba(0, 255, 0, 1)";
+              else col = "rgba(255, 0, 0, 1)";
+            } else if (lastMaVolColorRef.current !== null) {
+              col = lastMaVolColorRef.current;
+            }
           }
           return {time: i.time, value: i.ma_vol, color: col};
         });
@@ -1188,11 +1193,16 @@ useEffect(() => {
         const sortedRawForMomMa = rawData.filter(d => d.mom_ma != null && !isNaN(d.mom_ma)).sort((a,b)=>a.time-b.time);
         const momMaData = sortedRawForMomMa.map((i, index, arr) => {
           let col = "rgba(128, 128, 128, 0.8)";
-          if (index > 0) {
-            if (i.mom_ma >= arr[index - 1].mom_ma) col = "rgba(0, 255, 0, 1)"; // Lên màu xanh lá
-            else col = "rgba(255, 0, 0, 1)"; // Xuống màu đỏ
-          } else if (lastMomMaColorRef.current !== null) {
-            col = lastMomMaColorRef.current;
+          if (index < arr.length - 1) {
+            if (arr[index + 1].mom_ma >= i.mom_ma) col = "rgba(0, 255, 0, 1)";
+            else col = "rgba(255, 0, 0, 1)";
+          } else {
+            if (index > 0) {
+              if (i.mom_ma >= arr[index - 1].mom_ma) col = "rgba(0, 255, 0, 1)";
+              else col = "rgba(255, 0, 0, 1)";
+            } else if (lastMomMaColorRef.current !== null) {
+              col = lastMomMaColorRef.current;
+            }
           }
           return {time: i.time, value: i.mom_ma, color: col};
         });
