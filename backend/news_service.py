@@ -249,7 +249,7 @@ def get_news_for_symbol(symbol: str):
     filtered = []
     for ev in events:
         country = ev["country"].upper()
-        if country in currencies or (country == "ALL"):
+        if country in currencies or (country == "ALL") or (country == "USD"):
             impact = ev["impact"].strip()
             if impact in ["High", "Medium", "Holiday"]:
                 filtered.append(ev.copy())

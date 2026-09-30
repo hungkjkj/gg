@@ -196,7 +196,7 @@ def get_backtest_news(symbol: str, timestamp: int):
         filtered = []
         for ev in all_events:
             country = ev["country"].upper()
-            if country in currencies or country == "ALL":
+            if country in currencies or country == "ALL" or country == "USD":
                 impact = ev["impact"].strip()
                 if impact in ["High", "Medium", "Holiday"]:
                     filtered.append(ev.copy())
