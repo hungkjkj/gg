@@ -1,6 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
+const symbolGroups = {
+  "Chỉ số Tổng hợp": [
+    {name: "FX GI", description: "Thị trường chung"},
+    {name: "US Stocks GI", description: "Chỉ số Cổ phiếu Mỹ"},
+    {name: "Commodities GI", description: "Chỉ số Hàng hóa"},
+    {name: "Crypto GI", description: "Chỉ số Tiền điện tử"}
+  ],
+  "15 Cặp tiền tệ chính": [
+    {name: "EURUSD", description: "Euro vs US Dollar"},
+    {name: "GBPUSD", description: "Great Britain Pound vs US Dollar"},
+    {name: "AUDUSD", description: "Australian Dollar vs US Dollar"},
+    {name: "NZDUSD", description: "New Zealand Dollar vs US Dollar"},
+    {name: "USDJPY", description: "US Dollar vs Japanese Yen"},
+    {name: "EURGBP", description: "Euro vs Great Britain Pound"},
+    {name: "EURAUD", description: "Euro vs Australian Dollar"},
+    {name: "EURNZD", description: "Euro vs New Zealand Dollar"},
+    {name: "EURJPY", description: "Euro vs Japanese Yen"},
+    {name: "GBPAUD", description: "Great Britain Pound vs Australian Dollar"},
+    {name: "GBPNZD", description: "Great Britain Pound vs New Zealand Dollar"},
+    {name: "GBPJPY", description: "Great Britain Pound vs Japanese Yen"},
+    {name: "AUDNZD", description: "Australian Dollar vs New Zealand Dollar"},
+    {name: "AUDJPY", description: "Australian Dollar vs Japanese Yen"},
+    {name: "NZDJPY", description: "New Zealand Dollar vs Japanese Yen"}
+  ],
+  "Hàng hoá & Kim loại": [
+    {name: "GOLD.i#", description: "Vàng (Gold)"},
+    {name: "SILVER.i#", description: "Bạc (Silver)"},
+    {name: "OILCash#", description: "Dầu thô (WTI Oil)"}
+  ],
+  "Tiền điện tử": [
+    {name: "BTCUSD", description: "Bitcoin vs US Dollar"},
+    {name: "ETHUSD", description: "Ethereum vs US Dollar"}
+  ],
+  "Chỉ số Chứng khoán": [
+    {name: "US500.i#", description: "S&P 500"},
+    {name: "US30.i#", description: "Dow Jones"},
+    {name: "US100.i#", description: "NASDAQ 100"},
+    {name: "GER40.i#", description: "DAX 40 (Đức)"},
+    {name: "UK100.i#", description: "FTSE 100 (Anh)"},
+    {name: "JP225.i#", description: "Nikkei 225 (Nhật Bản)"}
+  ]
+};
+
 const conditionTypes = [
   { id: 'touch_dvp', label: 'Giá chạm D-VP' },
   { id: 'exit_dvp', label: 'Giá thoát D-VP' },
@@ -100,7 +143,15 @@ const StrategyBuilderTab = ({ symbol: currentSymbol, timeframe: currentTimeframe
         <div style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '5px' }}>Tài sản (Symbol)</label>
-            <input type="text" value={newSymbol} onChange={e => setNewSymbol(e.target.value)} style={{ padding: '8px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-color)', width: '120px' }} />
+            <select value={newSymbol} onChange={e => setNewSymbol(e.target.value)} style={{ padding: '8px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-color)', width: '250px' }}>
+              {Object.entries(symbolGroups).map(([groupName, syms]) => (
+                <optgroup key={groupName} label={groupName}>
+                  {syms.map(s => (
+                    <option key={s.name} value={s.name}>{s.description} ({s.name})</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '5px' }}>Khung giờ (TF)</label>
