@@ -292,7 +292,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['vwap'] = df['vwap_vol'].rolling(window=vwap_window, min_periods=1).sum() / vol_sum
     
     variance = ( ((df['hlc3'] - df['vwap'])**2) * df['value'] ).rolling(window=vwap_window, min_periods=1).sum() / vol_sum
-    df['stdev'] = variance.apply(lambda x: x**0.5 if pd.notnull(x) and x > 0 else 0)
+    df['stdev'] = np.where((variance.notnull()) & (variance > 0), np.sqrt(variance), 0)
     
     df['upper_band'] = df['vwap'] + (df['stdev'] * vwapMult)
     df['lower_band'] = df['vwap'] - (df['stdev'] * vwapMult)
@@ -384,16 +384,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
 
     mom_flip_metric_valid = mom_flip_metric.where(valid_mask, np.nan)
     
-    def calc_percent_rank_np(x):
-        current_val = x[-1]
-        if np.isnan(current_val):
-            return 0.0
-        valid_vals = x[~np.isnan(x)]
-        if len(valid_vals) == 0:
-            return 0.0
-        return (valid_vals <= current_val).mean() * 100.0
-
-    df['mom_flip'] = mom_flip_metric_valid.rolling(window=lookback_candles, min_periods=1).apply(calc_percent_rank_np, raw=True)
+    df['mom_flip'] = mom_flip_metric_valid.rolling(window=lookback_candles, min_periods=1).rank(pct=True, method='max') * 100.0
     
     # Tính toán các đường xác suất Momentum (Momentum đã chuẩn hóa theo median)
     df['mom_raw'] = df['mom_raw_raw'] / rolling_median_mom
@@ -405,7 +396,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['mom_lvl3'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct3 / 100.0)
     
     # Tính xếp hạng phần trăm của Động lượng (có dấu: -100% đến 100%)
-    df['mom_percent_rank'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).apply(calc_percent_rank_np, raw=True) * np.sign(df['mom_raw_raw'])
+    df['mom_percent_rank'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).rank(pct=True, method='max') * 100.0 * np.sign(df['mom_raw_raw'])
 
     
     # --- Tính toán Normalized Volume ---
@@ -430,8 +421,11 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     
     # --- Fetch M1 data BEFORE shifting df['time'] ---
     try:
-        start_ts = int(df['broker_time'].min())
         end_ts = int(df['broker_time'].max()) + 3600
+        if dvpLookbackDays > 0:
+            start_ts = max(int(df['broker_time'].min()), int(df['broker_time'].max()) - int(dvpLookbackDays * 24 * 3600))
+        else:
+            start_ts = int(df['broker_time'].min())
         real_sym = _get_real_symbol(symbol)
         m1_rates = mt5.copy_rates_range(real_sym, mt5.TIMEFRAME_M1, start_ts, end_ts)
         has_m1 = m1_rates is not None and len(m1_rates) > 0
@@ -737,7 +731,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                 hm = vol_stats.get(k)
                 if hm:
                     dt_str = f"{date_str} {hm}:00"
-                    local_dt = pd.to_datetime(dt_str)
+                    local_dt = pd.to_datetime(dt_str, format="%Y-%m-%d %H:%M:%S")
                     true_utc_dt = local_dt - pd.Timedelta(hours=browserOffsetHours)
                     true_utc_ts = int(true_utc_dt.tz_localize('UTC').timestamp())
                     chart_ts = true_utc_ts + int(timeShiftHours * 3600)
