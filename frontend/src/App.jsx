@@ -763,8 +763,11 @@ useEffect(() => {
     
     // Lưu ref cho Session BG
 
+    let isDisposed = false;
+
     // Resize handler
     const handleResize = () => {
+        if (isDisposed) return;
         try {
           if (chartContainerRef.current && chart) {
             chart.applyOptions({
@@ -802,6 +805,7 @@ useEffect(() => {
     window.addEventListener('resize', handleResize);
 
       return () => {
+      isDisposed = true;
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       
