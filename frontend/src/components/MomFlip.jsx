@@ -150,7 +150,6 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
-  const priceSeriesRef = useRef(null);
   const priceLinesRef = useRef([]);
   const [position, setPosition] = useState({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 - 125 });
   const dragRef = useRef(null);
@@ -174,23 +173,9 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
       lineWidth: 2,
     });
     
-    // Add price line series for divergence comparison
-    const priceSeries = chart.addLineSeries({
-      color: 'rgba(148, 163, 184, 0.5)', // Muted color for background price line
-      lineWidth: 1,
-      priceScaleId: 'priceScale',
-      crosshairMarkerVisible: false,
-      priceLineVisible: false,
-    });
-    
-    chart.priceScale('priceScale').applyOptions({
-      visible: false, // Hide the price scale so it doesn't clutter the flip chart
-      autoScale: true,
-    });
     chartRef.current = chart;
     
     seriesRef.current = series;
-    priceSeriesRef.current = priceSeries; // store in dedicated ref
 
 
     
@@ -347,9 +332,6 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
   useEffect(() => {
     if (seriesRef.current && data && data.length > 0) {
       seriesRef.current.setData(data.map(d => ({time: d.time, value: d.value})));
-      if (priceSeriesRef.current) {
-          priceSeriesRef.current.setData(data.map(d => ({time: d.time, value: d.close})));
-      }
     }
   }, [data]);
 
