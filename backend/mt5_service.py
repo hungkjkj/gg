@@ -62,6 +62,9 @@ def _get_real_symbol(symbol: str):
     if mt5.terminal_info() is None:
         initialize_mt5()
     
+    if symbol in SYNTHETIC_INDICES:
+        return _get_synthetic_tick(symbol)
+        
     # Xử lý riêng GLOBAL_INDEX
     if symbol.upper() == 'GLOBAL_INDEX':
         return symbol
@@ -114,6 +117,12 @@ def get_all_symbols():
             "description": s.description
         })
         
+
+    # Add synthetic symbols
+    res['Currency Indices'] = [
+        {"name": k, "description": f"Synthetic {k.split('_')[0]} Index"} for k in SYNTHETIC_INDICES.keys()
+    ]
+    
     _ALL_SYMBOLS_CACHE = res
     return res
 
@@ -122,6 +131,9 @@ def get_tick(symbol: str):
     if mt5.terminal_info() is None:
         initialize_mt5()
     
+    if symbol in SYNTHETIC_INDICES:
+        return _get_synthetic_tick(symbol)
+        
     # Xử lý riêng GLOBAL_INDEX
     if symbol == "GLOBAL_INDEX":
         sym_eur = _get_real_symbol("EURUSD")
@@ -182,9 +194,108 @@ def get_tick(symbol: str):
                 }
     return None
 
+
+SYNTHETIC_INDICES = {
+    'USD_INDEX': [('EURUSD', True), ('GBPUSD', True), ('AUDUSD', True), ('NZDUSD', True), ('USDCAD', False), ('USDCHF', False), ('USDJPY', False)],
+    'EUR_INDEX': [('EURUSD', False), ('EURGBP', False), ('EURAUD', False), ('EURNZD', False), ('EURCAD', False), ('EURCHF', False), ('EURJPY', False)],
+    'GBP_INDEX': [('GBPUSD', False), ('EURGBP', True), ('GBPAUD', False), ('GBPNZD', False), ('GBPCAD', False), ('GBPCHF', False), ('GBPJPY', False)],
+    'JPY_INDEX': [('USDJPY', True), ('EURJPY', True), ('GBPJPY', True), ('AUDJPY', True), ('CADJPY', True), ('CHFJPY', True), ('NZDJPY', True)],
+    'AUD_INDEX': [('AUDUSD', False), ('EURAUD', True), ('GBPAUD', True), ('AUDNZD', False), ('AUDCAD', False), ('AUDCHF', False), ('AUDJPY', False)],
+    'CAD_INDEX': [('USDCAD', True), ('EURCAD', True), ('GBPCAD', True), ('AUDCAD', True), ('NZDCAD', True), ('CADCHF', False), ('CADJPY', False)],
+    'CHF_INDEX': [('USDCHF', True), ('EURCHF', True), ('GBPCHF', True), ('AUDCHF', True), ('NZDCHF', True), ('CADCHF', True), ('CHFJPY', False)],
+    'NZD_INDEX': [('NZDUSD', False), ('EURNZD', True), ('GBPNZD', True), ('AUDNZD', True), ('NZDCAD', False), ('NZDCHF', False), ('NZDJPY', False)],
+}
+
+def _fetch_synthetic_data(symbol: str, timeframe: str, count: int = 1000, end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
+    import numpy as np
+    import pandas as pd
+    components = SYNTHETIC_INDICES.get(symbol)
+    if not components:
+        return None
+        
+    df_result = None
+    for pair, invert in components:
+        df = _fetch_raw_data(pair, timeframe, count + 20, end_time, brokerTimezone)
+        if df is None or df.empty:
+            continue
+            
+        df = df.copy()
+        if invert:
+            temp_high = 1.0 / df['low']
+            temp_low = 1.0 / df['high']
+            df['open'] = 1.0 / df['open']
+            df['close'] = 1.0 / df['close']
+            df['high'] = temp_high
+            df['low'] = temp_low
+            
+        df = df.set_index('time')
+        
+        if df_result is None:
+            df_result = df[['open', 'high', 'low', 'close', 'tick_volume']].copy()
+            df_result[['open', 'high', 'low', 'close']] = np.log(df_result[['open', 'high', 'low', 'close']])
+            df_result['count'] = 1
+        else:
+            common_idx = df_result.index.intersection(df.index)
+            df_result = df_result.loc[common_idx]
+            df = df.loc[common_idx]
+            
+            df_result[['open', 'high', 'low', 'close']] += np.log(df[['open', 'high', 'low', 'close']])
+            df_result['tick_volume'] += df['tick_volume']
+            df_result['count'] += 1
+            
+    if df_result is not None and not df_result.empty:
+        df_result[['open', 'high', 'low', 'close']] = np.exp(df_result[['open', 'high', 'low', 'close']].div(df_result['count'], axis=0))
+        df_result['tick_volume'] = df_result['tick_volume'] / df_result['count']
+        
+        if symbol == 'USD_INDEX': df_result[['open', 'high', 'low', 'close']] *= 40.0
+        elif symbol == 'JPY_INDEX': df_result[['open', 'high', 'low', 'close']] *= 12000.0
+        else: df_result[['open', 'high', 'low', 'close']] *= 100.0
+        
+        df_result = df_result.reset_index()
+        df_result = df_result.tail(count)
+        df_result['datetime'] = pd.to_datetime(df_result['time'], unit='s')
+        df_result['value'] = df_result['tick_volume']
+        return df_result
+        
+    return None
+
+def _get_synthetic_tick(symbol: str):
+    import numpy as np
+    components = SYNTHETIC_INDICES.get(symbol)
+    if not components:
+        return None
+        
+    prices = []
+    latest_time = 0
+    for pair, invert in components:
+        real_sym = _get_real_symbol(pair)
+        t = mt5.symbol_info_tick(real_sym)
+        if t and t.bid > 0:
+            val = t.bid
+            if invert: val = 1.0 / val
+            prices.append(np.log(val))
+            latest_time = max(latest_time, t.time)
+            
+    if len(prices) == len(components):
+        avg_p = np.exp(sum(prices) / len(prices))
+        if symbol == 'USD_INDEX': avg_p *= 40.0
+        elif symbol == 'JPY_INDEX': avg_p *= 12000.0
+        else: avg_p *= 100.0
+        
+        return {
+            "time": int(latest_time),
+            "bid": float(avg_p),
+            "ask": float(avg_p),
+            "last": float(avg_p)
+        }
+    return None
+
 def _fetch_raw_data(symbol: str, timeframe: str, count: int = 1000, end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
     """Lấy dữ liệu OHLCV quá khứ từ MT5, fallback sang EA nếu API bị chặn"""
     
+    if symbol in SYNTHETIC_INDICES:
+        return _fetch_synthetic_data(symbol, timeframe, count, end_time, brokerTimezone)
+        
     # 1. THỬ API CHÍNH THỨC TRƯỚC
     if mt5.terminal_info() is None:
         initialize_mt5()
