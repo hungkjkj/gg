@@ -14,21 +14,12 @@ const RrTool = ({ tool, chart, series, onDelete, onUpdate }) => {
 
   const [isDragging, setIsDragging] = useState(null); // 'target', 'entry', 'stop', 'body'
 
-  // We need a helper to normalize time since Lightweight Charts uses numbers for timestamps
-  const timeToPrimitive = (timeObj) => {
-    if (typeof timeObj === 'number') return timeObj;
-    if (timeObj && typeof timeObj === 'object') {
-      return timeObj.timestamp || new Date(`${timeObj.year}-${timeObj.month}-${timeObj.day}`).getTime() / 1000;
-    }
-    return 0;
-  };
-
   const updateCoordinates = useCallback(() => {
     if (!chart || !series || !tool) return;
     try {
       const timeScale = chart.timeScale();
-      const x1 = timeScale.timeToCoordinate(tool.time);
-      const x2 = timeScale.timeToCoordinate(tool.endTime);
+      const x1 = timeScale.logicalToCoordinate(tool.logical);
+      const x2 = timeScale.logicalToCoordinate(tool.endLogical);
       
       const yTarget = series.priceToCoordinate(tool.targetPrice);
       const yEntry = series.priceToCoordinate(tool.entryPrice);

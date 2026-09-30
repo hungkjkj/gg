@@ -71,18 +71,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const [contextMenu, setContextMenu] = useState(null);
   const [rrTools, setRrTools] = useState([]);
 
-  const addRrTool = (type, price, time) => {
-    let tfSeconds = 3600;
-    if (timeframe === 'M1') tfSeconds = 60;
-    if (timeframe === 'M5') tfSeconds = 300;
-    if (timeframe === 'M15') tfSeconds = 900;
-    if (timeframe === 'H1') tfSeconds = 3600;
-    if (timeframe === 'H4') tfSeconds = 14400;
-    if (timeframe === 'D1') tfSeconds = 86400;
-    
-    const toolTimePrimitive = typeof time === 'object' ? (time.timestamp || new Date(`${time.year}-${time.month}-${time.day}`).getTime()/1000) : time;
-    const endTime = toolTimePrimitive + (tfSeconds * 20);
-    
+  const addRrTool = (type, price, logical) => {
     const offset = price * 0.002;
     
     const newTool = {
@@ -91,8 +80,8 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       entryPrice: price,
       targetPrice: type === 'long' ? price + offset*2 : price - offset*2,
       stopPrice: type === 'long' ? price - offset : price + offset,
-      time: toolTimePrimitive,
-      endTime: endTime
+      logical: logical || 0,
+      endLogical: (logical || 0) + 20
     };
     setRrTools(prev => [...prev, newTool]);
   };
@@ -349,18 +338,22 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
         setAlertNoteInput('');
 
         const rect = chartContainerRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         
         const price = candlestickSeriesRef.current.coordinateToPrice(y);
         
         if (price !== null) {
+          const timeScale = chartRef.current.timeScale();
+          const logical = timeScale.coordinateToLogical(x);
           // IMPORTANT: Need to use functional state update or just directly set it.
           // Because setContextMenu is from useState, it is always available.
           setContextMenu({
             x: e.clientX,
             y: e.clientY,
             price: price,
-            symbol: symbolRef.current
+            symbol: symbolRef.current,
+            logical: logical
           });
           
           if (setAlerts) { // Tận dụng setAlerts hoặc toast để debug
@@ -1927,7 +1920,7 @@ useEffect(() => {
             <div 
               className="context-menu-item"
               onClick={() => {
-                addRrTool('long', contextMenu.price, contextMenu.time);
+                addRrTool('long', contextMenu.price, contextMenu.logical);
                 closeContextMenu();
               }}
             >
@@ -1936,7 +1929,7 @@ useEffect(() => {
             <div 
               className="context-menu-item"
               onClick={() => {
-                addRrTool('short', contextMenu.price, contextMenu.time);
+                addRrTool('short', contextMenu.price, contextMenu.logical);
                 closeContextMenu();
               }}
             >
