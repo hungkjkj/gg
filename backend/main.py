@@ -964,6 +964,10 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         "currencies": currencies
     }
             
+    if len(_MATRIX_CACHE) > 100:
+        _MATRIX_CACHE.clear()
+        _MATRIX_CACHE_TIME.clear()
+        
     _MATRIX_CACHE[cache_key] = result
     _MATRIX_CACHE_TIME[cache_key] = current_time
     return result
