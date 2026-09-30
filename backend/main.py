@@ -1068,12 +1068,15 @@ async def strategy_worker():
                                         strat['last_touched_dvp'] = box
                                         break
                             elif "exit_dvp" in step_type:
-                                box = strat.get('last_touched_dvp')
-                                if box:
+                                in_any = False
+                                for box in vp_boxes:
                                     top = box['price'] + box['height']/2
                                     bottom = box['price'] - box['height']/2
-                                    if target_low > top or target_high < bottom:
-                                        met = True
+                                    if target_high >= bottom and target_low <= top:
+                                        in_any = True
+                                        break
+                                if not in_any:
+                                    met = True
                         elif step_type == "mom_lt":
                             mom = latest_candle.get("mom_percent_rank", 0)
                             if mom <= float(step_val if step_val else 0): met = True

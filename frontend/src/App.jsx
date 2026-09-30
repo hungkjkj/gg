@@ -33,7 +33,7 @@ const customTickMarkFormatter = (time, tickMarkType) => {
     return `${dayStr} ${hh}:${mm}`;
 };
 
-const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
+const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
   const [momFlipData, setMomFlipData] = useState([]);
   const chartContainerRef = useRef(null);
   const momentumChartContainerRef = useRef(null);
@@ -812,7 +812,7 @@ useEffect(() => {
 
   useEffect(() => {
     if (candlestickSeriesRef.current) {
-      const isSunset = configs.chartTheme === 'sunset';
+      const isSunset = chartTheme === 'sunset';
       candlestickSeriesRef.current.applyOptions({
         upColor: isSunset ? '#ffffff' : '#00e676',
         downColor: isSunset ? '#1f2937' : '#ff1744',
@@ -820,7 +820,7 @@ useEffect(() => {
         wickDownColor: isSunset ? '#1f2937' : '#ff1744',
       });
     }
-  }, [configs.chartTheme]);
+  }, [chartTheme]);
   
   // Hàm cập nhật toạ độ HTML Overlay liên tục
   const updateOverlays = () => {
@@ -1226,7 +1226,7 @@ useEffect(() => {
         const sdFillData = [];
         const bandwidthHistory = [...bandwidthHistoryRef.current];
         
-        const isSunset = configs.chartTheme === 'sunset';
+        const isSunset = chartTheme === 'sunset';
         const colUp = isSunset ? "rgba(255, 255, 255, 0.9)" : "rgba(0, 230, 118, 0.9)";
         const colDn = isSunset ? "rgba(31, 41, 55, 0.9)" : "rgba(255, 23, 68, 0.9)";
         const fillUp = isSunset ? "rgba(255, 255, 255, 0.25)" : "rgba(0, 230, 118, 0.25)";
@@ -3157,7 +3157,7 @@ function App() {
         <div className="chart-container">
           <div className={`chart-wrapper theme-${chartTheme}`} style={{ overflow: (viewMode === 'matrix' || viewMode === 'catalyst' || viewMode === 'strategy') ? 'auto' : 'hidden' }}>
             {viewMode === 'chart' || viewMode === 'backtest' ? (
-              <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} showSdBands={showSdBands} showMomFlipChart={showMomFlipChart} showVolChart={showVolChart} showMomChart={showMomChart} />
+              <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} chartTheme={chartTheme} showSdBands={showSdBands} showMomFlipChart={showMomFlipChart} showVolChart={showVolChart} showMomChart={showMomChart} />
             ) : viewMode === 'matrix' ? (
               <MatrixComponent 
                 simulatedTime={null} 
