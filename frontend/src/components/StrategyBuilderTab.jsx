@@ -45,10 +45,10 @@ const symbolGroups = {
 };
 
 const conditionTypes = [
-  { id: 'touch_dvp', label: 'Giá chạm D-VP' },
-  { id: 'exit_dvp', label: 'Giá thoát D-VP' },
-  { id: 'mf_touch_dvp', label: 'Money Flow chạm D-VP' },
-  { id: 'mf_exit_dvp', label: 'Money Flow thoát D-VP' },
+  { id: 'touch_dvp', label: 'Giá nằm TRONG D-VP (Chạm)' },
+  { id: 'exit_dvp', label: 'Giá nằm NGOÀI D-VP (Thoát)' },
+  { id: 'mf_touch_dvp', label: 'Money Flow nằm TRONG D-VP (Chạm)' },
+  { id: 'mf_exit_dvp', label: 'Money Flow nằm NGOÀI D-VP (Thoát)' },
   { id: 'mom_lt', label: 'Động lượng (Mom) <= X %', hasValue: true },
   { id: 'mom_gt', label: 'Động lượng (Mom) >= X %', hasValue: true },
   { id: 'mom_flip_gt', label: 'Mom Flip >= X %', hasValue: true },
