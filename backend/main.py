@@ -388,8 +388,9 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     displacement = np.where(full_valid, vwap_cur - vwap_prev, 0)
     time_span_candles = np.maximum(i_arr - j_current + 1, 1.0)
     
-    # 4. Độ dịch chuyển / atr / thời gian
-    df['mom_raw_raw'] = np.where(full_valid, (displacement / df['atr'].values) / time_span_candles, 0.0)
+    # 4. Độ dịch chuyển / atr / thời gian * Hệ số khuyếch đại Vol (vol_cur / V_series)
+    vol_ratio = vol_cur / V_series
+    df['mom_raw_raw'] = np.where(full_valid, ((displacement / df['atr'].values) / time_span_candles) * vol_ratio, 0.0)
     df['abs_mom_raw'] = df['mom_raw_raw'].abs()
     
     # Tính median động lượng trong chu kỳ N giờ
