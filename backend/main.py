@@ -919,7 +919,8 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         displacement = np.where(full_valid, vwap_cur - vwap_prev, 0)
         time_span_candles = np.maximum(i_arr - j_current + 1, 1.0)
         
-        df['diff_pct'] = np.where(full_valid, (displacement / df['atr'].values) / time_span_candles, 0.0)
+        vol_ratio = vol_cur / V_series
+        df['diff_pct'] = np.where(full_valid, ((displacement / df['atr'].values) / time_span_candles) * vol_ratio, 0.0)
         
         df['vol_rolling'] = df['value'].rolling(window=window_size, min_periods=1).sum()
         
