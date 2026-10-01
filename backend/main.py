@@ -871,7 +871,7 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         
         if len(df) > n_hours:
             current_vwma = df['vwma'].iloc[-1]
-            past_hlc3 = df['hlc3'].iloc[-n_hours]
+            past_hlc3 = df['hlc3'].iloc[-n_hours - 1]
             
             if pd.isna(current_vwma) or pd.isna(past_hlc3) or past_hlc3 == 0:
                 return None
