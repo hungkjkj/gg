@@ -1784,7 +1784,7 @@ useEffect(() => {
         )}
         
         {/* Main Chart */}
-        <div style={{ flex: 3, position: 'relative', width: '100%' }}>
+        <div style={{ flex: 3, position: 'relative', width: '100%', overflow: 'hidden' }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
           <canvas 
             ref={canvasRef} 
