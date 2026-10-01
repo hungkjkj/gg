@@ -864,26 +864,26 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         df['vol_rolling'] = df['tick_volume'].rolling(window=window_size, min_periods=1).sum()
         
         if len(df) > window_size:
-            current_vwma = df['vwma'].iloc[-1]
-            past_hlc3 = df['hlc3'].iloc[-window_size - 1]
+            # Tính diff_pct cho TOÀN BỘ cây nến (C-VWMA vs HLC3 cách window_size nến)
+            shifted_hlc3 = df['hlc3'].shift(window_size)
+            df['diff_pct'] = (df['vwma'] - shifted_hlc3) / shifted_hlc3 * 100
             
-            if pd.isna(current_vwma) or pd.isna(past_hlc3) or past_hlc3 == 0:
+            # Score = TRUNG BÌNH toàn bộ cửa sổ (không phải 1 nến cuối)
+            window_diff = df['diff_pct'].iloc[-window_size:]
+            diff_pct_current = window_diff.mean()
+            
+            if pd.isna(diff_pct_current):
                 return None
-                
-            diff_pct_current = ((current_vwma - past_hlc3) / past_hlc3) * 100
             
             if pair == "GLOBAL_INDEX":
                 base_currency = "GI"
                 quote_currency = "NONE"
-                df['diff_pct'] = (df['vwma'] - df['hlc3'].shift(window_size)) / df['hlc3'].shift(window_size) * 100
             elif matrix_type != "fx" and matrix_type != "currency":
                 base_currency = pair
                 quote_currency = "NONE"
-                df['diff_pct'] = (df['vwma'] - df['hlc3'].shift(window_size)) / df['hlc3'].shift(window_size) * 100
             else:
                 base_currency = pair[:3]
                 quote_currency = pair[3:]
-                df['diff_pct'] = (df['vwma'] - df['hlc3'].shift(window_size)) / df['hlc3'].shift(window_size) * 100
             
             diff_array_len = vol_days * 24 * candles_per_hour
             diff_array = df['diff_pct'].iloc[-diff_array_len:].fillna(0).values
@@ -938,26 +938,41 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         vol_percentile = 0.0
         mom_percentile = 0.0
         if len(vol_arr) > 0 and len(scores_arr) > 0:
-            current_vol = vol_arr[-1]
-            # Tính phần trăm số nến trong lịch sử nhỏ hơn khối lượng hiện tại
-            percentile = np.mean(vol_arr < current_vol) * 100
+            # Tính Vol Percentile — trung bình cửa sổ
+            ws_vol = min(window_size, len(vol_arr))
+            current_vol = np.mean(vol_arr[-ws_vol:]) if ws_vol > 0 else vol_arr[-1]
+            
+            # So sánh vol trung bình cửa sổ với rolling mean lịch sử
+            if len(vol_arr) >= ws_vol:
+                vol_rolling_means = pd.Series(vol_arr).rolling(ws_vol, min_periods=max(1, ws_vol//2)).mean().dropna().values
+            else:
+                vol_rolling_means = vol_arr
+            percentile = np.mean(vol_rolling_means < current_vol) * 100
             vol_percentile = round(percentile, 2)
             
-            # Tính Mom Percentile (Nhân điểm sức mạnh với RVOL của cửa sổ n_hours)
+            # Tính Mom Percentile (Nhân điểm sức mạnh với RVOL — trung bình cửa sổ)
             scores_np = np.array(scores_arr)
             vol_np = np.array(vol_arr)
             
             mean_vol = np.mean(vol_np)
             rvol = vol_np / mean_vol if mean_vol > 0 else np.ones_like(vol_np)
             weighted_scores = scores_np * rvol
-            current_weighted = weighted_scores[-1]
             
-            # Phân phối động lượng chuẩn (so với toàn bộ lịch sử thăng giáng)
-            all_abs_scores = np.abs(weighted_scores)
+            # Lấy trung bình cửa sổ thay vì 1 nến cuối
+            ws = min(window_size, len(weighted_scores))
+            current_weighted = np.mean(weighted_scores[-ws:]) if ws > 0 else weighted_scores[-1]
+            
+            # Tính phân phối theo cửa sổ trượt (rolling mean) thay vì từng nến
+            if len(weighted_scores) >= ws:
+                rolling_means = pd.Series(weighted_scores).rolling(ws, min_periods=max(1, ws//2)).mean().dropna().values
+            else:
+                rolling_means = weighted_scores
+            
+            all_abs = np.abs(rolling_means)
             current_abs = np.abs(current_weighted)
             
-            if len(all_abs_scores) > 0:
-                pct = np.mean(all_abs_scores <= current_abs) * 100
+            if len(all_abs) > 0:
+                pct = np.mean(all_abs <= current_abs) * 100
                 mom_percentile = round(pct, 2)
                 if current_weighted < 0:
                     mom_percentile = -mom_percentile
