@@ -45,8 +45,7 @@ const symbolGroups = {
 };
 
 const conditionTypes = [
-  { id: 'touch_dvp', label: 'Giá nằm TRONG D-VP (Chạm)' },
-  { id: 'exit_dvp', label: 'Giá nằm NGOÀI D-VP (Thoát)' },
+  { id: 'price_cross', label: 'Giá đi qua mức X', hasValue: true },
   { id: 'mf_touch_dvp', label: 'Money Flow nằm TRONG D-VP (Chạm)' },
   { id: 'mf_exit_dvp', label: 'Money Flow nằm NGOÀI D-VP (Thoát)' },
   { id: 'mom_lt', label: 'Động lượng (Mom) <= X %', hasValue: true },

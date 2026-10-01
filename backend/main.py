@@ -1167,14 +1167,10 @@ async def strategy_worker():
                         step_val = step.get("value")
                         met = False
                         
-                        if step_type in ["touch_dvp", "mf_touch_dvp", "exit_dvp", "mf_exit_dvp"]:
-                            target_high = c_high
-                            target_low = c_low
-                            if step_type.startswith("mf_"):
-                                target_high = c_hl2
-                                target_low = c_hl2
-                                
-                            if "touch_dvp" in step_type:
+                        if step_type in ["mf_touch_dvp", "mf_exit_dvp"]:
+                            target_high = c_hl2
+                            target_low = c_hl2
+                            if step_type == "mf_touch_dvp":
                                 for box in vp_boxes:
                                     top = box['price'] + box['height']/2
                                     bottom = box['price'] - box['height']/2
@@ -1182,7 +1178,7 @@ async def strategy_worker():
                                         met = True
                                         strat['last_touched_dvp'] = box
                                         break
-                            elif "exit_dvp" in step_type:
+                            elif step_type == "mf_exit_dvp":
                                 in_any = False
                                 for box in vp_boxes:
                                     top = box['price'] + box['height']/2
@@ -1192,6 +1188,10 @@ async def strategy_worker():
                                         break
                                 if not in_any:
                                     met = True
+                        elif step_type == "price_cross":
+                            target_price = float(step_val if step_val else 0)
+                            if c_low <= target_price <= c_high:
+                                met = True
                         elif step_type == "mom_lt":
                             mom = eval_candle.get("mom_percent_rank", 0)
                             if mom <= float(step_val if step_val else 0): met = True
