@@ -415,6 +415,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
 useEffect(() => {
     // Khởi tạo biểu đồ
     const chart = createChart(chartContainerRef.current, {
+      autoSize: false,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: '#f8fafc',
@@ -540,6 +541,7 @@ useEffect(() => {
     });
       
       const momentumChart = createChart(momentumChartContainerRef.current, {
+        autoSize: false,
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
           textColor: '#f8fafc',
@@ -574,6 +576,7 @@ useEffect(() => {
       const momentumDummySeries = momentumChart.addLineSeries({ color: 'transparent', crosshairMarkerVisible: false, priceLineVisible: false });
       
       const volumeChart = createChart(volumeChartContainerRef.current, {
+        autoSize: false,
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
           textColor: '#f8fafc',
