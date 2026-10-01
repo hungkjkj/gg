@@ -336,15 +336,18 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     else:
         df['hl2'] = (df['high'] + df['low']) / 2.0
     
-    # --- 2. Momentum & Normalized Volume (indi2.txt) ---
-    # TR calculation for ATR
-    h_m_l = df['high'] - df['low']
-    h_m_pc = (df['high'] - df['close'].shift(1)).abs()
-    l_m_pc = (df['low'] - df['close'].shift(1)).abs()
-    df['tr'] = np.maximum(h_m_l, np.maximum(h_m_pc.fillna(0), l_m_pc.fillna(0)))
-    df['atr'] = df['tr'].rolling(window=mom_window, min_periods=1).mean()
+    # Window ATR calculation for Main Chart Momentum
+    high_win = df['high'].rolling(window=mom_window, min_periods=1).max()
+    low_win = df['low'].rolling(window=mom_window, min_periods=1).min()
+    prev_close_win = df['close'].shift(mom_window).bfill()
     
+    h_m_l = high_win - low_win
+    h_m_pc = (high_win - prev_close_win).abs()
+    l_m_pc = (low_win - prev_close_win).abs()
+    
+    tr_win = np.maximum(h_m_l, np.maximum(h_m_pc, l_m_pc))
     lookback_candles = max(1, int((matrixLookbackHours * 3600) / tf_seconds))
+    df['atr'] = tr_win.rolling(window=lookback_candles, min_periods=1).mean()
     
     # --- New VF-Momentum Logic directly on current timeframe ---
     sma_mom_window = max(1, smaMomLength)
@@ -872,12 +875,18 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         df['hlc3'] = (df['high'] + df['low'] + df['close']) / 3
         df['vwap_vol'] = df['hlc3'] * df['tick_volume']
         
-        # ATR calculation
-        h_m_l = df['high'] - df['low']
-        h_m_pc = (df['high'] - df['close'].shift(1)).abs()
-        l_m_pc = (df['low'] - df['close'].shift(1)).abs()
-        df['tr'] = np.maximum(h_m_l, np.maximum(h_m_pc.fillna(0), l_m_pc.fillna(0)))
-        df['atr'] = df['tr'].rolling(window=window_size, min_periods=1).mean()
+        # Window ATR calculation
+        high_win = df['high'].rolling(window=window_size, min_periods=1).max()
+        low_win = df['low'].rolling(window=window_size, min_periods=1).min()
+        prev_close_win = df['close'].shift(window_size).bfill()
+        
+        h_m_l = high_win - low_win
+        h_m_pc = (high_win - prev_close_win).abs()
+        l_m_pc = (low_win - prev_close_win).abs()
+        
+        tr_win = np.maximum(h_m_l, np.maximum(h_m_pc, l_m_pc))
+        lookback_candles = int(vol_days * 24 * candles_per_hour)
+        df['atr'] = tr_win.rolling(window=lookback_candles, min_periods=1).mean()
 
         # VF-Momentum Logic
         lookback_candles = int(vol_days * 24 * candles_per_hour)
