@@ -245,10 +245,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
               brokerTimezone: str = "Europe/Athens"):
     """
     Lấy dữ liệu OHLCV từ MT5 và tính toán Chỉ báo Nâng cao (D-VP & Momentum).
-    """
-    import numpy as np
-    import pandas as pd
-    
+    """    
     df = get_historical_data(symbol, timeframe, count, end_time, brokerTimezone)
     
     if df is None or df.empty:
@@ -843,7 +840,7 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         
         rolling_vols = df_lookback['tick_volume'].rolling(n_hours, min_periods=max(1, n_hours//2)).sum().dropna()
         if len(rolling_vols) > 0:
-            V = np.percentile(rolling_vols, config.get('mfTargetPct', 95))
+            V = np.percentile(rolling_vols, config.get('matrixTargetPct', 75))
         else:
             V = 1.0
         V = max(V, 1.0)
@@ -938,7 +935,6 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
             })
 
     # Xếp hạng currencies và tính Vol Percentile & Mom Percentile
-    import numpy as np
     ranked_currencies = []
     for c in currencies:
         vol_arr = vol_hist[c]
