@@ -292,7 +292,7 @@ def _get_synthetic_tick(symbol: str):
         }
     return None
 
-def _fetch_raw_data(symbol: str, timeframe: str, count: int = 1000, end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
+def _fetch_raw_data(symbol: str, timeframe: str, count: int = 1000, end_time: int = 0, brokerTimezone: str = "Europe/Athens", fallback_ea: bool = True):
     """Lấy dữ liệu OHLCV quá khứ từ MT5, fallback sang EA nếu API bị chặn"""
     
     if symbol in SYNTHETIC_INDICES:
@@ -326,6 +326,10 @@ def _fetch_raw_data(symbol: str, timeframe: str, count: int = 1000, end_time: in
                 df['datetime'] = pd.to_datetime(df['time'], unit='s')
                 df['value'] = df['tick_volume']
                 return df
+                
+    if not fallback_ea:
+        print(f"Warning: MT5 API failed for {symbol}. EA Fallback is disabled.")
+        return pd.DataFrame()
                 
     # 2. API BỊ CHẶN -> FALLBACK SANG MQL5 EXPERT ADVISOR (DataServer)
     print(f"Warning: MT5 API failed. Falling back to MQL5 DataServer for {symbol} {timeframe}")
@@ -385,7 +389,7 @@ def _fetch_raw_data(symbol: str, timeframe: str, count: int = 1000, end_time: in
 _cached_usdx_symbol = None
 _usdx_searched = False
 
-def get_historical_data(symbol: str, timeframe: str, count: int = 1000, end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
+def get_historical_data(symbol: str, timeframe: str, count: int = 1000, end_time: int = 0, brokerTimezone: str = "Europe/Athens", fallback_ea: bool = True):
     is_global = symbol.endswith("_GI") or symbol == "GLOBAL_INDEX"
     
     if is_global:
@@ -467,7 +471,7 @@ def get_historical_data(symbol: str, timeframe: str, count: int = 1000, end_time
             return df_res.reset_index(drop=True)
             
     # Xử lý các mã bình thường
-    df = _fetch_raw_data(symbol, timeframe, count, end_time, brokerTimezone)
+    df = _fetch_raw_data(symbol, timeframe, count, end_time, brokerTimezone, fallback_ea)
     if df is not None:
         return df
     return pd.DataFrame()

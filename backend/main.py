@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, ORJSONResponse
 from pydantic import BaseModel
 import pandas as pd
+import numpy as np
 from typing import List, Optional
 import concurrent.futures
 
@@ -828,12 +829,47 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
     count = max(n_hours + 25, vol_days * 24 + n_hours)
     
     def process_pair(pair):
-        df = get_historical_data(pair, "H1", count, end_time, brokerTimezone)
+        df = get_historical_data(pair, "H1", count, end_time, brokerTimezone, fallback_ea=False)
         if df is None or df.empty or len(df) < n_hours:
             return None
             
         df['hlc3'] = (df['high'] + df['low'] + df['close']) / 3
-        df['vwma'] = (df['hlc3'] * df['tick_volume']).rolling(window=n_hours, min_periods=1).sum() / df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
+        df['vwap_vol'] = df['hlc3'] * df['tick_volume']
+        
+        # C-VWMA Logic (Volume grouped)
+        lookback_sec = vol_days * 24 * 3600
+        last_time_val = df['time'].iloc[-1]
+        df_lookback = df[df['time'] >= last_time_val - lookback_sec]
+        
+        rolling_vols = df_lookback['tick_volume'].rolling(n_hours, min_periods=max(1, n_hours//2)).sum().dropna()
+        if len(rolling_vols) > 0:
+            V = np.percentile(rolling_vols, config.get('mfTargetPct', 95))
+        else:
+            V = 1.0
+        V = max(V, 1.0)
+        
+        cum_vol = df['tick_volume'].cumsum().values
+        cum_vwap_vol = df['vwap_vol'].cumsum().values
+        target_v = cum_vol - V
+        
+        idx_start_minus_1 = np.searchsorted(cum_vol, target_v, side='right') - 1
+        
+        vwma_vals = np.zeros(len(df))
+        for i in range(len(df)):
+            idx = idx_start_minus_1[i]
+            if idx >= 0:
+                sum_vol = cum_vol[i] - cum_vol[idx]
+                sum_vwap_vol = cum_vwap_vol[i] - cum_vwap_vol[idx]
+            else:
+                sum_vol = cum_vol[i]
+                sum_vwap_vol = cum_vwap_vol[i]
+                
+            if sum_vol > 0:
+                vwma_vals[i] = sum_vwap_vol / sum_vol
+            else:
+                vwma_vals[i] = df['hlc3'].iloc[i]
+                
+        df['vwma'] = vwma_vals
         df['vol_rolling'] = df['tick_volume'].rolling(window=n_hours, min_periods=1).sum()
         
         if len(df) > n_hours:
