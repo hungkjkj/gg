@@ -344,10 +344,11 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     h_m_l = high_win - low_win
     h_m_pc = (high_win - prev_close_win).abs()
     l_m_pc = (low_win - prev_close_win).abs()
-    
     tr_win = np.maximum(h_m_l, np.maximum(h_m_pc, l_m_pc))
+    atr_window = max(1, int(momLength * mom_window))
+    df['atr'] = tr_win.rolling(window=atr_window, min_periods=1).mean()
+    
     lookback_candles = max(1, int((matrixLookbackHours * 3600) / tf_seconds))
-    df['atr'] = tr_win.rolling(window=lookback_candles, min_periods=1).mean()
     
     # --- New VF-Momentum Logic directly on current timeframe ---
     sma_mom_window = max(1, smaMomLength)
@@ -885,8 +886,9 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         l_m_pc = (low_win - prev_close_win).abs()
         
         tr_win = np.maximum(h_m_l, np.maximum(h_m_pc, l_m_pc))
-        lookback_candles = int(vol_days * 24 * candles_per_hour)
-        df['atr'] = tr_win.rolling(window=lookback_candles, min_periods=1).mean()
+        mom_length = config.get('momLength', 20)
+        atr_window = int(mom_length * window_size)
+        df['atr'] = tr_win.rolling(window=atr_window, min_periods=1).mean()
 
         # VF-Momentum Logic
         lookback_candles = int(vol_days * 24 * candles_per_hour)
