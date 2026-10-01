@@ -2115,7 +2115,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     // Tự động làm mới Ma trận mỗi 15 phút
     const intervalId = setInterval(() => {
       fetchMatrix(true);
-    }, 15 * 60 * 1000);
+    }, 5 * 60 * 1000);
     
     return () => clearInterval(intervalId);
   }, [matrixType]);
@@ -2757,7 +2757,7 @@ const DEFAULT_SYMBOLS = {
 
 function App() {
   const [symbol, setSymbol] = useState('EURUSD');
-
+  const [searchSymbol, setSearchSymbol] = useState('');
   const [alerts, setAlerts] = useState([]);
   const [toasts, setToasts] = useState([]);
   
@@ -3033,6 +3033,13 @@ function App() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Cặp tiền tệ (Symbol)</label>
+            <input
+              type="text"
+              placeholder="Tìm kiếm mã hoặc tên tài sản..."
+              value={searchSymbol}
+              onChange={(e) => setSearchSymbol(e.target.value)}
+              style={{ width: '100%', marginBottom: '8px', padding: '8px', borderRadius: '4px', border: '1px solid #374151', background: '#1f2937', color: '#fff', fontSize: '0.85rem' }}
+            />
             <select value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ width: '100%' }}>
               <optgroup label="Chỉ số Tổng hợp">
                 <option value="GLOBAL_INDEX">Thị trường chung (FX GI)</option>
@@ -3041,13 +3048,20 @@ function App() {
                 <option value="CRYPTO_GI">Chỉ số Tiền điện tử (Crypto GI)</option>
               </optgroup>
               {availableSymbols ? (
-                Object.keys(availableSymbols).map(group => (
-                  <optgroup key={group} label={group}>
-                    {availableSymbols[group].map(s => (
-                      <option key={s.name} value={s.name}>{s.description} ({s.name})</option>
-                    ))}
-                  </optgroup>
-                ))
+                Object.keys(availableSymbols).map(group => {
+                  const filtered = availableSymbols[group].filter(s => 
+                    s.name.toLowerCase().includes(searchSymbol.toLowerCase()) || 
+                    s.description.toLowerCase().includes(searchSymbol.toLowerCase())
+                  );
+                  if (filtered.length === 0) return null;
+                  return (
+                    <optgroup key={group} label={group}>
+                      {filtered.map(s => (
+                        <option key={s.name} value={s.name}>{s.description} ({s.name})</option>
+                      ))}
+                    </optgroup>
+                  );
+                })
               ) : (
                 <optgroup label="Đang tải danh sách...">
                   <option value="EURUSD">EURUSD</option>
