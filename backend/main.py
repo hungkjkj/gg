@@ -459,6 +459,10 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['rvol_mean'] = df.groupby('time_of_day')['value'].transform(lambda x: x.rolling(window=rvolLookbackDays, min_periods=1).mean())
     df['rvol'] = np.where(df['rvol_mean'] > 0, df['value'] / df['rvol_mean'], 0)
     
+    # --- Tính toán Mean MA Vol (Trung bình của ma_vol cùng giờ trong chu kỳ matrixLookbackHours) ---
+    mean_vol_lookback_days = max(1, int(matrixLookbackHours / 24.0))
+    df['mean_ma_vol'] = df.groupby('time_of_day')['ma_vol'].transform(lambda x: x.rolling(window=mean_vol_lookback_days, min_periods=1).mean())
+    
     # --- Fetch M1 data BEFORE shifting df['time'] ---
     try:
         end_ts = int(df['broker_time'].max()) + 3600
@@ -782,7 +786,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     if latest_only:
         df = df.tail(2)
         
-    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_percent_rank', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'spread']
+    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_percent_rank', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mean_ma_vol', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'spread']
     existing_cols = [c for c in cols_to_keep if c in df.columns]
     df = df[existing_cols]
         

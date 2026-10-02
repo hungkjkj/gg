@@ -1176,14 +1176,20 @@ useEffect(() => {
         const m50Up = rawData.filter(d => d.mom_lvl3 != null && !isNaN(d.mom_lvl3)).map(i => ({time: i.time, value: i.mom_lvl3})).sort((a,b)=>a.time-b.time);
         const m50Dn = rawData.filter(d => d.mom_lvl3 != null && !isNaN(d.mom_lvl3)).map(i => ({time: i.time, value: -i.mom_lvl3})).sort((a,b)=>a.time-b.time);
 
-        const normVolData = rawData.filter(d => (configs.volMode === 'rvol' ? (d.rvol != null && !isNaN(d.rvol)) : (d.norm_vol != null && !isNaN(d.norm_vol)))).map(i => {
+        const normVolData = rawData.filter(d => {
+          if (configs.volMode === 'rvol') return d.rvol != null && !isNaN(d.rvol);
+          if (configs.volMode === 'mean_vol') return d.mean_ma_vol != null && !isNaN(d.mean_ma_vol);
+          return d.norm_vol != null && !isNaN(d.norm_vol);
+        }).map(i => {
           let color = '#9c27b0';
-          let value = configs.volMode === 'rvol' ? i.rvol : i.norm_vol;
+          let value = i.norm_vol;
+          if (configs.volMode === 'rvol') value = i.rvol;
+          else if (configs.volMode === 'mean_vol') value = i.mean_ma_vol;
           
-          if (configs.volMode === 'rvol') {
-            if (i.rvol < 0.5) color = '#0033ff'; 
-            else if (i.rvol < 1.0) color = '#ff8c00'; 
-            else if (i.rvol < 2.0) color = '#ffff00'; 
+          if (configs.volMode === 'rvol' || configs.volMode === 'mean_vol') {
+            if (value < 0.5) color = '#0033ff'; 
+            else if (value < 1.0) color = '#ff8c00'; 
+            else if (value < 2.0) color = '#ffff00'; 
             else color = '#ff1744'; 
           } else {
             if (i.norm_vol <= i.vol_lvl4) color = '#0033ff'; // Blue
@@ -2457,6 +2463,7 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
               <select value={local.volMode} onChange={e => handleChange('volMode', e.target.value)} style={styleInput}>
                 <option value="normal">Normal (Phân phối Ma trận)</option>
                 <option value="rvol">RVol (So sánh cùng giờ)</option>
+                <option value="mean_vol">Trung bình Vol (Matrix 500H)</option>
               </select>
             </div>
             
