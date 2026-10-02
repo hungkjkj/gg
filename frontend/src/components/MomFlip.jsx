@@ -88,7 +88,7 @@ export const AssistiveTouch = ({
             <input type="checkbox" checked={showVolChart} onChange={e => { setShowVolChart(e.target.checked); localStorage.setItem('showVolChart', e.target.checked); }} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
             Biểu đồ Volume
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s', paddingLeft: '30px' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
+          <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
             <input type="checkbox" checked={volMode === 'mean_vol'} onChange={e => handleVolModeToggle && handleVolModeToggle(e.target.checked)} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
             ↳ Chế độ Trung bình Vol
           </label>
