@@ -3016,6 +3016,8 @@ function App() {
         showMatrixBubble={showMatrixBubble}
         setShowMatrixBubble={setShowMatrixBubble}
         bubbleMatrixData={bubbleMatrixData}
+        volMode={configs.volMode}
+        handleVolModeToggle={(checked) => setConfigs(prev => ({ ...prev, volMode: checked ? 'mean_vol' : 'normal' }))}
       />
 
       {showSettings && (
