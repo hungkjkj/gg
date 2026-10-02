@@ -797,6 +797,39 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df = df.replace({np.nan: None})
     records = df.to_dict(orient="records")
     
+    # Dự đoán tương lai (Append extra records for mean_vol mode until the end of the day)
+    if len(records) > 0 and not latest_only:
+        last_broker_time = int(df['broker_time'].max())
+        last_time = int(df['time'].max())
+        
+        future_records = []
+        next_broker_time = last_broker_time + tf_seconds
+        next_time = last_time + tf_seconds
+        
+        # Chỉ tìm trong khoảng 24h gần nhất
+        recent_df = df.tail(int((24 * 3600) / tf_seconds) + 10)
+        
+        while True:
+            dt = pd.to_datetime(next_broker_time, unit='s')
+            if dt.hour == 0 and dt.minute == 0 and dt.second == 0:
+                break
+                
+            tod = dt.time()
+            match = recent_df[recent_df['time_of_day'] == tod]
+            
+            if not match.empty:
+                mean_val = match['mean_ma_vol'].iloc[-1]
+                if not pd.isna(mean_val):
+                    future_records.append({
+                        "time": next_time,
+                        "mean_ma_vol": float(mean_val)
+                    })
+            
+            next_broker_time += tf_seconds
+            next_time += tf_seconds
+            
+        records.extend(future_records)
+    
     # Save the latest mom_flip for alert checking
     if len(records) > 0 and 'mom_flip' in records[-1] and records[-1]['mom_flip'] is not None:
         import alert_service
