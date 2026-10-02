@@ -809,9 +809,11 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         # Chỉ tìm trong khoảng 24h gần nhất
         recent_df = df.tail(int((24 * 3600) / tf_seconds) + 10)
         
+        last_dt = pd.to_datetime(last_broker_time, unit='s')
+        
         while True:
             dt = pd.to_datetime(next_broker_time, unit='s')
-            if dt.hour == 0 and dt.minute == 0 and dt.second == 0:
+            if dt.day != last_dt.day:
                 break
                 
             tod = dt.time()
