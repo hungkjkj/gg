@@ -786,29 +786,17 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     if latest_only:
         df = df.tail(2)
         
-    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_percent_rank', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mean_ma_vol', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'spread']
-    existing_cols = [c for c in cols_to_keep if c in df.columns]
-    df = df[existing_cols]
-        
-    # Chuyển Dataframe sang dictionary (Thay thế NaN, Inf bằng None để JSON tương thích)
-    for col in df.columns:
-        if pd.api.types.is_numeric_dtype(df[col]):
-            df[col] = df[col].replace([np.inf, -np.inf], np.nan)
-    df = df.replace({np.nan: None})
-    records = df.to_dict(orient="records")
-    
+    future_records_to_append = []
     # Dự đoán tương lai (Append extra records for mean_vol mode until the end of the day)
-    if len(records) > 0 and not latest_only:
+    if not df.empty and not latest_only:
         last_broker_time = int(df['broker_time'].max())
         last_time = int(df['time'].max())
         
-        future_records = []
         next_broker_time = last_broker_time + tf_seconds
         next_time = last_time + tf_seconds
         
         # Chỉ tìm trong khoảng 24h gần nhất
         recent_df = df.tail(int((24 * 3600) / tf_seconds) + 10)
-        
         last_dt = pd.to_datetime(last_broker_time, unit='s')
         
         while True:
@@ -822,15 +810,25 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
             if not match.empty:
                 mean_val = match['mean_ma_vol'].iloc[-1]
                 if not pd.isna(mean_val):
-                    future_records.append({
+                    future_records_to_append.append({
                         "time": next_time,
                         "mean_ma_vol": float(mean_val)
                     })
             
             next_broker_time += tf_seconds
             next_time += tf_seconds
-            
-        records.extend(future_records)
+
+    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_percent_rank', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mean_ma_vol', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'spread']
+    existing_cols = [c for c in cols_to_keep if c in df.columns]
+    df = df[existing_cols]
+        
+    # Chuyển Dataframe sang dictionary (Thay thế NaN, Inf bằng None để JSON tương thích)
+    for col in df.columns:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            df[col] = df[col].replace([np.inf, -np.inf], np.nan)
+    df = df.replace({np.nan: None})
+    records = df.to_dict(orient="records")
+    records.extend(future_records_to_append)
     
     # Save the latest mom_flip for alert checking
     if len(records) > 0 and 'mom_flip' in records[-1] and records[-1]['mom_flip'] is not None:
