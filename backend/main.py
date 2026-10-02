@@ -390,7 +390,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     full_valid = valid_prev_end & valid_prev & (vol_cur > 0) & (vol_prev > 0) & (df['atr'].values > 0)
     
     displacement = np.where(full_valid, vwap_cur - vwap_prev, 0)
-    time_span = np.maximum(i_arr - j_current + 1, 1.0) / window_size
+    time_span = np.maximum(i_arr - j_current + 1, 1.0) / mom_window
     
     # 4. Độ dịch chuyển / atr / thời gian chuẩn hóa * Hệ số khuyếch đại Vol (vol_cur / V_series)
     vol_ratio = vol_cur / V_series
