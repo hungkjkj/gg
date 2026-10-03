@@ -1834,8 +1834,8 @@ useEffect(() => {
                 position: 'absolute',
                 bottom: '30px',
                 right: '70px',
-                width: '36px',
-                height: '36px',
+                width: '42px',
+                height: '42px',
                 borderRadius: '50%',
                 background: 'rgba(59, 130, 246, 0.8)',
                 color: 'white',
@@ -1847,14 +1847,12 @@ useEffect(() => {
                 zIndex: 10,
                 boxShadow: '0 2px 10px rgba(0,0,0,0.5)',
                 transition: 'all 0.2s',
-                fontSize: '18px',
-                fontWeight: 'bold'
               }}
               title="Go to latest"
               onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 1)'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.8)'}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M5 12h14"></path>
                 <path d="M12 5l7 7-7 7"></path>
               </svg>
