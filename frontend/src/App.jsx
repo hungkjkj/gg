@@ -1174,13 +1174,13 @@ useEffect(() => {
 
         const normVolData = rawData.filter(d => {
           if (configs.volMode === 'rvol') return d.rvol != null && !isNaN(d.rvol);
-          if (configs.volMode === 'mean_vol') return d.mean_ma_vol != null && !isNaN(d.mean_ma_vol);
+          // Always require norm_vol to plot the volume bar
           return d.norm_vol != null && !isNaN(d.norm_vol);
         }).map(i => {
           let color = '#9c27b0';
           let value = i.norm_vol;
           if (configs.volMode === 'rvol') value = i.rvol;
-          else if (configs.volMode === 'mean_vol') value = i.mean_ma_vol;
+          // In mean_vol mode, we keep value = i.norm_vol, but compare against mean_vol thresholds!
           
           if (configs.volMode === 'rvol') {
             if (value < 0.5) color = '#0033ff'; 
@@ -1192,10 +1192,12 @@ useEffect(() => {
             const lvl2 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl2 : i.vol_lvl2;
             const lvl3 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl3 : i.vol_lvl3;
             const lvl4 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl4 : i.vol_lvl4;
+            
             if (value <= lvl4) color = '#0033ff'; // Blue
             else if (value <= lvl3) color = '#ff8c00'; // Orange
             else if (value <= lvl2) color = '#ffff00'; // Yellow
             else if (value <= lvl1) color = '#ff1744'; // Red
+            // > lvl1 defaults to '#9c27b0' (Purple)
           }
           return { time: i.time, value: value, color };
         }).sort((a,b)=>a.time-b.time);
@@ -1430,38 +1432,49 @@ useEffect(() => {
             
             // Cập nhật đường Spread (Bid / Ask)
             if (formattedData.length > 0 && candlestickSeriesRef.current) {
-                const lastItem = formattedData[formattedData.length - 1];
-                const bid = lastItem.close;
-                let minMove = 0.00001;
-                if (symbol.includes("JPY")) minMove = 0.001;
-                else if (symbol.includes("XAU") || symbol.includes("GOLD") || symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL")) minMove = 0.01;
-                const ask = bid + ((lastItem.spread || 0) * minMove);
-                if (!Number.isFinite(ask) || !Number.isFinite(bid)) return;
-                
-                if (!bidPriceLineRef.current) {
-                    bidPriceLineRef.current = candlestickSeriesRef.current.createPriceLine({
-                        price: bid,
-                        color: 'rgba(128, 128, 128, 0.7)',
-                        lineWidth: 1,
-                        lineStyle: 2,
-                        axisLabelVisible: true,
-                        title: 'Bid',
-                    });
-                } else {
-                    bidPriceLineRef.current.applyOptions({ price: bid });
+                // Find the last item that actually has a close price (ignore future timeline records)
+                let validLastItem = null;
+                for (let i = formattedData.length - 1; i >= 0; i--) {
+                    if (formattedData[i] && formattedData[i].close != null && Number.isFinite(formattedData[i].close)) {
+                        validLastItem = formattedData[i];
+                        break;
+                    }
                 }
                 
-                if (!askPriceLineRef.current) {
-                    askPriceLineRef.current = candlestickSeriesRef.current.createPriceLine({
-                        price: ask,
-                        color: 'rgba(255, 7, 58, 0.7)',
-                        lineWidth: 1,
-                        lineStyle: 2,
-                        axisLabelVisible: true,
-                        title: 'Ask',
-                    });
-                } else {
-                    askPriceLineRef.current.applyOptions({ price: ask });
+                if (validLastItem) {
+                    const bid = validLastItem.close;
+                    let minMove = 0.00001;
+                    if (symbol.includes("JPY")) minMove = 0.001;
+                    else if (symbol.includes("XAU") || symbol.includes("GOLD") || symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL")) minMove = 0.01;
+                    const ask = bid + ((validLastItem.spread || 0) * minMove);
+                    
+                    if (Number.isFinite(ask) && Number.isFinite(bid)) {
+                        if (!bidPriceLineRef.current) {
+                            bidPriceLineRef.current = candlestickSeriesRef.current.createPriceLine({
+                                price: bid,
+                                color: 'rgba(128, 128, 128, 0.7)',
+                                lineWidth: 1,
+                                lineStyle: 2,
+                                axisLabelVisible: true,
+                                title: 'Bid',
+                            });
+                        } else {
+                            bidPriceLineRef.current.applyOptions({ price: bid });
+                        }
+                        
+                        if (!askPriceLineRef.current) {
+                            askPriceLineRef.current = candlestickSeriesRef.current.createPriceLine({
+                                price: ask,
+                                color: 'rgba(255, 7, 58, 0.7)',
+                                lineWidth: 1,
+                                lineStyle: 2,
+                                axisLabelVisible: true,
+                                title: 'Ask',
+                            });
+                        } else {
+                            askPriceLineRef.current.applyOptions({ price: ask });
+                        }
+                    }
                 }
             }
             
