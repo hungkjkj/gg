@@ -1389,6 +1389,33 @@ useEffect(() => {
               lastUpdateTimeRef.current = formattedData[formattedData.length - 1].time;
             }
             candlestickSeriesRef.current.setData(formattedData);
+            
+            // Re-generate future timeline to ensure news markers don't compress when jumping in backtest
+            if (newsSeriesRef.current && newsDataRef.current) {
+                const tfSec = timeframe === 'M1' ? 60 : (timeframe === 'M5' ? 300 : (timeframe === 'M15' ? 900 : 3600));
+                let cTime = formattedData.length > 0 ? formattedData[formattedData.length - 1].time : Math.floor(Date.now() / 1000);
+                cTime = cTime - (cTime % tfSec);
+                
+                const futureTimes = [];
+                let t = cTime + tfSec;
+                for (let i = 0; i < 1500; i++) {
+                    const date = new Date(t * 1000);
+                    const day = date.getUTCDay();
+                    if (day !== 0 && day !== 6) {
+                        futureTimes.push({ time: t, value: 0 });
+                    } else {
+                        i--; // Bỏ qua cuối tuần
+                    }
+                    t += tfSec;
+                }
+                
+                const allTimesMap = new Map();
+                newsDataRef.current.forEach(ev => allTimesMap.set(ev.time, { time: ev.time, value: 0 }));
+                futureTimes.forEach(ft => allTimesMap.set(ft.time, ft));
+                
+                const newsSeriesData = Array.from(allTimesMap.values()).sort((a,b) => a.time - b.time);
+                newsSeriesRef.current.setData(newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            }
             lineCloseSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.close })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             lineHighSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.high })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             lineLowSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.low })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
