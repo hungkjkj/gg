@@ -1174,13 +1174,13 @@ useEffect(() => {
 
         const normVolData = rawData.filter(d => {
           if (configs.volMode === 'rvol') return d.rvol != null && !isNaN(d.rvol);
-          // Always require norm_vol to plot the volume bar
+          if (configs.volMode === 'mean_vol') return d.mean_ma_vol != null && !isNaN(d.mean_ma_vol);
           return d.norm_vol != null && !isNaN(d.norm_vol);
         }).map(i => {
           let color = '#9c27b0';
           let value = i.norm_vol;
           if (configs.volMode === 'rvol') value = i.rvol;
-          // In mean_vol mode, we keep value = i.norm_vol, but compare against mean_vol thresholds!
+          if (configs.volMode === 'mean_vol') value = i.mean_ma_vol;
           
           if (configs.volMode === 'rvol') {
             if (value < 0.5) color = '#0033ff'; 
