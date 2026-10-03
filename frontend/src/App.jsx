@@ -1414,7 +1414,10 @@ useEffect(() => {
                 futureTimes.forEach(ft => allTimesMap.set(ft.time, ft));
                 
                 const newsSeriesData = Array.from(allTimesMap.values()).sort((a,b) => a.time - b.time);
-                newsSeriesRef.current.setData(newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                const finalNewsData = newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time));
+                newsSeriesRef.current.setData(finalNewsData);
+                if (volumeDummySeriesRef.current) volumeDummySeriesRef.current.setData(finalNewsData);
+                if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(finalNewsData);
             }
             lineCloseSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.close })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             lineHighSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.high })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
