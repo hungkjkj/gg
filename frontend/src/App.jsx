@@ -147,8 +147,6 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   
   const [newsData, setNewsData] = useState([]);
   const newsSeriesRef = useRef(null);
-  const volumeDummySeriesRef = useRef(null);
-  const momentumDummySeriesRef = useRef(null);
   const newsDataRef = useRef([]);
   const [selectedNewsGroup, setSelectedNewsGroup] = useState(null);
   
@@ -242,8 +240,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       
       try {
           if (newsSeriesRef.current) newsSeriesRef.current.setData(newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-          if (volumeDummySeriesRef.current) volumeDummySeriesRef.current.setData(newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-          if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+
           // Group events by time
           const eventsByTime = {};
           alignedNewsData.forEach(ev => {
@@ -557,6 +554,7 @@ useEffect(() => {
         timeScale: {
           timeVisible: true,
           secondsVisible: false,
+          rightOffset: 20,
           tickMarkFormatter: customTickMarkFormatter,
         },
       });
@@ -572,8 +570,6 @@ useEffect(() => {
       const mom75Dn = momentumChart.addLineSeries({ color: 'rgba(225, 230, 38, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
       const mom50Up = momentumChart.addLineSeries({ color: 'rgba(128, 128, 128, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
       const mom50Dn = momentumChart.addLineSeries({ color: 'rgba(128, 128, 128, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
-      
-      const momentumDummySeries = momentumChart.addLineSeries({ color: 'transparent', crosshairMarkerVisible: false, priceLineVisible: false });
       
       const volumeChart = createChart(volumeChartContainerRef.current, {
         autoSize: false,
@@ -592,6 +588,7 @@ useEffect(() => {
         timeScale: {
           timeVisible: true,
           secondsVisible: false,
+          rightOffset: 20,
           tickMarkFormatter: customTickMarkFormatter,
         },
       });
@@ -600,8 +597,6 @@ useEffect(() => {
         priceFormat: { type: 'volume' },
       });
       const maVolSeries = volumeChart.addLineSeries({ color: 'rgba(57, 255, 20, 0.8)', lineWidth: 2 });
-      
-      const volumeDummySeries = volumeChart.addLineSeries({ color: 'transparent', crosshairMarkerVisible: false, priceLineVisible: false });
       
       const vol85Line = volumeChart.addLineSeries({ color: 'rgba(255, 165, 0, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
       const vol75Line = volumeChart.addLineSeries({ color: 'rgba(225, 230, 38, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
@@ -736,8 +731,6 @@ useEffect(() => {
     lineHighSeriesRef.current = lineHighSeries;
     lineLowSeriesRef.current = lineLowSeries;
     newsSeriesRef.current = newsSeries;
-    volumeDummySeriesRef.current = volumeDummySeries;
-    momentumDummySeriesRef.current = momentumDummySeries;
     vwapSeriesRef.current = vwapSeries;
     fairValueSeriesRef.current = fairValueSeries;
     upperBandSeriesRef.current = upperBandSeries;
@@ -821,8 +814,7 @@ useEffect(() => {
       volumeChartRef.current = null;
       candlestickSeriesRef.current = null;
       newsSeriesRef.current = null;
-      volumeDummySeriesRef.current = null;
-      momentumDummySeriesRef.current = null;
+
       bidPriceLineRef.current = null;
       askPriceLineRef.current = null;
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
@@ -1196,10 +1188,14 @@ useEffect(() => {
             else if (value < 2.0) color = '#ffff00'; 
             else color = '#ff1744'; 
           } else {
-            if (value <= i.vol_lvl4) color = '#0033ff'; // Blue
-            else if (value <= i.vol_lvl3) color = '#ff8c00'; // Orange
-            else if (value <= i.vol_lvl2) color = '#ffff00'; // Yellow
-            else if (value <= i.vol_lvl1) color = '#ff1744'; // Red
+            const lvl1 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl1 : i.vol_lvl1;
+            const lvl2 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl2 : i.vol_lvl2;
+            const lvl3 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl3 : i.vol_lvl3;
+            const lvl4 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl4 : i.vol_lvl4;
+            if (value <= lvl4) color = '#0033ff'; // Blue
+            else if (value <= lvl3) color = '#ff8c00'; // Orange
+            else if (value <= lvl2) color = '#ffff00'; // Yellow
+            else if (value <= lvl1) color = '#ff1744'; // Red
           }
           return { time: i.time, value: value, color };
         }).sort((a,b)=>a.time-b.time);
@@ -1255,10 +1251,15 @@ useEffect(() => {
         });
         if (momMaData.length > 0) lastMomMaColorRef.current = momMaData[momMaData.length - 1].color;
         
-        const v85 = rawData.filter(d => d.vol_lvl1 != null && !isNaN(d.vol_lvl1)).map(i => ({time: i.time, value: i.vol_lvl1})).sort((a,b)=>a.time-b.time);
-        const v75 = rawData.filter(d => d.vol_lvl2 != null && !isNaN(d.vol_lvl2)).map(i => ({time: i.time, value: i.vol_lvl2})).sort((a,b)=>a.time-b.time);
-        const v50 = rawData.filter(d => d.vol_lvl3 != null && !isNaN(d.vol_lvl3)).map(i => ({time: i.time, value: i.vol_lvl3})).sort((a,b)=>a.time-b.time);
-        const v15 = rawData.filter(d => d.vol_lvl4 != null && !isNaN(d.vol_lvl4)).map(i => ({time: i.time, value: i.vol_lvl4})).sort((a,b)=>a.time-b.time);
+        const lvl1Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl1' : 'vol_lvl1';
+        const lvl2Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl2' : 'vol_lvl2';
+        const lvl3Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl3' : 'vol_lvl3';
+        const lvl4Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl4' : 'vol_lvl4';
+
+        const v85 = rawData.filter(d => d[lvl1Field] != null && !isNaN(d[lvl1Field])).map(i => ({time: i.time, value: i[lvl1Field]})).sort((a,b)=>a.time-b.time);
+        const v75 = rawData.filter(d => d[lvl2Field] != null && !isNaN(d[lvl2Field])).map(i => ({time: i.time, value: i[lvl2Field]})).sort((a,b)=>a.time-b.time);
+        const v50 = rawData.filter(d => d[lvl3Field] != null && !isNaN(d[lvl3Field])).map(i => ({time: i.time, value: i[lvl3Field]})).sort((a,b)=>a.time-b.time);
+        const v15 = rawData.filter(d => d[lvl4Field] != null && !isNaN(d[lvl4Field])).map(i => ({time: i.time, value: i[lvl4Field]})).sort((a,b)=>a.time-b.time);
         
         const sortedHl2Raw = rawData.filter(d => d.hl2 != null && !isNaN(d.hl2)).sort((a,b)=>a.time-b.time);
         const fairValueData = sortedHl2Raw.map((item, index, arr) => {
@@ -1416,8 +1417,6 @@ useEffect(() => {
                 const newsSeriesData = Array.from(allTimesMap.values()).sort((a,b) => a.time - b.time);
                 const finalNewsData = newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time));
                 newsSeriesRef.current.setData(finalNewsData);
-                if (volumeDummySeriesRef.current) volumeDummySeriesRef.current.setData(finalNewsData);
-                if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(finalNewsData);
             }
             lineCloseSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.close })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             lineHighSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.high })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
@@ -1736,6 +1735,7 @@ useEffect(() => {
     backtestWeekRef.current = getWeekMonday(targetTimestamp);
     setIsPlaying(false);
     isPlayingRef.current = false;
+    newsDataRef.current = []; // Clear stale news data so futureTimes aligns properly before new news arrives
     fetchData(false, targetTimestamp);
     
     // Tải tin tức lịch sử cho backtest
