@@ -1186,16 +1186,16 @@ useEffect(() => {
           if (configs.volMode === 'rvol') value = i.rvol;
           else if (configs.volMode === 'mean_vol') value = i.mean_ma_vol;
           
-          if (configs.volMode === 'rvol' || configs.volMode === 'mean_vol') {
+          if (configs.volMode === 'rvol') {
             if (value < 0.5) color = '#0033ff'; 
             else if (value < 1.0) color = '#ff8c00'; 
             else if (value < 2.0) color = '#ffff00'; 
             else color = '#ff1744'; 
           } else {
-            if (i.norm_vol <= i.vol_lvl4) color = '#0033ff'; // Blue
-            else if (i.norm_vol <= i.vol_lvl3) color = '#ff8c00'; // Orange
-            else if (i.norm_vol <= i.vol_lvl2) color = '#ffff00'; // Yellow
-            else if (i.norm_vol <= i.vol_lvl1) color = '#ff1744'; // Red
+            if (value <= i.vol_lvl4) color = '#0033ff'; // Blue
+            else if (value <= i.vol_lvl3) color = '#ff8c00'; // Orange
+            else if (value <= i.vol_lvl2) color = '#ffff00'; // Yellow
+            else if (value <= i.vol_lvl1) color = '#ff1744'; // Red
           }
           return { time: i.time, value: value, color };
         }).sort((a,b)=>a.time-b.time);
