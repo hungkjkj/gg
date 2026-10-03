@@ -2390,11 +2390,11 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
             <input type="number" value={local.dvpLookbackDays !== undefined ? local.dvpLookbackDays : 5} onChange={(e) => handleChange('dvpLookbackDays', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} step="1" />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Target Volume % (Tính Money Flow)</label>
+            <label style={styleLabel}>Target Volume %</label>
             <input type="number" value={local.mfTargetPct !== undefined ? local.mfTargetPct : 50} onChange={e => handleChange('mfTargetPct', Number(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Chu kỳ tính Target Volume (Phút)</label>
+            <label style={styleLabel}>Chu kỳ tính Target Volume (Nến)</label>
             <input type="number" value={local.mfTimeoutMins !== undefined ? local.mfTimeoutMins : 120} onChange={e => handleChange('mfTimeoutMins', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
