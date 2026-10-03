@@ -795,8 +795,8 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         next_broker_time = last_broker_time + tf_seconds
         next_time = last_time + tf_seconds
         
-        # Chỉ tìm trong khoảng 24h gần nhất
-        recent_df = df.tail(int((24 * 3600) / tf_seconds) + 10)
+        # Tìm giá trị mean_ma_vol mới nhất cho mỗi time_of_day từ toàn bộ lịch sử (để tránh sót gap)
+        latest_mean_vol = df.drop_duplicates(subset=['time_of_day'], keep='last').set_index('time_of_day')['mean_ma_vol'].to_dict()
         last_dt = pd.to_datetime(last_broker_time, unit='s')
         
         while True:
@@ -805,15 +805,18 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                 break
                 
             tod = dt.time()
-            match = recent_df[recent_df['time_of_day'] == tod]
+            mean_val = latest_mean_vol.get(tod)
             
-            if not match.empty:
-                mean_val = match['mean_ma_vol'].iloc[-1]
-                if not pd.isna(mean_val):
-                    future_records_to_append.append({
-                        "time": next_time,
-                        "mean_ma_vol": float(mean_val)
-                    })
+            if mean_val is not None and not pd.isna(mean_val):
+                future_records_to_append.append({
+                    "time": next_time,
+                    "mean_ma_vol": float(mean_val)
+                })
+            else:
+                # Phải thêm time rỗng để biểu đồ không bị nhảy quãng thời gian
+                future_records_to_append.append({
+                    "time": next_time
+                })
             
             next_broker_time += tf_seconds
             next_time += tf_seconds

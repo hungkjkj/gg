@@ -1120,18 +1120,22 @@ useEffect(() => {
         if (lineHighSeriesRef.current) lineHighSeriesRef.current.applyOptions({ priceFormat });
         if (lineLowSeriesRef.current) lineLowSeriesRef.current.applyOptions({ priceFormat });
         
-        // Format nến (Loại bỏ các nến bị lỗi null)
+        // Format nến (hỗ trợ khoảng trống thời gian - whitespace data)
         let formattedData = rawData
-          .filter(item => item.open != null && item.high != null && item.low != null && item.close != null && !isNaN(item.open) && !isNaN(item.high) && !isNaN(item.low) && !isNaN(item.close))
-          .map(item => ({
-            time: item.time, 
-            open: item.open,
-            high: item.high,
-            low: item.low,
-            close: item.close,
-            spread: item.spread || 0
-          }))
-          .filter(item => Number.isFinite(item.time) && Number.isFinite(item.open) && Number.isFinite(item.high) && Number.isFinite(item.low) && Number.isFinite(item.close))
+          .map(item => {
+            if (item.open == null || item.high == null || item.low == null || item.close == null || isNaN(item.open) || isNaN(item.high) || isNaN(item.low) || isNaN(item.close)) {
+              return { time: item.time };
+            }
+            return {
+              time: item.time, 
+              open: item.open,
+              high: item.high,
+              low: item.low,
+              close: item.close,
+              spread: item.spread || 0
+            };
+          })
+          .filter(item => Number.isFinite(item.time))
           .sort((a, b) => a.time - b.time);
           
         // Deduplicate strictly ascending
