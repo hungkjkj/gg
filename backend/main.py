@@ -790,49 +790,6 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     if latest_only:
         df = df.tail(2)
         
-    future_records_to_append = []
-    # Dự đoán tương lai (Append extra records for mean_vol mode until the end of the day)
-    if not df.empty and not latest_only:
-        last_broker_time = int(df['broker_time'].max())
-        last_time = int(df['time'].max())
-        
-        next_broker_time = last_broker_time + tf_seconds
-        next_time = last_time + tf_seconds
-        
-        # Tìm giá trị mean_ma_vol mới nhất cho mỗi time_of_day từ toàn bộ lịch sử (để tránh sót gap)
-        latest_mean_vol = df.drop_duplicates(subset=['time_of_day'], keep='last').set_index('time_of_day')['mean_ma_vol'].to_dict()
-        last_mean_vol_lvl1 = float(df['mean_vol_lvl1'].iloc[-1]) if not df.empty else None
-        last_mean_vol_lvl2 = float(df['mean_vol_lvl2'].iloc[-1]) if not df.empty else None
-        last_mean_vol_lvl3 = float(df['mean_vol_lvl3'].iloc[-1]) if not df.empty else None
-        last_mean_vol_lvl4 = float(df['mean_vol_lvl4'].iloc[-1]) if not df.empty else None
-        last_dt = pd.to_datetime(last_broker_time, unit='s')
-        
-        while True:
-            dt = pd.to_datetime(next_broker_time, unit='s')
-            if dt.day != last_dt.day:
-                break
-                
-            tod = dt.time()
-            mean_val = latest_mean_vol.get(tod)
-            
-            if mean_val is not None and not pd.isna(mean_val):
-                future_records_to_append.append({
-                    "time": next_time,
-                    "mean_ma_vol": float(mean_val),
-                    "mean_vol_lvl1": last_mean_vol_lvl1,
-                    "mean_vol_lvl2": last_mean_vol_lvl2,
-                    "mean_vol_lvl3": last_mean_vol_lvl3,
-                    "mean_vol_lvl4": last_mean_vol_lvl4
-                })
-            else:
-                # Phải thêm time rỗng để biểu đồ không bị nhảy quãng thời gian
-                future_records_to_append.append({
-                    "time": next_time
-                })
-            
-            next_broker_time += tf_seconds
-            next_time += tf_seconds
-
     cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_percent_rank', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mean_ma_vol', 'mean_vol_lvl1', 'mean_vol_lvl2', 'mean_vol_lvl3', 'mean_vol_lvl4', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'spread']
     existing_cols = [c for c in cols_to_keep if c in df.columns]
     df = df[existing_cols]
@@ -843,7 +800,6 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
             df[col] = df[col].replace([np.inf, -np.inf], np.nan)
     df = df.replace({np.nan: None})
     records = df.to_dict(orient="records")
-    records.extend(future_records_to_append)
     
     # Save the latest mom_flip for alert checking
     if len(records) > 0 and 'mom_flip' in records[-1] and records[-1]['mom_flip'] is not None:

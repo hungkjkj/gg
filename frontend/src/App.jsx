@@ -1157,11 +1157,12 @@ useEffect(() => {
           lastVwapColorRef.current = vwapData[vwapData.length - 1].color;
         }
           
+          const isSunsetMom = chartTheme === 'sunset';
           const momentumData = rawData.filter(d => d.mom_raw != null && !isNaN(d.mom_raw)).map(item => {
             return {
               time: item.time,
               value: item.mom_raw,
-              color: item.mom_raw >= 0 ? '#00e676' : '#ff1744'
+              color: item.mom_raw >= 0 ? (isSunsetMom ? '#ffffff' : '#00e676') : (isSunsetMom ? '#1f2937' : '#ff1744')
             };
           }).sort((a,b)=>a.time-b.time);
           
@@ -1633,7 +1634,7 @@ useEffect(() => {
         }
       }).catch(e => console.error(e));
     }
-  }, [symbol, timeframe, configs, viewMode]);
+  }, [symbol, timeframe, configs, viewMode, chartTheme]);
 
   // Backtest Playback Loop
   const getWeekMonday = (timestamp) => {
