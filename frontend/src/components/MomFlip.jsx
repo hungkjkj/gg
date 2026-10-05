@@ -350,10 +350,7 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
       const isSunsetMom = chartTheme === 'sunset';
       seriesRef.current.setData(data.map(d => {
         const val = d.value || 0;
-        let alpha = 0.15; // < 75%
-        if (val >= 85) alpha = 1.0;
-        else if (val >= 75) alpha = 0.6;
-        if (val < 5) alpha = 0.05; // ~0%
+        let alpha = Math.min(1.0, Math.max(0, val / 100));
         
         let r, g, b;
         if (d.mom_raw >= 0) {
