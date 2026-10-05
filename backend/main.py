@@ -664,6 +664,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         highs = df_m1_filtered['high'].values
         lows = df_m1_filtered['low'].values
         vols = df_m1_filtered['tick_volume'].values
+        timeout_candles = max(int(timeout_sec / 60), 3)
     else:
         df_filtered = df[df['time'] >= dvp_cutoff_time]
         times = df_filtered['time'].values
@@ -673,6 +674,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
             vols = df_filtered['value'].values
         except:
             vols = df_filtered['tick_volume'].values
+        timeout_candles = max(int(timeout_sec / tf_seconds), 3)
     
     active_bins = {}
     completed_boxes = []
@@ -690,10 +692,10 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         
         for bin_idx in range(min_bin_idx, max_bin_idx + 1):
             if bin_idx not in active_bins:
-                active_bins[bin_idx] = {'vol': vol_per_bin, 'start': t, 'end': t, 'last_touch': t}
+                active_bins[bin_idx] = {'vol': vol_per_bin, 'start': t, 'end': t, 'last_touch': t, 'last_idx': i}
             else:
                 b = active_bins[bin_idx]
-                if (t - b['last_touch']) > timeout_sec:
+                if (i - b['last_idx']) > timeout_candles:
                     # Close old box, extend end to current time t
                     completed_boxes.append({
                         'bin_idx': bin_idx,
@@ -703,11 +705,12 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                         'end': t
                     })
                     # Start new box
-                    active_bins[bin_idx] = {'vol': vol_per_bin, 'start': t, 'end': t, 'last_touch': t}
+                    active_bins[bin_idx] = {'vol': vol_per_bin, 'start': t, 'end': t, 'last_touch': t, 'last_idx': i}
                 else:
                     b['vol'] += vol_per_bin
                     b['end'] = t
                     b['last_touch'] = t
+                    b['last_idx'] = i
                     
     # Flush remaining active bins, extending them to the right edge of the chart
     last_time = times[-1] if len(times) > 0 else 0

@@ -188,10 +188,6 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       // Align news to timeframe grid to prevent blank gaps in chart
       const alignedNewsData = newsData.map(ev => {
          let alignedTime = ev.time - (ev.time % tfSec);
-         let date = new Date(alignedTime * 1000);
-         let day = date.getUTCDay();
-         if (day === 6) alignedTime += 86400 * 2; // Shift Sat to Mon
-         else if (day === 0) alignedTime += 86400; // Shift Sun to Mon
          return { ...ev, originalTime: ev.time, time: alignedTime };
       });
       newsDataRef.current = alignedNewsData;
