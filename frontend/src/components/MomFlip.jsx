@@ -175,7 +175,8 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
       layout: { background: { color: 'transparent' }, textColor: '#f8fafc' },
       grid: { vertLines: { color: 'rgba(255,255,255,0.05)' }, horzLines: { color: 'rgba(255,255,255,0.05)' } },
       rightPriceScale: { borderColor: 'rgba(255,255,255,0.1)' },
-      timeScale: { borderColor: 'rgba(255,255,255,0.1)' }
+      timeScale: { borderColor: 'rgba(255,255,255,0.1)' },
+      crosshair: { mode: 0 }
     });
     
     const series = chart.addHistogramSeries({
