@@ -1072,7 +1072,8 @@ useEffect(() => {
         const newMomFlip = rawData.map(d => ({
           time: d.time,
           value: (d.mom_flip != null && !isNaN(d.mom_flip)) ? d.mom_flip : 0, 
-          close: d.close 
+          close: d.close,
+          mom_raw: d.mom_raw
         })).sort((a,b)=>a.time - b.time);
 
         if (!isPolling) {
@@ -2077,7 +2078,7 @@ useEffect(() => {
             </div>
           </div>
         )}
-        {showMomFlipChart && <MomFlipChartComponent data={momFlipData} mainChart={chartRef.current} mainSeries={candlestickSeriesRef.current} alerts={alerts} symbol={symbol} />}
+        {showMomFlipChart && <MomFlipChartComponent data={momFlipData} mainChart={chartRef.current} mainSeries={candlestickSeriesRef.current} alerts={alerts} symbol={symbol} chartTheme={chartTheme} />}
       </div>
   );
 };

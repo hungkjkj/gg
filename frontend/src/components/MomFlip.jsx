@@ -158,7 +158,7 @@ export const AssistiveTouch = ({
   );
 };
 
-export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, symbol }) => {
+export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, symbol, chartTheme }) => {
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
@@ -349,23 +349,34 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
 
   useEffect(() => {
     if (seriesRef.current && data && data.length > 0) {
+      const isSunsetMom = chartTheme === 'sunset';
       seriesRef.current.setData(data.map(d => {
         const val = d.value || 0;
         let alpha = 0.15; // < 75%
         if (val >= 85) alpha = 1.0;
         else if (val >= 75) alpha = 0.6;
         if (val < 5) alpha = 0.05; // ~0%
+        
+        let r, g, b;
+        if (d.mom_raw >= 0) {
+           r = 0; g = 230; b = 118;
+           if (isSunsetMom) { r = 255; g = 255; b = 255; }
+        } else {
+           r = 255; g = 23; b = 68;
+           if (isSunsetMom) { r = 31; g = 41; b = 55; }
+        }
+
         return {
           time: d.time,
           open: 0,
           close: 0,
           low: 0,
           high: val,
-          wickColor: `rgba(192, 132, 252, ${alpha})`
+          wickColor: `rgba(${r}, ${g}, ${b}, ${alpha})`
         };
       }));
     }
-  }, [data]);
+  }, [data, chartTheme]);
 
   const handlePointerDown = (e) => {
     if (e.target.id !== 'mom-flip-header') return;
