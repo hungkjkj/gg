@@ -178,11 +178,14 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
       timeScale: { borderColor: 'rgba(255,255,255,0.1)' }
     });
     
-    const series = chart.addAreaSeries({
-      topColor: 'rgba(192, 132, 252, 0.5)',
-      bottomColor: 'rgba(192, 132, 252, 0.05)',
-      lineColor: '#c084fc',
-      lineWidth: 2,
+    const series = chart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      autoscaleInfoProvider: () => ({
+        priceRange: {
+          minValue: 0,
+          maxValue: 100,
+        },
+      }),
     });
     
     chartRef.current = chart;
@@ -343,7 +346,18 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
 
   useEffect(() => {
     if (seriesRef.current && data && data.length > 0) {
-      seriesRef.current.setData(data.map(d => ({time: d.time, value: d.value})));
+      seriesRef.current.setData(data.map(d => {
+        const val = d.value || 0;
+        let alpha = 0.15; // < 75%
+        if (val >= 85) alpha = 1.0;
+        else if (val >= 75) alpha = 0.6;
+        if (val < 5) alpha = 0.05; // ~0%
+        return {
+          time: d.time,
+          value: val,
+          color: `rgba(192, 132, 252, ${alpha})`
+        };
+      }));
     }
   }, [data]);
 
