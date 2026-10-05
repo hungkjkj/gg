@@ -178,11 +178,8 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
       timeScale: { borderColor: 'rgba(255,255,255,0.1)' }
     });
     
-    const series = chart.addCandlestickSeries({
-      upColor: 'transparent',
-      downColor: 'transparent',
-      borderVisible: false,
-      wickVisible: true,
+    const series = chart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
       autoscaleInfoProvider: () => ({
         priceRange: {
           minValue: 0,
@@ -368,11 +365,8 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
 
         return {
           time: d.time,
-          open: 0,
-          close: 0,
-          low: 0,
-          high: val,
-          wickColor: `rgba(${r}, ${g}, ${b}, ${alpha})`
+          value: val,
+          color: `rgba(${r}, ${g}, ${b}, ${alpha})`
         };
       }));
     }
