@@ -454,14 +454,16 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['vol_lvl3'] = np.where(df['vol_median'] > 0, df['vol_lvl3_raw'] / df['vol_median'], 0)
     df['vol_lvl4'] = np.where(df['vol_median'] > 0, df['vol_lvl4_raw'] / df['vol_median'], 0)
     
-    # --- Tính toán RVol (Relative Volume theo cùng khung giờ) ---
-    df['time_of_day'] = pd.to_datetime(df['broker_time'], unit='s').dt.time
-    df['rvol_mean'] = df.groupby('time_of_day')['value'].transform(lambda x: x.rolling(window=rvolLookbackDays, min_periods=1).mean())
+    # --- Tính toán RVol (Relative Volume theo cùng khung giờ & cùng thứ trong tuần) ---
+    df['broker_dt'] = pd.to_datetime(df['broker_time'], unit='s')
+    df['time_of_day'] = df['broker_dt'].dt.time
+    df['day_of_week'] = df['broker_dt'].dt.dayofweek
+    df['rvol_mean'] = df.groupby(['day_of_week', 'time_of_day'])['value'].transform(lambda x: x.rolling(window=rvolLookbackDays, min_periods=1).mean())
     df['rvol'] = np.where(df['rvol_mean'] > 0, df['value'] / df['rvol_mean'], 0)
     
-    # --- Tính toán Mean MA Vol (Trung bình của ma_vol cùng giờ trong chu kỳ matrixLookbackHours) ---
+    # --- Tính toán Mean MA Vol (Trung bình của ma_vol cùng giờ & cùng thứ trong chu kỳ matrixLookbackHours) ---
     mean_vol_lookback_days = max(1, int(matrixLookbackHours / 24.0))
-    df['mean_ma_vol'] = df.groupby('time_of_day')['ma_vol'].transform(lambda x: x.rolling(window=mean_vol_lookback_days, min_periods=1).mean())
+    df['mean_ma_vol'] = df.groupby(['day_of_week', 'time_of_day'])['ma_vol'].transform(lambda x: x.rolling(window=mean_vol_lookback_days, min_periods=1).mean())
     df['mean_vol_lvl1'] = df['mean_ma_vol'].rolling(window=lookback_candles, min_periods=1).quantile(volPct1 / 100.0)
     df['mean_vol_lvl2'] = df['mean_ma_vol'].rolling(window=lookback_candles, min_periods=1).quantile(volPct2 / 100.0)
     df['mean_vol_lvl3'] = df['mean_ma_vol'].rolling(window=lookback_candles, min_periods=1).quantile(volPct3 / 100.0)
