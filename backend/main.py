@@ -454,11 +454,11 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['vol_lvl3'] = np.where(df['vol_median'] > 0, df['vol_lvl3_raw'] / df['vol_median'], 0)
     df['vol_lvl4'] = np.where(df['vol_median'] > 0, df['vol_lvl4_raw'] / df['vol_median'], 0)
     
-    # --- Tính toán RVol (Relative Volume theo cùng khung giờ & cùng thứ trong tuần) ---
+    # --- Tính toán RVol ---
     df['broker_dt'] = pd.to_datetime(df['broker_time'], unit='s')
     df['time_of_day'] = df['broker_dt'].dt.time
     df['day_of_week'] = df['broker_dt'].dt.dayofweek
-    df['rvol_mean'] = df.groupby('time_of_day')['value'].transform(lambda x: x.rolling(window=rvolLookbackDays, min_periods=1).mean())
+    df['rvol_mean'] = df['value'].rolling(window=rvolLookbackDays, min_periods=1).mean()
     df['rvol'] = np.where(df['rvol_mean'] > 0, df['value'] / df['rvol_mean'], 0)
     
     # --- Tính toán Mean MA Vol (Trung bình của ma_vol cùng giờ & cùng thứ trong chu kỳ matrixLookbackHours) ---
