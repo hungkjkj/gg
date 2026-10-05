@@ -55,15 +55,6 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const sdFillSeriesRef = useRef(null);
   const momentumSeriesRef = useRef(null);
   
-  // Các đường xác suất Momentum
-  const mom85UpRef = useRef(null);
-  const mom85DnRef = useRef(null);
-  const mom75UpRef = useRef(null);
-  const mom75DnRef = useRef(null);
-  const mom50UpRef = useRef(null);
-  const mom50DnRef = useRef(null);
-  const momMaSeriesRef = useRef(null);
-  
   // Các đường xác suất Volume
   const normVolSeriesRef = useRef(null);
   const maVolSeriesRef = useRef(null);
@@ -557,15 +548,18 @@ useEffect(() => {
 
       const momentumSeries = momentumChart.addHistogramSeries({
         priceFormat: { type: 'volume' },
-        autoscaleInfoProvider: () => null,
+        autoscaleInfoProvider: () => ({
+          priceRange: {
+            minValue: -100,
+            maxValue: 100,
+          },
+        }),
       });
       
-      const mom85Up = momentumChart.addLineSeries({ color: 'rgba(255, 165, 0, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
-      const mom85Dn = momentumChart.addLineSeries({ color: 'rgba(255, 165, 0, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
-      const mom75Up = momentumChart.addLineSeries({ color: 'rgba(225, 230, 38, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
-      const mom75Dn = momentumChart.addLineSeries({ color: 'rgba(225, 230, 38, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
-      const mom50Up = momentumChart.addLineSeries({ color: 'rgba(128, 128, 128, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
-      const mom50Dn = momentumChart.addLineSeries({ color: 'rgba(128, 128, 128, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
+      momentumSeries.createPriceLine({ price: 85, color: 'rgba(255, 255, 255, 0.4)', lineWidth: 1, lineStyle: 2, title: '85%' });
+      momentumSeries.createPriceLine({ price: 75, color: 'rgba(255, 255, 255, 0.2)', lineWidth: 1, lineStyle: 2, title: '75%' });
+      momentumSeries.createPriceLine({ price: -75, color: 'rgba(255, 255, 255, 0.2)', lineWidth: 1, lineStyle: 2, title: '-75%' });
+      momentumSeries.createPriceLine({ price: -85, color: 'rgba(255, 255, 255, 0.4)', lineWidth: 1, lineStyle: 2, title: '-85%' });
       
       const volumeChart = createChart(volumeChartContainerRef.current, {
         autoSize: false,
@@ -735,16 +729,6 @@ useEffect(() => {
     momentumSeriesRef.current = momentumSeries;
     momentumChartRef.current = momentumChart;
     volumeChartRef.current = volumeChart;
-    
-    mom85UpRef.current = mom85Up;
-    mom85DnRef.current = mom85Dn;
-    mom75UpRef.current = mom75Up;
-    mom75DnRef.current = mom75Dn;
-    mom50UpRef.current = mom50Up;
-    mom50DnRef.current = mom50Dn;
-    
-    const momMaSeries = momentumChart.addLineSeries({ color: 'rgba(255, 255, 255, 0.8)', lineWidth: 1, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
-    momMaSeriesRef.current = momMaSeries;
     
     normVolSeriesRef.current = normVolSeries;
     maVolSeriesRef.current = maVolSeries;
@@ -1003,11 +987,9 @@ useEffect(() => {
         if (vwapSeriesRef.current) vwapSeriesRef.current.setData([]);
         if (momentumSeriesRef.current) momentumSeriesRef.current.setData([]);
         if (normVolSeriesRef.current) normVolSeriesRef.current.setData([]);
-        if (momMaSeriesRef.current) momMaSeriesRef.current.setData([]);
         if (maVolSeriesRef.current) maVolSeriesRef.current.setData([]);
         lastVwapColorRef.current = null;
         lastMaVolColorRef.current = null;
-        lastMomMaColorRef.current = null;
         lastHl2ColorRef.current = null;
         lastBandwidthRef.current = null;
         lastSdColorRef.current = null;
@@ -1154,21 +1136,27 @@ useEffect(() => {
         }
           
           const isSunsetMom = chartTheme === 'sunset';
-          const momentumData = rawData.filter(d => d.mom_raw != null && !isNaN(d.mom_raw)).map(item => {
+          const momentumData = rawData.filter(d => d.mom_percent_rank != null && !isNaN(d.mom_percent_rank)).map(item => {
+            const val = item.mom_percent_rank;
+            const absVal = Math.abs(val);
+            
+            let alpha = 0.15; // < 75%: cột rất mờ
+            if (absVal >= 85) alpha = 1.0; // >= 85%: cột nổi bật
+            else if (absVal >= 75) alpha = 0.6; // 75-85%: cột bình thường
+            if (absVal < 5) alpha = 0.05; // 0%: gần như không vẽ
+            
+            let color = val >= 0 ? `rgba(0, 230, 118, ${alpha})` : `rgba(255, 23, 68, ${alpha})`;
+            if (isSunsetMom) {
+                color = val >= 0 ? `rgba(255, 255, 255, ${alpha})` : `rgba(31, 41, 55, ${alpha})`;
+            }
+
             return {
               time: item.time,
-              value: item.mom_raw,
-              color: item.mom_raw >= 0 ? (isSunsetMom ? '#ffffff' : '#00e676') : (isSunsetMom ? '#1f2937' : '#ff1744')
+              value: val,
+              color: color
             };
           }).sort((a,b)=>a.time-b.time);
           
-        const m85Up = rawData.filter(d => d.mom_lvl1 != null && !isNaN(d.mom_lvl1)).map(i => ({time: i.time, value: i.mom_lvl1})).sort((a,b)=>a.time-b.time);
-        const m85Dn = rawData.filter(d => d.mom_lvl1 != null && !isNaN(d.mom_lvl1)).map(i => ({time: i.time, value: -i.mom_lvl1})).sort((a,b)=>a.time-b.time);
-        const m75Up = rawData.filter(d => d.mom_lvl2 != null && !isNaN(d.mom_lvl2)).map(i => ({time: i.time, value: i.mom_lvl2})).sort((a,b)=>a.time-b.time);
-        const m75Dn = rawData.filter(d => d.mom_lvl2 != null && !isNaN(d.mom_lvl2)).map(i => ({time: i.time, value: -i.mom_lvl2})).sort((a,b)=>a.time-b.time);
-        const m50Up = rawData.filter(d => d.mom_lvl3 != null && !isNaN(d.mom_lvl3)).map(i => ({time: i.time, value: i.mom_lvl3})).sort((a,b)=>a.time-b.time);
-        const m50Dn = rawData.filter(d => d.mom_lvl3 != null && !isNaN(d.mom_lvl3)).map(i => ({time: i.time, value: -i.mom_lvl3})).sort((a,b)=>a.time-b.time);
-
         const normVolData = rawData.filter(d => {
           if (configs.volMode === 'rvol') return d.rvol != null && !isNaN(d.rvol);
           if (configs.volMode === 'mean_vol') return d.mean_ma_vol != null && !isNaN(d.mean_ma_vol);
@@ -1231,24 +1219,6 @@ useEffect(() => {
           return {time: i.time, value: i.ma_vol, color: col};
         });
         if (maVolData.length > 0) lastMaVolColorRef.current = maVolData[maVolData.length - 1].color;
-        
-        const sortedRawForMomMa = rawData.filter(d => d.mom_ma != null && !isNaN(d.mom_ma)).sort((a,b)=>a.time-b.time);
-        const momMaData = sortedRawForMomMa.map((i, index, arr) => {
-          let col = "rgba(128, 128, 128, 0.8)";
-          if (index < arr.length - 1) {
-            if (arr[index + 1].mom_ma >= i.mom_ma) col = "rgba(0, 255, 0, 1)";
-            else col = "rgba(255, 0, 0, 1)";
-          } else {
-            if (index > 0) {
-              if (i.mom_ma >= arr[index - 1].mom_ma) col = "rgba(0, 255, 0, 1)";
-              else col = "rgba(255, 0, 0, 1)";
-            } else if (lastMomMaColorRef.current !== null) {
-              col = lastMomMaColorRef.current;
-            }
-          }
-          return {time: i.time, value: i.mom_ma, color: col};
-        });
-        if (momMaData.length > 0) lastMomMaColorRef.current = momMaData[momMaData.length - 1].color;
         
         const lvl1Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl1' : 'vol_lvl1';
         const lvl2Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl2' : 'vol_lvl2';
@@ -1361,16 +1331,6 @@ useEffect(() => {
             sdFillData.forEach(d => safeUpdate(sdFillSeriesRef.current, d));
             momentumData.forEach(d => safeUpdate(momentumSeriesRef.current, d));
             
-            if (mom85UpRef.current) {
-              m85Up.forEach(d => safeUpdate(mom85UpRef.current, d));
-              m85Dn.forEach(d => safeUpdate(mom85DnRef.current, d));
-              m75Up.forEach(d => safeUpdate(mom75UpRef.current, d));
-              m75Dn.forEach(d => safeUpdate(mom75DnRef.current, d));
-              m50Up.forEach(d => safeUpdate(mom50UpRef.current, d));
-            }
-            if (mom50DnRef.current) m50Dn.forEach(d => safeUpdate(mom50DnRef.current, d));
-            if (momMaSeriesRef.current) momMaData.forEach(d => safeUpdate(momMaSeriesRef.current, d));
-            
             if (normVolSeriesRef.current) {
               normVolData.forEach(d => safeUpdate(normVolSeriesRef.current, d));
               maVolData.forEach(d => safeUpdate(maVolSeriesRef.current, d));
@@ -1475,16 +1435,8 @@ useEffect(() => {
                 }
             }
             
-            if (mom85UpRef.current) {
-              mom85UpRef.current.setData(m85Up.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-              mom85DnRef.current.setData(m85Dn.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-              mom75UpRef.current.setData(m75Up.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-              mom75DnRef.current.setData(m75Dn.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-              mom50UpRef.current.setData(m50Up.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-            }
-            if (mom50DnRef.current) mom50DnRef.current.setData(m50Dn.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-            if (momMaSeriesRef.current) momMaSeriesRef.current.setData(momMaData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             
+
             if (normVolSeriesRef.current) {
               normVolSeriesRef.current.setData(normVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
               maVolSeriesRef.current.setData(maVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
@@ -1580,7 +1532,6 @@ useEffect(() => {
             if (vwapSeriesRef.current) vwapSeriesRef.current.setData([]);
             if (momentumSeriesRef.current) momentumSeriesRef.current.setData([]);
             if (normVolSeriesRef.current) normVolSeriesRef.current.setData([]);
-            if (momMaSeriesRef.current) momMaSeriesRef.current.setData([]);
             if (maVolSeriesRef.current) maVolSeriesRef.current.setData([]);
             setVpBoxes([]);
             setVolStats(null);
