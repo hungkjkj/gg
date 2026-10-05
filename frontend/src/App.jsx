@@ -1256,10 +1256,10 @@ useEffect(() => {
         const lvl3Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl3' : 'vol_lvl3';
         const lvl4Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl4' : 'vol_lvl4';
 
-        const v85 = rawData.filter(d => d[lvl1Field] != null && !isNaN(d[lvl1Field])).map(i => ({time: i.time, value: i[lvl1Field]})).sort((a,b)=>a.time-b.time);
-        const v75 = rawData.filter(d => d[lvl2Field] != null && !isNaN(d[lvl2Field])).map(i => ({time: i.time, value: i[lvl2Field]})).sort((a,b)=>a.time-b.time);
-        const v50 = rawData.filter(d => d[lvl3Field] != null && !isNaN(d[lvl3Field])).map(i => ({time: i.time, value: i[lvl3Field]})).sort((a,b)=>a.time-b.time);
-        const v15 = rawData.filter(d => d[lvl4Field] != null && !isNaN(d[lvl4Field])).map(i => ({time: i.time, value: i[lvl4Field]})).sort((a,b)=>a.time-b.time);
+        const v85 = configs.volMode === 'rvol' ? [] : rawData.filter(d => d[lvl1Field] != null && !isNaN(d[lvl1Field])).map(i => ({time: i.time, value: i[lvl1Field]})).sort((a,b)=>a.time-b.time);
+        const v75 = configs.volMode === 'rvol' ? [] : rawData.filter(d => d[lvl2Field] != null && !isNaN(d[lvl2Field])).map(i => ({time: i.time, value: i[lvl2Field]})).sort((a,b)=>a.time-b.time);
+        const v50 = configs.volMode === 'rvol' ? [] : rawData.filter(d => d[lvl3Field] != null && !isNaN(d[lvl3Field])).map(i => ({time: i.time, value: i[lvl3Field]})).sort((a,b)=>a.time-b.time);
+        const v15 = configs.volMode === 'rvol' ? [] : rawData.filter(d => d[lvl4Field] != null && !isNaN(d[lvl4Field])).map(i => ({time: i.time, value: i[lvl4Field]})).sort((a,b)=>a.time-b.time);
         
         const sortedHl2Raw = rawData.filter(d => d.hl2 != null && !isNaN(d.hl2)).sort((a,b)=>a.time-b.time);
         const fairValueData = sortedHl2Raw.map((item, index, arr) => {
