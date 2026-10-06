@@ -795,6 +795,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         }
         # No hack needed, df['time'] is already True UTC
 
+ 
     
     # Generate vertical lines for Volume Peaks/Bottoms
     v_lines = []
