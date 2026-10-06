@@ -1,1 +1,1 @@
-[{"id": 1789631662573, "symbol": "NZDUSD", "price": 0.57538, "note": "CANH BAN", "status": "active"}, {"id": 1789631996412, "symbol": "GLOBAL_INDEX", "price": 112.86872, "note": "!", "status": "active"}, {"id": 1789635338570, "symbol": "AUDUSD", "price": 0.71239, "note": "CANH BAN ", "status": "active"}, {"id": 1789637390723, "symbol": "AUDUSD", "price": 0.71168, "note": "", "status": "active"}]
+[{"id": 1791300885255, "symbol": "EURUSD", "price": 1.12665, "note": "", "status": "triggered", "type": "price", "timeframe": "H1"}]

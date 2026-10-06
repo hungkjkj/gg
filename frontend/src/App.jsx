@@ -2881,15 +2881,15 @@ function App() {
               const startTime = ctx.currentTime + i * 0.25;
               const osc = ctx.createOscillator();
               const gainNode = ctx.createGain();
-              osc.type = 'sine';
+              osc.type = 'triangle';
               osc.frequency.setValueAtTime(880, startTime);
-              osc.frequency.exponentialRampToValueAtTime(440, startTime + 0.15);
-              gainNode.gain.setValueAtTime(0.5, startTime);
-              gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.15);
+              osc.frequency.exponentialRampToValueAtTime(440, startTime + 0.20);
+              gainNode.gain.setValueAtTime(1.5, startTime);
+              gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.20);
               osc.connect(gainNode);
               gainNode.connect(ctx.destination);
               osc.start(startTime);
-              osc.stop(startTime + 0.15);
+              osc.stop(startTime + 0.20);
           }
         } catch (e) { console.error("Audio error", e); }
       }, 5000);
