@@ -509,125 +509,126 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         except:
             has_m1 = False
 
-        # Manual Time Shift requested by user
-        is_macro_tf = timeframe.upper() in ['D1', 'W1', 'MN1']
-        if not is_macro_tf:
-            df['time'] = df['time'] + (timeShiftHours * 3600)
+    # Manual Time Shift requested by user
+    is_macro_tf = timeframe.upper() in ['D1', 'W1', 'MN1']
+    if not is_macro_tf:
+        df['time'] = df['time'] + (timeShiftHours * 3600)
+    
+    # --- Tính toán Background Sessions (Á, Âu, Mỹ) ---
+    # true_utc_series is the actual UTC time of the candle
+    if not is_macro_tf:
+        true_utc_series = pd.to_datetime(df['time'] - (timeShiftHours * 3600), unit='s', utc=True)
+    else:
+        true_utc_series = pd.to_datetime(df['time'], unit='s', utc=True)
+    # user_local_series is the user's physical local time (based on browserOffsetHours)
+    user_local_series = true_utc_series + pd.Timedelta(hours=browserOffsetHours)
+    
+    summer_offsets = {
+        'America/New_York': pd.Timedelta(hours=-4),
+        'Europe/London': pd.Timedelta(hours=1),
+        'Asia/Tokyo': pd.Timedelta(hours=9)
+    }
+    
+    def get_session_mask(start_str, end_str, tz_name):
+        sh, sm = map(int, start_str.split(':'))
+        eh, em = map(int, end_str.split(':'))
+        start_min = sh * 60 + sm
+        end_min = eh * 60 + em
         
-        # --- Tính toán Background Sessions (Á, Âu, Mỹ) ---
-        # true_utc_series is the actual UTC time of the candle
-        if not is_macro_tf:
-            true_utc_series = pd.to_datetime(df['time'] - (timeShiftHours * 3600), unit='s', utc=True)
+        candle_min = user_local_series.dt.hour * 60 + user_local_series.dt.minute
+        
+        if autoDst and tz_name in summer_offsets:
+            tz_series = true_utc_series.dt.tz_convert(tz_name)
+            # Calculate utcoffset by subtracting naive UTC time from naive local time
+            utcoffset = tz_series.dt.tz_localize(None) - true_utc_series.dt.tz_localize(None)
+            dst_shift_mins = (utcoffset - summer_offsets[tz_name]).dt.total_seconds() / 60
         else:
-            true_utc_series = pd.to_datetime(df['time'], unit='s', utc=True)
-        # user_local_series is the user's physical local time (based on browserOffsetHours)
-        user_local_series = true_utc_series + pd.Timedelta(hours=browserOffsetHours)
+            dst_shift_mins = pd.Series(0, index=df.index)
+            
+        target_start = (start_min - dst_shift_mins) % 1440
+        target_end = (end_min - dst_shift_mins) % 1440
         
-        summer_offsets = {
-            'America/New_York': pd.Timedelta(hours=-4),
-            'Europe/London': pd.Timedelta(hours=1),
-            'Asia/Tokyo': pd.Timedelta(hours=9)
-        }
+        cond_straight = (candle_min >= target_start) & (candle_min < target_end)
+        cond_cross = (candle_min >= target_start) | (candle_min < target_end)
         
-        def get_session_mask(start_str, end_str, tz_name):
-            sh, sm = map(int, start_str.split(':'))
-            eh, em = map(int, end_str.split(':'))
-            start_min = sh * 60 + sm
-            end_min = eh * 60 + em
+        result = np.where(target_start <= target_end, cond_straight, cond_cross)
+        if tz_name == 'Asia/Tokyo':
+            print(f"ASIA DEBUG:")
+            print(f"start_min: {start_min}, end_min: {end_min}")
+            print(f"target_start (first 5): {target_start.head().tolist()}")
+            print(f"target_end (first 5): {target_end.head().tolist()}")
+            print(f"dst_shift_mins (first 5): {dst_shift_mins.head().tolist() if isinstance(dst_shift_mins, pd.Series) else dst_shift_mins}")
             
-            candle_min = user_local_series.dt.hour * 60 + user_local_series.dt.minute
-            
-            if autoDst and tz_name in summer_offsets:
-                tz_series = true_utc_series.dt.tz_convert(tz_name)
-                # Calculate utcoffset by subtracting naive UTC time from naive local time
-                utcoffset = tz_series.dt.tz_localize(None) - true_utc_series.dt.tz_localize(None)
-                dst_shift_mins = (utcoffset - summer_offsets[tz_name]).dt.total_seconds() / 60
-            else:
-                dst_shift_mins = pd.Series(0, index=df.index)
+            # Print the first candle that gets colored!
+            colored_idx = np.where(result)[0]
+            if len(colored_idx) > 0:
+                first_idx = colored_idx[0]
+                print(f"First colored candle at index {first_idx}:")
+                print(f"df['time']: {df['time'].iloc[first_idx]}")
+                print(f"user_local_time: {user_local_series.iloc[first_idx]}")
+                print(f"candle_min: {candle_min.iloc[first_idx]}")
                 
-            target_start = (start_min - dst_shift_mins) % 1440
-            target_end = (end_min - dst_shift_mins) % 1440
-            
-            cond_straight = (candle_min >= target_start) & (candle_min < target_end)
-            cond_cross = (candle_min >= target_start) | (candle_min < target_end)
-            
-            result = np.where(target_start <= target_end, cond_straight, cond_cross)
-            if tz_name == 'Asia/Tokyo':
-                print(f"ASIA DEBUG:")
-                print(f"start_min: {start_min}, end_min: {end_min}")
-                print(f"target_start (first 5): {target_start.head().tolist()}")
-                print(f"target_end (first 5): {target_end.head().tolist()}")
-                print(f"dst_shift_mins (first 5): {dst_shift_mins.head().tolist() if isinstance(dst_shift_mins, pd.Series) else dst_shift_mins}")
-                
-                # Print the first candle that gets colored!
-                colored_idx = np.where(result)[0]
-                if len(colored_idx) > 0:
-                    first_idx = colored_idx[0]
-                    print(f"First colored candle at index {first_idx}:")
-                    print(f"df['time']: {df['time'].iloc[first_idx]}")
-                    print(f"user_local_time: {user_local_series.iloc[first_idx]}")
-                    print(f"candle_min: {candle_min.iloc[first_idx]}")
-                    
-            return result
+        return result
 
-        in_asia = get_session_mask(asiaStart, asiaEnd, 'Asia/Tokyo')
-        in_euro = get_session_mask(euroStart, euroEnd, 'Europe/London')
-        in_us = get_session_mask(usStart, usEnd, 'America/New_York')
+    in_asia = get_session_mask(asiaStart, asiaEnd, 'Asia/Tokyo')
+    in_euro = get_session_mask(euroStart, euroEnd, 'Europe/London')
+    in_us = get_session_mask(usStart, usEnd, 'America/New_York')
+    
+    df['session_color'] = None
+    df.loc[in_asia, 'session_color'] = 'rgba(139, 69, 19, 0.18)' # Brown/Orange
+    df.loc[in_euro, 'session_color'] = 'rgba(139, 0, 139, 0.18)' # Dark Purple
+    df.loc[in_us, 'session_color'] = 'rgba(0, 0, 139, 0.18)' # Dark Blue
+    
+    # --- Thống kê Đỉnh/Đáy Vol theo Phase ---
+    try:
+        df_hm = user_local_series.dt.strftime('%H:%M')
+        df_date = user_local_series.dt.date
+    
+        phase_s = pd.Series(0, index=df.index)
+        phase_s.loc[in_asia] = 1
+        phase_s.loc[in_euro] = 3
+        phase_s.loc[in_us] = 5
         
-        df['session_color'] = None
-        df.loc[in_asia, 'session_color'] = 'rgba(139, 69, 19, 0.18)' # Brown/Orange
-        df.loc[in_euro, 'session_color'] = 'rgba(139, 0, 139, 0.18)' # Dark Purple
-        df.loc[in_us, 'session_color'] = 'rgba(0, 0, 139, 0.18)' # Dark Blue
-        
-        # --- Thống kê Đỉnh/Đáy Vol theo Phase ---
+        last_active = phase_s.replace(0, pd.NA).ffill()
+        phase_s = phase_s.where(phase_s != 0, last_active + 1)
+        phase_s = phase_s.fillna(6)
+    
         try:
-            df_hm = user_local_series.dt.strftime('%H:%M')
-            df_date = user_local_series.dt.date
-        
-            phase_s = pd.Series(0, index=df.index)
-            phase_s.loc[in_asia] = 1
-            phase_s.loc[in_euro] = 3
-            phase_s.loc[in_us] = 5
+            lookback_ago = df_date.max() - pd.Timedelta(days=peakVolLookbackDays)
+        except:
+            lookback_ago = df_date.min()
             
-            last_active = phase_s.replace(0, pd.NA).ffill()
-            phase_s = phase_s.where(phase_s != 0, last_active + 1)
-            phase_s = phase_s.fillna(6)
-        
-            try:
-                lookback_ago = df_date.max() - pd.Timedelta(days=peakVolLookbackDays)
-            except:
-                lookback_ago = df_date.min()
+        def get_mode_time(p_id, find_max=True):
+            mask = (phase_s == p_id) & (df_date >= lookback_ago)
+            if not mask.any(): return None
+            subset = df[mask]
+            if find_max:
+                daily_idx = subset.groupby(df_date[mask])['value'].idxmax()
+            else:
+                daily_idx = subset.groupby(df_date[mask])['value'].idxmin()
                 
-            def get_mode_time(p_id, find_max=True):
-                mask = (phase_s == p_id) & (df_date >= lookback_ago)
-                if not mask.any(): return None
-                subset = df[mask]
-                if find_max:
-                    daily_idx = subset.groupby(df_date[mask])['value'].idxmax()
-                else:
-                    daily_idx = subset.groupby(df_date[mask])['value'].idxmin()
-                    
-                daily_idx = daily_idx.dropna()
-                if daily_idx.empty: return None
-                
-                times = df_hm.loc[daily_idx]
-                if times.empty: return None
-                
-                mode_val = times.mode()
-                return mode_val.iloc[0] if not mode_val.empty else None
-        
-            vol_stats = {
-                "aPeak": get_mode_time(1, True),
-                "aeBtm": get_mode_time(2, False),
-                "ePeak": get_mode_time(3, True),
-                "euBtm": get_mode_time(4, False),
-                "uPeak": get_mode_time(5, True),
-                "uaBtm": get_mode_time(6, False)
-            }
-        except Exception as e:
-            print(f"Error calculating vol_stats: {e}")
-            vol_stats = {}
-        
+            daily_idx = daily_idx.dropna()
+            if daily_idx.empty: return None
+            
+            times = df_hm.loc[daily_idx]
+            if times.empty: return None
+            
+            mode_val = times.mode()
+            return mode_val.iloc[0] if not mode_val.empty else None
+    
+        vol_stats = {
+            "aPeak": get_mode_time(1, True),
+            "aeBtm": get_mode_time(2, False),
+            "ePeak": get_mode_time(3, True),
+            "euBtm": get_mode_time(4, False),
+            "uPeak": get_mode_time(5, True),
+            "uaBtm": get_mode_time(6, False)
+        }
+    except Exception as e:
+        print(f"Error calculating vol_stats: {e}")
+        vol_stats = {}
+    
+    if not use_cache:
         # --- 3. Dynamic Volume Profile (D-VP State Machine) ---
         if gridMode == 'fixed':
             avg_price = df['close'].mean() if len(df) > 0 else 0
