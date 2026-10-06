@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, ORJSONResponse
 from pydantic import BaseModel
 import pandas as pd
+import time
 import numpy as np
 from typing import List, Optional
 import concurrent.futures
@@ -14,6 +15,7 @@ import mt5_service
 from mt5_service import initialize_mt5, get_historical_data, shutdown_mt5, get_tick, _get_real_symbol
 
 app = FastAPI(title="Quant Trading Dashboard API")
+_VP_BOXES_CACHE = {}
 
 @app.middleware("http")
 async def add_cache_control_header(request, call_next):
@@ -314,27 +316,24 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         
         cum_vol = df['value'].cumsum().values
         cum_vwap_vol = df['vwap_vol'].cumsum().values
-        target_v = cum_vol - V
         
-        idx_start_minus_1 = np.searchsorted(cum_vol, target_v, side='right') - 1
+        target_v_raw = cum_vol - V
+        target_v = np.maximum(target_v_raw, 0)
+        j_arr = np.searchsorted(cum_vol, target_v, side='right')
         
-        hl2_vals = np.zeros(len(df))
-        for i in range(len(df)):
-            idx = idx_start_minus_1[i]
-            if idx >= 0:
-                sum_vol = cum_vol[i] - cum_vol[idx]
-                sum_vwap_vol = cum_vwap_vol[i] - cum_vwap_vol[idx]
-            else:
-                sum_vol = cum_vol[i]
-                sum_vwap_vol = cum_vwap_vol[i]
-                
-            if sum_vol > 0:
-                hl2_vals[i] = sum_vwap_vol / sum_vol
-            else:
-                hl2_vals[i] = df['hlc3'].iloc[i]
+        # Fractional interpolation
+        marginal_vol = cum_vol[j_arr] - target_v
+        price_array = df['hlc3'].values
+        
+        sum_vwap_vol = (cum_vwap_vol - cum_vwap_vol[j_arr]) + price_array[j_arr] * marginal_vol
+        sum_vol = cum_vol - target_v
+        
+        safe_sum_vol = np.where(sum_vol > 0, sum_vol, 1.0)
+        hl2_vals = np.where(sum_vol > 0, sum_vwap_vol / safe_sum_vol, df['hlc3'].values)
+        
         df['hl2'] = hl2_vals
     else:
-        df['hl2'] = (df['high'] + df['low']) / 2.0
+        df['hl2'] = df['hlc3']
     
     # Window ATR calculation for Main Chart Momentum
     high_win = df['high'].rolling(window=mom_window, min_periods=1).max()
@@ -469,310 +468,333 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['mean_vol_lvl3'] = df['mean_ma_vol'].rolling(window=lookback_candles, min_periods=1).quantile(volPct3 / 100.0)
     df['mean_vol_lvl4'] = df['mean_ma_vol'].rolling(window=lookback_candles, min_periods=1).quantile(volPct4 / 100.0)
     
-    # --- Fetch M1 data BEFORE shifting df['time'] ---
-    try:
-        end_ts = int(df['broker_time'].max()) + 3600
-        if dvpLookbackDays > 0:
-            start_ts = max(int(df['broker_time'].min()), int(df['broker_time'].max()) - int(dvpLookbackDays * 24 * 3600))
-        else:
-            start_ts = int(df['broker_time'].min())
-        real_sym = _get_real_symbol(symbol)
-        m1_rates = mt5.copy_rates_range(real_sym, mt5.TIMEFRAME_M1, start_ts, end_ts)
-        has_m1 = m1_rates is not None and len(m1_rates) > 0
-        if has_m1:
-            df_m1 = pd.DataFrame(m1_rates)
-            # Chuẩn hoá M1 time về UTC
-            m1_broker_naive = pd.to_datetime(df_m1['time'], unit='s')
-            try:
-                m1_broker_aware = m1_broker_naive.dt.tz_localize(brokerTimezone, nonexistent='shift_forward', ambiguous='NaT')
-            except Exception:
-                m1_broker_aware = m1_broker_naive.dt.tz_localize('UTC')
-            m1_utc_aware = m1_broker_aware.dt.tz_convert('UTC')
-            df_m1['time'] = (m1_utc_aware - pd.Timestamp("1970-01-01", tz="UTC")) // pd.Timedelta('1s')
-            df_m1['time'] = df_m1['time'].astype(int)
-    except:
-        has_m1 = False
-
-    # Manual Time Shift requested by user
-    is_macro_tf = timeframe.upper() in ['D1', 'W1', 'MN1']
-    if not is_macro_tf:
-        df['time'] = df['time'] + (timeShiftHours * 3600)
+    vp_boxes = []
+    cache_key = f"{symbol}_{timeframe}_{dvpLookbackDays}_{timeoutHours}_{rowCount}_{pct1}"
+    current_time_val = time.time()
     
-    # --- Tính toán Background Sessions (Á, Âu, Mỹ) ---
-    # true_utc_series is the actual UTC time of the candle
-    if not is_macro_tf:
-        true_utc_series = pd.to_datetime(df['time'] - (timeShiftHours * 3600), unit='s', utc=True)
-    else:
-        true_utc_series = pd.to_datetime(df['time'], unit='s', utc=True)
-    # user_local_series is the user's physical local time (based on browserOffsetHours)
-    user_local_series = true_utc_series + pd.Timedelta(hours=browserOffsetHours)
-    
-    summer_offsets = {
-        'America/New_York': pd.Timedelta(hours=-4),
-        'Europe/London': pd.Timedelta(hours=1),
-        'Asia/Tokyo': pd.Timedelta(hours=9)
-    }
-    
-    def get_session_mask(start_str, end_str, tz_name):
-        sh, sm = map(int, start_str.split(':'))
-        eh, em = map(int, end_str.split(':'))
-        start_min = sh * 60 + sm
-        end_min = eh * 60 + em
-        
-        candle_min = user_local_series.dt.hour * 60 + user_local_series.dt.minute
-        
-        if autoDst and tz_name in summer_offsets:
-            tz_series = true_utc_series.dt.tz_convert(tz_name)
-            # Calculate utcoffset by subtracting naive UTC time from naive local time
-            utcoffset = tz_series.dt.tz_localize(None) - true_utc_series.dt.tz_localize(None)
-            dst_shift_mins = (utcoffset - summer_offsets[tz_name]).dt.total_seconds() / 60
-        else:
-            dst_shift_mins = pd.Series(0, index=df.index)
-            
-        target_start = (start_min - dst_shift_mins) % 1440
-        target_end = (end_min - dst_shift_mins) % 1440
-        
-        cond_straight = (candle_min >= target_start) & (candle_min < target_end)
-        cond_cross = (candle_min >= target_start) | (candle_min < target_end)
-        
-        result = np.where(target_start <= target_end, cond_straight, cond_cross)
-        if tz_name == 'Asia/Tokyo':
-            print(f"ASIA DEBUG:")
-            print(f"start_min: {start_min}, end_min: {end_min}")
-            print(f"target_start (first 5): {target_start.head().tolist()}")
-            print(f"target_end (first 5): {target_end.head().tolist()}")
-            print(f"dst_shift_mins (first 5): {dst_shift_mins.head().tolist() if isinstance(dst_shift_mins, pd.Series) else dst_shift_mins}")
-            
-            # Print the first candle that gets colored!
-            colored_idx = np.where(result)[0]
-            if len(colored_idx) > 0:
-                first_idx = colored_idx[0]
-                print(f"First colored candle at index {first_idx}:")
-                print(f"df['time']: {df['time'].iloc[first_idx]}")
-                print(f"user_local_time: {user_local_series.iloc[first_idx]}")
-                print(f"candle_min: {candle_min.iloc[first_idx]}")
-                
-        return result
-
-    in_asia = get_session_mask(asiaStart, asiaEnd, 'Asia/Tokyo')
-    in_euro = get_session_mask(euroStart, euroEnd, 'Europe/London')
-    in_us = get_session_mask(usStart, usEnd, 'America/New_York')
-    
-    df['session_color'] = None
-    df.loc[in_asia, 'session_color'] = 'rgba(139, 69, 19, 0.18)' # Brown/Orange
-    df.loc[in_euro, 'session_color'] = 'rgba(139, 0, 139, 0.18)' # Dark Purple
-    df.loc[in_us, 'session_color'] = 'rgba(0, 0, 139, 0.18)' # Dark Blue
-    
-    # --- Thống kê Đỉnh/Đáy Vol theo Phase ---
-    try:
-        df_hm = user_local_series.dt.strftime('%H:%M')
-        df_date = user_local_series.dt.date
-    
-        phase_s = pd.Series(0, index=df.index)
-        phase_s.loc[in_asia] = 1
-        phase_s.loc[in_euro] = 3
-        phase_s.loc[in_us] = 5
-        
-        last_active = phase_s.replace(0, pd.NA).ffill()
-        phase_s = phase_s.where(phase_s != 0, last_active + 1)
-        phase_s = phase_s.fillna(6)
-    
+    use_cache = False
+    if latest_only and cache_key in _VP_BOXES_CACHE:
+        cache_entry = _VP_BOXES_CACHE[cache_key]
+        if current_time_val - cache_entry['time'] < 60:
+            use_cache = True
+            vp_boxes = cache_entry['boxes']
+            if len(df) > 0:
+                current_last_time = df['time'].iloc[-1]
+                for box in vp_boxes:
+                    if box.get('is_active'):
+                        box['end'] = current_last_time
+                        
+    if not use_cache:
+        # --- Fetch M1 data BEFORE shifting df['time'] ---
         try:
-            lookback_ago = df_date.max() - pd.Timedelta(days=peakVolLookbackDays)
-        except:
-            lookback_ago = df_date.min()
-            
-        def get_mode_time(p_id, find_max=True):
-            mask = (phase_s == p_id) & (df_date >= lookback_ago)
-            if not mask.any(): return None
-            subset = df[mask]
-            if find_max:
-                daily_idx = subset.groupby(df_date[mask])['value'].idxmax()
+            end_ts = int(df['broker_time'].max()) + 3600
+            if dvpLookbackDays > 0:
+                start_ts = max(int(df['broker_time'].min()), int(df['broker_time'].max()) - int(dvpLookbackDays * 24 * 3600))
             else:
-                daily_idx = subset.groupby(df_date[mask])['value'].idxmin()
-                
-            daily_idx = daily_idx.dropna()
-            if daily_idx.empty: return None
-            
-            times = df_hm.loc[daily_idx]
-            if times.empty: return None
-            
-            mode_val = times.mode()
-            return mode_val.iloc[0] if not mode_val.empty else None
-    
-        vol_stats = {
-            "aPeak": get_mode_time(1, True),
-            "aeBtm": get_mode_time(2, False),
-            "ePeak": get_mode_time(3, True),
-            "euBtm": get_mode_time(4, False),
-            "uPeak": get_mode_time(5, True),
-            "uaBtm": get_mode_time(6, False)
-        }
-    except Exception as e:
-        print(f"Error calculating vol_stats: {e}")
-        vol_stats = {}
-    
-    # --- 3. Dynamic Volume Profile (D-VP State Machine) ---
-    if gridMode == 'fixed':
-        avg_price = df['close'].mean() if len(df) > 0 else 0
-        if avg_price > 0:
-            import math
-            # Dynamic pip size based on EURUSD ratio
-            ratio_pip = avg_price * (0.0001 / 1.10)
-            pip_size = 10 ** math.floor(math.log10(ratio_pip))
-        else:
-            pip_size = 0.0001
-            
-        bin_size = fixedPips * pip_size
-        
-        # Ngăn chặn việc bin_size quá nhỏ (gây lag nếu số lượng hộp > 1000)
-        recent_min = df['low'].min()
-        recent_max = df['high'].max()
-        if recent_max - recent_min > 0 and bin_size > 0:
-            if (recent_max - recent_min) / bin_size > 1000:
-                bin_size = (recent_max - recent_min) / 1000
-    else:
-        lookback_bars = min(120, len(df))
-        recent_df = df.tail(max(1, lookback_bars))
-        recent_min = recent_df['low'].min()
-        recent_max = recent_df['high'].max()
-        bin_size = (recent_max - recent_min) / max(1, rowCount)
-        
-    # BẢO VỆ CHỐNG TRÀN VÒNG LẶP D-VP DO QUÁ NHIỀU BINS
-    global_min = df['low'].min()
-    global_max = df['high'].max()
-    if global_max - global_min > 0 and bin_size > 0:
-        pass # Bỏ giới hạn số lượng hộp VP vì giao diện đã được vá lỗi hiệu năng đồ hoạ
+                start_ts = int(df['broker_time'].min())
+            real_sym = _get_real_symbol(symbol)
+            m1_rates = mt5.copy_rates_range(real_sym, mt5.TIMEFRAME_M1, start_ts, end_ts)
+            has_m1 = m1_rates is not None and len(m1_rates) > 0
+            if has_m1:
+                df_m1 = pd.DataFrame(m1_rates)
+                # Chuẩn hoá M1 time về UTC
+                m1_broker_naive = pd.to_datetime(df_m1['time'], unit='s')
+                try:
+                    m1_broker_aware = m1_broker_naive.dt.tz_localize(brokerTimezone, nonexistent='shift_forward', ambiguous='NaT')
+                except Exception:
+                    m1_broker_aware = m1_broker_naive.dt.tz_localize('UTC')
+                m1_utc_aware = m1_broker_aware.dt.tz_convert('UTC')
+                df_m1['time'] = (m1_utc_aware - pd.Timestamp("1970-01-01", tz="UTC")) // pd.Timedelta('1s')
+                df_m1['time'] = df_m1['time'].astype(int)
+        except:
+            has_m1 = False
 
-    if bin_size <= 0:
-        bin_size = 0.0001
-    # Dùng lại tf_seconds đã tính ở trên (dòng 250) để tránh ghi đè và thiếu M30
-    timeout_sec = max(timeoutHours * 3600, tf_seconds * 3)
-    
-    # --- Calculate D-VP Cutoff Time ---
-    if dvpLookbackDays > 0 and len(df) > 0:
-        last_time = df['time'].iloc[-1]
-        dvp_cutoff_time = last_time - (dvpLookbackDays * 24 * 3600)
-    else:
-        dvp_cutoff_time = 0
-        
-    # --- Fetch M1 data for Precise D-VP ---
-    if has_m1:
-        # Chỉ shift M1 time trên TF thường, macro TF (D1/W1/MN1) không shift
+        # Manual Time Shift requested by user
+        is_macro_tf = timeframe.upper() in ['D1', 'W1', 'MN1']
         if not is_macro_tf:
-            df_m1['time'] = df_m1['time'] + (timeShiftHours * 3600)
-        df_m1_filtered = df_m1[df_m1['time'] >= dvp_cutoff_time]
-        times = df_m1_filtered['time'].values
-        highs = df_m1_filtered['high'].values
-        lows = df_m1_filtered['low'].values
-        vols = df_m1_filtered['tick_volume'].values
-        timeout_candles = max(int(timeout_sec / 60), 3)
-    else:
-        df_filtered = df[df['time'] >= dvp_cutoff_time]
-        times = df_filtered['time'].values
-        highs = df_filtered['high'].values
-        lows = df_filtered['low'].values
-        try:
-            vols = df_filtered['value'].values
-        except:
-            vols = df_filtered['tick_volume'].values
-        timeout_candles = max(int(timeout_sec / tf_seconds), 3)
-    
-    active_bins = {}
-    completed_boxes = []
-    
-    for i in range(len(times)):
-        t = times[i]
-        h = highs[i]
-        l = lows[i]
-        v = vols[i]
+            df['time'] = df['time'] + (timeShiftHours * 3600)
         
-        min_bin_idx = int(l / bin_size)
-        max_bin_idx = int(h / bin_size)
-        num_bins = max_bin_idx - min_bin_idx + 1
-        vol_per_bin = v / num_bins
+        # --- Tính toán Background Sessions (Á, Âu, Mỹ) ---
+        # true_utc_series is the actual UTC time of the candle
+        if not is_macro_tf:
+            true_utc_series = pd.to_datetime(df['time'] - (timeShiftHours * 3600), unit='s', utc=True)
+        else:
+            true_utc_series = pd.to_datetime(df['time'], unit='s', utc=True)
+        # user_local_series is the user's physical local time (based on browserOffsetHours)
+        user_local_series = true_utc_series + pd.Timedelta(hours=browserOffsetHours)
         
-        for bin_idx in range(min_bin_idx, max_bin_idx + 1):
-            if bin_idx not in active_bins:
-                active_bins[bin_idx] = {'vol': vol_per_bin, 'start': t, 'end': t, 'last_touch': t, 'last_idx': i}
+        summer_offsets = {
+            'America/New_York': pd.Timedelta(hours=-4),
+            'Europe/London': pd.Timedelta(hours=1),
+            'Asia/Tokyo': pd.Timedelta(hours=9)
+        }
+        
+        def get_session_mask(start_str, end_str, tz_name):
+            sh, sm = map(int, start_str.split(':'))
+            eh, em = map(int, end_str.split(':'))
+            start_min = sh * 60 + sm
+            end_min = eh * 60 + em
+            
+            candle_min = user_local_series.dt.hour * 60 + user_local_series.dt.minute
+            
+            if autoDst and tz_name in summer_offsets:
+                tz_series = true_utc_series.dt.tz_convert(tz_name)
+                # Calculate utcoffset by subtracting naive UTC time from naive local time
+                utcoffset = tz_series.dt.tz_localize(None) - true_utc_series.dt.tz_localize(None)
+                dst_shift_mins = (utcoffset - summer_offsets[tz_name]).dt.total_seconds() / 60
             else:
-                b = active_bins[bin_idx]
-                if (i - b['last_idx']) > timeout_candles:
-                    # Close old box, extend end to current time t
-                    completed_boxes.append({
-                        'bin_idx': bin_idx,
-                        'price': bin_idx * bin_size + bin_size/2,
-                        'vol': b['vol'],
-                        'start': b['start'],
-                        'end': t
-                    })
-                    # Start new box
+                dst_shift_mins = pd.Series(0, index=df.index)
+                
+            target_start = (start_min - dst_shift_mins) % 1440
+            target_end = (end_min - dst_shift_mins) % 1440
+            
+            cond_straight = (candle_min >= target_start) & (candle_min < target_end)
+            cond_cross = (candle_min >= target_start) | (candle_min < target_end)
+            
+            result = np.where(target_start <= target_end, cond_straight, cond_cross)
+            if tz_name == 'Asia/Tokyo':
+                print(f"ASIA DEBUG:")
+                print(f"start_min: {start_min}, end_min: {end_min}")
+                print(f"target_start (first 5): {target_start.head().tolist()}")
+                print(f"target_end (first 5): {target_end.head().tolist()}")
+                print(f"dst_shift_mins (first 5): {dst_shift_mins.head().tolist() if isinstance(dst_shift_mins, pd.Series) else dst_shift_mins}")
+                
+                # Print the first candle that gets colored!
+                colored_idx = np.where(result)[0]
+                if len(colored_idx) > 0:
+                    first_idx = colored_idx[0]
+                    print(f"First colored candle at index {first_idx}:")
+                    print(f"df['time']: {df['time'].iloc[first_idx]}")
+                    print(f"user_local_time: {user_local_series.iloc[first_idx]}")
+                    print(f"candle_min: {candle_min.iloc[first_idx]}")
+                    
+            return result
+
+        in_asia = get_session_mask(asiaStart, asiaEnd, 'Asia/Tokyo')
+        in_euro = get_session_mask(euroStart, euroEnd, 'Europe/London')
+        in_us = get_session_mask(usStart, usEnd, 'America/New_York')
+        
+        df['session_color'] = None
+        df.loc[in_asia, 'session_color'] = 'rgba(139, 69, 19, 0.18)' # Brown/Orange
+        df.loc[in_euro, 'session_color'] = 'rgba(139, 0, 139, 0.18)' # Dark Purple
+        df.loc[in_us, 'session_color'] = 'rgba(0, 0, 139, 0.18)' # Dark Blue
+        
+        # --- Thống kê Đỉnh/Đáy Vol theo Phase ---
+        try:
+            df_hm = user_local_series.dt.strftime('%H:%M')
+            df_date = user_local_series.dt.date
+        
+            phase_s = pd.Series(0, index=df.index)
+            phase_s.loc[in_asia] = 1
+            phase_s.loc[in_euro] = 3
+            phase_s.loc[in_us] = 5
+            
+            last_active = phase_s.replace(0, pd.NA).ffill()
+            phase_s = phase_s.where(phase_s != 0, last_active + 1)
+            phase_s = phase_s.fillna(6)
+        
+            try:
+                lookback_ago = df_date.max() - pd.Timedelta(days=peakVolLookbackDays)
+            except:
+                lookback_ago = df_date.min()
+                
+            def get_mode_time(p_id, find_max=True):
+                mask = (phase_s == p_id) & (df_date >= lookback_ago)
+                if not mask.any(): return None
+                subset = df[mask]
+                if find_max:
+                    daily_idx = subset.groupby(df_date[mask])['value'].idxmax()
+                else:
+                    daily_idx = subset.groupby(df_date[mask])['value'].idxmin()
+                    
+                daily_idx = daily_idx.dropna()
+                if daily_idx.empty: return None
+                
+                times = df_hm.loc[daily_idx]
+                if times.empty: return None
+                
+                mode_val = times.mode()
+                return mode_val.iloc[0] if not mode_val.empty else None
+        
+            vol_stats = {
+                "aPeak": get_mode_time(1, True),
+                "aeBtm": get_mode_time(2, False),
+                "ePeak": get_mode_time(3, True),
+                "euBtm": get_mode_time(4, False),
+                "uPeak": get_mode_time(5, True),
+                "uaBtm": get_mode_time(6, False)
+            }
+        except Exception as e:
+            print(f"Error calculating vol_stats: {e}")
+            vol_stats = {}
+        
+        # --- 3. Dynamic Volume Profile (D-VP State Machine) ---
+        if gridMode == 'fixed':
+            avg_price = df['close'].mean() if len(df) > 0 else 0
+            if avg_price > 0:
+                import math
+                # Dynamic pip size based on EURUSD ratio
+                ratio_pip = avg_price * (0.0001 / 1.10)
+                pip_size = 10 ** math.floor(math.log10(ratio_pip))
+            else:
+                pip_size = 0.0001
+                
+            bin_size = fixedPips * pip_size
+            
+            # Ngăn chặn việc bin_size quá nhỏ (gây lag nếu số lượng hộp > 1000)
+            recent_min = df['low'].min()
+            recent_max = df['high'].max()
+            if recent_max - recent_min > 0 and bin_size > 0:
+                if (recent_max - recent_min) / bin_size > 1000:
+                    bin_size = (recent_max - recent_min) / 1000
+        else:
+            lookback_bars = min(120, len(df))
+            recent_df = df.tail(max(1, lookback_bars))
+            recent_min = recent_df['low'].min()
+            recent_max = recent_df['high'].max()
+            bin_size = (recent_max - recent_min) / max(1, rowCount)
+            
+        # BẢO VỆ CHỐNG TRÀN VÒNG LẶP D-VP DO QUÁ NHIỀU BINS
+        global_min = df['low'].min()
+        global_max = df['high'].max()
+        if global_max - global_min > 0 and bin_size > 0:
+            pass # Bỏ giới hạn số lượng hộp VP vì giao diện đã được vá lỗi hiệu năng đồ hoạ
+
+        if bin_size <= 0:
+            bin_size = 0.0001
+        # Dùng lại tf_seconds đã tính ở trên (dòng 250) để tránh ghi đè và thiếu M30
+        timeout_sec = max(timeoutHours * 3600, tf_seconds * 3)
+        
+        # --- Calculate D-VP Cutoff Time ---
+        if dvpLookbackDays > 0 and len(df) > 0:
+            last_time = df['time'].iloc[-1]
+            dvp_cutoff_time = last_time - (dvpLookbackDays * 24 * 3600)
+        else:
+            dvp_cutoff_time = 0
+            
+        # --- Fetch M1 data for Precise D-VP ---
+        if has_m1:
+            # Chỉ shift M1 time trên TF thường, macro TF (D1/W1/MN1) không shift
+            if not is_macro_tf:
+                df_m1['time'] = df_m1['time'] + (timeShiftHours * 3600)
+            df_m1_filtered = df_m1[df_m1['time'] >= dvp_cutoff_time]
+            times = df_m1_filtered['time'].values
+            highs = df_m1_filtered['high'].values
+            lows = df_m1_filtered['low'].values
+            vols = df_m1_filtered['tick_volume'].values
+            timeout_candles = max(int(timeout_sec / 60), 3)
+        else:
+            df_filtered = df[df['time'] >= dvp_cutoff_time]
+            times = df_filtered['time'].values
+            highs = df_filtered['high'].values
+            lows = df_filtered['low'].values
+            try:
+                vols = df_filtered['value'].values
+            except:
+                vols = df_filtered['tick_volume'].values
+            timeout_candles = max(int(timeout_sec / tf_seconds), 3)
+        
+        active_bins = {}
+        completed_boxes = []
+        
+        for i in range(len(times)):
+            t = times[i]
+            h = highs[i]
+            l = lows[i]
+            v = vols[i]
+            
+            min_bin_idx = int(l / bin_size)
+            max_bin_idx = int(h / bin_size)
+            num_bins = max_bin_idx - min_bin_idx + 1
+            vol_per_bin = v / num_bins
+            
+            for bin_idx in range(min_bin_idx, max_bin_idx + 1):
+                if bin_idx not in active_bins:
                     active_bins[bin_idx] = {'vol': vol_per_bin, 'start': t, 'end': t, 'last_touch': t, 'last_idx': i}
                 else:
-                    b['vol'] += vol_per_bin
-                    b['end'] = t
-                    b['last_touch'] = t
-                    b['last_idx'] = i
-                    
-    # Flush remaining active bins, extending them to the right edge of the chart
-    last_time = times[-1] if len(times) > 0 else 0
-    for bin_idx, b in active_bins.items():
-        completed_boxes.append({
-            'bin_idx': bin_idx,
-            'price': bin_idx * bin_size + bin_size/2,
-            'vol': b['vol'],
-            'start': b['start'],
-            'end': last_time # Active boxes extend to the right edge
-        })
-        
-    all_vols = [b['vol'] for b in completed_boxes]
-    if len(all_vols) > 0:
-        val_95 = np.percentile(all_vols, 95)
-        val_pct1 = np.percentile(all_vols, pct1)
-        val_pct2 = np.percentile(all_vols, pct2)
-    else:
-        val_95 = val_pct1 = val_pct2 = 0
-    
-    main_times_sorted = np.sort(df['time'].values)
-    
-    vp_boxes = []
-    for b in completed_boxes:
-        if b['vol'] >= val_pct1:
-            ratio = 0.0
-            if val_95 > val_pct1:
-                ratio = (b['vol'] - val_pct1) / (val_95 - val_pct1)
-                ratio = max(0.0, min(1.0, ratio))
-            
-            # G (Green) value decreases from 180 to 0 as volume increases
-            # This makes the color transition from Yellow-Orange to Pure Red
-            g_val = int(180 * (1.0 - ratio))
-            
-            # Opacity increases from 0.35 to 0.75 as volume increases
-            a_val = 0.35 + (0.4 * ratio)
-            
-            color = f"rgba(255, {g_val}, 0, {a_val:.2f})"
-            level = f"Heat: {int(ratio*100)}%"
-            
-            # Map M1 timestamps to the closest available timestamp in the main series
-            idx_start = np.searchsorted(main_times_sorted, b['start'], side='right') - 1
-            if idx_start < 0: idx_start = 0
-            mapped_start = main_times_sorted[idx_start]
-            
-            idx_end = np.searchsorted(main_times_sorted, b['end'], side='left')
-            if idx_end >= len(main_times_sorted): idx_end = len(main_times_sorted) - 1
-            mapped_end = main_times_sorted[idx_end]
-                
-            vp_boxes.append({
-                'price': float(b['price']),
-                'vol': float(b['vol']),
-                'start': int(mapped_start),
-                'end': int(mapped_end),
-                'level': level,
-                'color': color,
-                'height': float(bin_size)
+                    b = active_bins[bin_idx]
+                    if (i - b['last_idx']) > timeout_candles:
+                        # Close old box, extend end to current time t
+                        completed_boxes.append({
+                            'bin_idx': bin_idx,
+                            'price': bin_idx * bin_size + bin_size/2,
+                            'vol': b['vol'],
+                            'start': b['start'],
+                            'end': t
+                        })
+                        # Start new box
+                        active_bins[bin_idx] = {'vol': vol_per_bin, 'start': t, 'end': t, 'last_touch': t, 'last_idx': i}
+                    else:
+                        b['vol'] += vol_per_bin
+                        b['end'] = t
+                        b['last_touch'] = t
+                        b['last_idx'] = i
+                        
+        # Flush remaining active bins, extending them to the right edge of the chart
+        last_time = times[-1] if len(times) > 0 else 0
+        for bin_idx, b in active_bins.items():
+            completed_boxes.append({
+                'bin_idx': bin_idx,
+                'price': bin_idx * bin_size + bin_size/2,
+                'vol': b['vol'],
+                'start': b['start'],
+                'end': last_time, 'is_active': True # Active boxes extend to the right edge
             })
             
-    # No hack needed, df['time'] is already True UTC
+        all_vols = [b['vol'] for b in completed_boxes]
+        if len(all_vols) > 0:
+            val_95 = np.percentile(all_vols, 95)
+            val_pct1 = np.percentile(all_vols, pct1)
+            val_pct2 = np.percentile(all_vols, pct2)
+        else:
+            val_95 = val_pct1 = val_pct2 = 0
+        
+        main_times_sorted = np.sort(df['time'].values)
+        
+        vp_boxes = []
+        for b in completed_boxes:
+            if b['vol'] >= val_pct1:
+                ratio = 0.0
+                if val_95 > val_pct1:
+                    ratio = (b['vol'] - val_pct1) / (val_95 - val_pct1)
+                    ratio = max(0.0, min(1.0, ratio))
+                
+                # G (Green) value decreases from 180 to 0 as volume increases
+                # This makes the color transition from Yellow-Orange to Pure Red
+                g_val = int(180 * (1.0 - ratio))
+                
+                # Opacity increases from 0.35 to 0.75 as volume increases
+                a_val = 0.35 + (0.4 * ratio)
+                
+                color = f"rgba(255, {g_val}, 0, {a_val:.2f})"
+                level = f"Heat: {int(ratio*100)}%"
+                
+                # Map M1 timestamps to the closest available timestamp in the main series
+                idx_start = np.searchsorted(main_times_sorted, b['start'], side='right') - 1
+                if idx_start < 0: idx_start = 0
+                mapped_start = main_times_sorted[idx_start]
+                
+                idx_end = np.searchsorted(main_times_sorted, b['end'], side='left')
+                if idx_end >= len(main_times_sorted): idx_end = len(main_times_sorted) - 1
+                mapped_end = main_times_sorted[idx_end]
+                    
+                vp_boxes.append({
+                    'price': float(b['price']),
+                    'vol': float(b['vol']),
+                    'start': int(mapped_start),
+                    'end': int(mapped_end),
+                    'level': level,
+                    'color': color,
+                    'height': float(bin_size)
+                })
+                
+    
+        _VP_BOXES_CACHE[cache_key] = {
+            'time': current_time_val,
+            'boxes': vp_boxes
+        }
+        # No hack needed, df['time'] is already True UTC
+
     
     # Generate vertical lines for Volume Peaks/Bottoms
     v_lines = []
@@ -968,11 +990,17 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
                 base_currency = pair[:3]
                 quote_currency = pair[3:]
             
-            diff_array_len = vol_days * 24 * candles_per_hour
+            diff_array_len = int(vol_days * 24 * candles_per_hour)
             diff_array = df['diff_pct'].iloc[-diff_array_len:].fillna(0).values
             vol_array = df['vol_rolling'].iloc[-diff_array_len:].fillna(0).values
             
-            return (pair, diff_pct_current, base_currency, quote_currency, diff_array, vol_array)
+            # Institutional H4 Log Returns for Correlation Matrix
+            df['datetime'] = pd.to_datetime(df['time'], unit='s')
+            df_h4 = df.set_index('datetime').resample('4h').last()
+            log_ret = np.log(df_h4['close'] / df_h4['close'].shift(1))
+            log_ret.name = pair
+            
+            return (pair, diff_pct_current, base_currency, quote_currency, diff_array, vol_array, log_ret)
         return None
 
 
@@ -982,10 +1010,11 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         
     scores_hist = {c: [] for c in currencies}
     vol_hist = {c: [] for c in currencies}
+    log_returns_list = []
     
     for res in results:
         if res:
-            pair, diff_pct_current, base_currency, quote_currency, diff_array, vol_array = res
+            pair, diff_pct_current, base_currency, quote_currency, diff_array, vol_array, log_ret = res
             
             if base_currency in scores:
                 scores[base_currency] += diff_pct_current
@@ -1011,6 +1040,7 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
                 "pair": pair,
                 "change_pct": round(diff_pct_current, 4) if not pd.isna(diff_pct_current) else 0
             })
+            log_returns_list.append(log_ret)
 
     # Xếp hạng currencies và tính Vol Percentile & Mom Percentile
     ranked_currencies = []
@@ -1069,21 +1099,38 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         
     ranked_currencies = sorted(ranked_currencies, key=lambda x: (x["mom_percentile"], x["score"]), reverse=True)
     
-    # Tính ma trận tương quan (Correlation Matrix)
+    # Tính ma trận tương quan (Correlation Matrix) CHUẨN INSTITUTIONAL (H4 Log Returns)
     corr_matrix = []
-    if len(currencies) > 1:
-        # Tìm chiều dài tối thiểu để tránh lỗi chênh lệch độ dài mảng
-        min_len = min([len(scores_hist[c]) for c in currencies if len(scores_hist[c]) > 0], default=0)
-        if min_len > 0:
-            hist_dict = {c: scores_hist[c][-min_len:] for c in currencies if len(scores_hist[c]) >= min_len}
-            df_corr = pd.DataFrame(hist_dict).corr()
-            
-            for c1 in df_corr.index:
-                row = {"currency": c1}
-                for c2 in df_corr.columns:
-                    val = df_corr.loc[c1, c2]
-                    row[c2] = round(val, 2) if not pd.isna(val) else 0.0
-                corr_matrix.append(row)
+    if len(currencies) > 1 and len(log_returns_list) > 0:
+        df_returns = pd.concat(log_returns_list, axis=1).ffill().dropna()
+        
+        idx_returns = {c: pd.Series(0.0, index=df_returns.index) for c in currencies}
+        
+        for p in df_returns.columns:
+            if p == "GLOBAL_INDEX":
+                b = "GI"
+                q = "NONE"
+            elif matrix_type not in ["fx", "currency"]:
+                b = p
+                q = "USD"
+            else:
+                b = p[:3]
+                q = p[3:6]
+                
+            if b in idx_returns:
+                idx_returns[b] = idx_returns[b] + df_returns[p]
+            if q in idx_returns:
+                idx_returns[q] = idx_returns[q] - df_returns[p]
+                
+        df_idx = pd.DataFrame(idx_returns)
+        df_corr = df_idx.corr()
+        
+        for c1 in df_corr.index:
+            row = {"currency": c1}
+            for c2 in df_corr.columns:
+                val = df_corr.loc[c1, c2]
+                row[c2] = round(val, 2) if not pd.isna(val) else 0.0
+            corr_matrix.append(row)
 
     MATRIX_PROGRESS[matrix_type] = 100.0
     result = {

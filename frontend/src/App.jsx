@@ -6,6 +6,8 @@ import StrategyBuilderTab from './components/StrategyBuilderTab';
 import RrTool from './components/RrTool';
 import './index.css';
 
+const API_BASE = window.location.port === '5173' ? `${API_BASE}` : window.location.origin;
+
 const customTimeFormatter = (time) => {
     const date = new Date(time * 1000);
     const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -158,7 +160,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
 // Fetch News Data
   const fetchNews = async () => {
     try {
-      const response = await axios.get(`http://localhost:8000/api/v1/news`, {
+      const response = await axios.get(`${API_BASE}/api/v1/news`, {
         params: { symbol }
       });
       if (response.data.status === 'success') {
@@ -1046,7 +1048,7 @@ useEffect(() => {
         // Lọc bỏ các params không thuộc OHLCV API (email config, volMode...)
         const { emailSender, emailPassword, emailReceiver, volMode, ...ohlcvConfigs } = configs;
         
-        const response = await axios.get(`http://localhost:8000/api/v1/ohlcv`, {
+        const response = await axios.get(`${API_BASE}/api/v1/ohlcv`, {
           params: { symbol, timeframe, count: 10000, end_time: targetEndTime, browserOffsetHours, latest_only: isPolling, _t: Date.now(), ...ohlcvConfigs }
         });
         
@@ -1616,7 +1618,7 @@ useEffect(() => {
       // Khi đổi symbol hoặc timeframe trong lúc backtest
       fetchData(false, simulatedTimeRef.current);
       // Tải lại tin tức cho cặp tiền mới
-      axios.get(`http://localhost:8000/api/v1/news/backtest`, {
+      axios.get(`${API_BASE}/api/v1/news/backtest`, {
         params: { symbol, timestamp: simulatedTimeRef.current }
       }).then(response => {
         if (response.data.status === 'success') {
@@ -1689,7 +1691,7 @@ useEffect(() => {
       if (currentMonday !== backtestWeekRef.current) {
         backtestWeekRef.current = currentMonday;
         try {
-          const response = await axios.get(`http://localhost:8000/api/v1/news/backtest`, {
+          const response = await axios.get(`${API_BASE}/api/v1/news/backtest`, {
             params: { symbol, timestamp: simulatedTimeRef.current }
           });
           if (response.data.status === 'success') {
@@ -1751,7 +1753,7 @@ useEffect(() => {
     
     // Tải tin tức lịch sử cho backtest
     try {
-      const response = await axios.get(`http://localhost:8000/api/v1/news/backtest`, {
+      const response = await axios.get(`${API_BASE}/api/v1/news/backtest`, {
         params: { symbol, timestamp: targetTimestamp }
       });
       if (response.data.status === 'success') {
@@ -2110,7 +2112,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     if (loading) {
       interval = setInterval(async () => {
         try {
-          const res = await axios.get(`http://localhost:8000/api/v1/matrix/progress?matrix_type=${matrixType}`);
+          const res = await axios.get(`${API_BASE}/api/v1/matrix/progress?matrix_type=${matrixType}`);
           setProgress(res.data.progress || 0);
         } catch (e) {}
       }, 500);
@@ -2142,7 +2144,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     
     setLoading(true);
     try {
-      const response = await axios.get(`http://localhost:8000/api/v1/matrix`, {
+      const response = await axios.get(`${API_BASE}/api/v1/matrix`, {
         params: { n_hours: matrixHours, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone }
       });
       setMatrixData(response.data);
@@ -2385,7 +2387,7 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
   const handleSave = () => {
     setConfigs(local);
     onClose();
-    axios.post('http://localhost:8000/api/v1/configs', local)
+    axios.post(`${API_BASE}/api/v1/configs`, local)
       .catch(err => console.error("Error saving configs to backend", err));
   };
 
@@ -2642,7 +2644,7 @@ const CatalystTab = ({ configs }) => {
 
   const loadCatalyst = () => {
     setLoading(true);
-    axios.get('http://localhost:8000/api/v1/catalyst')
+    axios.get(`${API_BASE}/api/v1/catalyst`)
       .then(res => {
         let finalData = res.data || [];
         if (configs && configs.timeShiftHours) {
@@ -2664,7 +2666,7 @@ const CatalystTab = ({ configs }) => {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await axios.post('http://localhost:8000/api/v1/catalyst/refresh');
+      await axios.post(`${API_BASE}/api/v1/catalyst/refresh`);
       loadCatalyst();
     } catch (err) {
       console.error('Refresh failed:', err);
@@ -2820,13 +2822,13 @@ function App() {
   const handleSaveMatrixSettings = (hours, volDays) => {
     const newConfigs = { ...configs, matrixHours: hours, matrixVolDays: volDays };
     setConfigs(newConfigs);
-    axios.post('http://localhost:8000/api/v1/configs', newConfigs)
+    axios.post(`${API_BASE}/api/v1/configs`, newConfigs)
       .catch(err => console.error("Error saving configs to backend", err));
   };
 
   const fetchAlerts = async () => {
     try {
-      const res = await axios.get(`http://localhost:8000/api/v1/alerts?_t=${Date.now()}`);
+      const res = await axios.get(`${API_BASE}/api/v1/alerts?_t=${Date.now()}`);
       const data = res.data;
       setAlerts(data);
       
@@ -2855,7 +2857,7 @@ function App() {
   const handleAddAlert = async (alertData) => {
     try {
       const newAlert = { ...alertData, id: Date.now(), status: 'active' };
-      await axios.post('http://localhost:8000/api/v1/alerts', newAlert);
+      await axios.post(`${API_BASE}/api/v1/alerts`, newAlert);
       fetchAlerts(); 
     } catch (e) { console.error(e); }
   };
@@ -2863,7 +2865,7 @@ function App() {
   const handleDeleteAlert = async (id) => {
     try {
       // Remove optimistic update to prevent race conditions with in-flight polling
-      await axios.delete(`http://localhost:8000/api/v1/alerts/${id}`);
+      await axios.delete(`${API_BASE}/api/v1/alerts/${id}`);
       fetchAlerts(); 
     } catch (e) { console.error(e); }
   };
@@ -2979,7 +2981,7 @@ function App() {
       const mHours = configs.matrixHours || 24;
       const mVolDays = configs.matrixVolDays || 30;
       const mType = getMatrixTypeForSymbol(symbol);
-      let url = `http://localhost:8000/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}`;
+      let url = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}`;
       if (viewMode === 'backtest' && window.currentSimulatedTime) {
         url += `&end_time=${window.currentSimulatedTime}`;
       }
@@ -3002,7 +3004,7 @@ function App() {
   }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixVolDays, symbol]);
 
   useEffect(() => {
-    axios.get('http://localhost:8000/api/v1/symbols')
+    axios.get(`${API_BASE}/api/v1/symbols`)
       .then(res => {
          if (res.data.status === 'success') {
              setAvailableSymbols(res.data.data);
@@ -3012,7 +3014,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    axios.get('http://localhost:8000/api/v1/configs')
+    axios.get(`${API_BASE}/api/v1/configs`)
       .then(res => {
          const data = res.data;
          if (Object.keys(data).length > 0) {

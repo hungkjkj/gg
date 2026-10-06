@@ -8,6 +8,18 @@ import os
 # Add backend directory to sys.path so modules can be found
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
 
+import socket
+
+def find_free_port(start_port=8000, max_port=8100):
+    for port in range(start_port, max_port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('127.0.0.1', port))
+                return port
+            except socket.error:
+                continue
+    return 8000
+
 def check_server(url, timeout=10):
     start_time = time.time()
     while time.time() - start_time < timeout:
@@ -23,13 +35,15 @@ if __name__ == '__main__':
     # Bật server chạy trên một process riêng biệt để tránh kẹt giao diện UI
     print("Starting backend server in a separate process...")
     backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend")
+    port = find_free_port()
+    print(f"Found free port: {port}")
     backend_process = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000", "--log-level", "warning"],
+        [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
         cwd=backend_dir
     )
     
     try:
-        url = f"http://127.0.0.1:8000/?_v={int(time.time())}"
+        url = f"http://127.0.0.1:{port}/?_v={int(time.time())}"
         print("Waiting for server to start...")
         
         if not check_server(url):
