@@ -996,10 +996,10 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
             diff_array = df['diff_pct'].iloc[-diff_array_len:].fillna(0).values
             vol_array = df['vol_rolling'].iloc[-diff_array_len:].fillna(0).values
             
-            # Institutional H4 Log Returns for Correlation Matrix
+            # Institutional H1 Log Returns for Correlation Matrix
             df['datetime'] = pd.to_datetime(df['time'], unit='s')
-            df_h4 = df.set_index('datetime').resample('4h').last()
-            log_ret = np.log(df_h4['close'] / df_h4['close'].shift(1))
+            df_h1 = df.set_index('datetime').resample('1h').last()
+            log_ret = np.log(df_h1['close'] / df_h1['close'].shift(1))
             log_ret.name = pair
             
             return (pair, diff_pct_current, base_currency, quote_currency, diff_array, vol_array, log_ret)
@@ -1101,7 +1101,7 @@ async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type
         
     ranked_currencies = sorted(ranked_currencies, key=lambda x: (x["mom_percentile"], x["score"]), reverse=True)
     
-    # Tính ma trận tương quan (Correlation Matrix) CHUẨN INSTITUTIONAL (H4 Log Returns)
+    # Tính ma trận tương quan (Correlation Matrix) CHUẨN INSTITUTIONAL (H1 Log Returns)
     corr_matrix = []
     if len(currencies) > 1 and len(log_returns_list) > 0:
         df_returns = pd.concat(log_returns_list, axis=1).ffill().dropna()
