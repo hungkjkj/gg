@@ -57,7 +57,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import json
 
-CONFIG_FILE = "app_configs.json"
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "app_configs.json")
 
 @app.get("/api/v1/configs")
 def get_configs():

@@ -6,8 +6,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from mt5_service import get_tick
 
-ALERTS_FILE = "alerts.json"
-CONFIG_FILE = "app_configs.json"
+ALERTS_FILE = os.path.join(os.path.dirname(__file__), "alerts.json")
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "app_configs.json")
 alerts_data = []
 
 def load_alerts():
@@ -40,7 +40,7 @@ def delete_alert(alert_id):
     alerts_data = [a for a in alerts_data if str(a.get("id")) != str(alert_id)]
     save_alerts()
 
-STRATEGIES_FILE = "strategies.json"
+STRATEGIES_FILE = os.path.join(os.path.dirname(__file__), "strategies.json")
 strategies_data = []
 
 def load_strategies():

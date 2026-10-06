@@ -7,7 +7,8 @@ import time
 import json
 import os
 
-CACHE_FILE = "news_cache.json"
+import os
+CACHE_FILE = os.path.join(os.path.dirname(__file__), "news_cache.json")
 
 def load_cache():
     if os.path.exists(CACHE_FILE):
@@ -25,7 +26,7 @@ def save_cache(cache):
     except:
         pass
 
-HISTORY_CACHE_FILE = "news_history_cache.json"
+HISTORY_CACHE_FILE = os.path.join(os.path.dirname(__file__), "news_history_cache.json")
 
 def load_history_cache():
     if os.path.exists(HISTORY_CACHE_FILE):
