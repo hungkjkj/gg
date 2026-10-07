@@ -555,22 +555,6 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         cond_cross = (candle_min >= target_start) | (candle_min < target_end)
         
         result = np.where(target_start <= target_end, cond_straight, cond_cross)
-        if tz_name == 'Asia/Tokyo':
-            print(f"ASIA DEBUG:")
-            print(f"start_min: {start_min}, end_min: {end_min}")
-            print(f"target_start (first 5): {target_start.head().tolist()}")
-            print(f"target_end (first 5): {target_end.head().tolist()}")
-            print(f"dst_shift_mins (first 5): {dst_shift_mins.head().tolist() if isinstance(dst_shift_mins, pd.Series) else dst_shift_mins}")
-            
-            # Print the first candle that gets colored!
-            colored_idx = np.where(result)[0]
-            if len(colored_idx) > 0:
-                first_idx = colored_idx[0]
-                print(f"First colored candle at index {first_idx}:")
-                print(f"df['time']: {df['time'].iloc[first_idx]}")
-                print(f"user_local_time: {user_local_series.iloc[first_idx]}")
-                print(f"candle_min: {candle_min.iloc[first_idx]}")
-                
         return result
 
     in_asia = get_session_mask(asiaStart, asiaEnd, 'Asia/Tokyo')
@@ -862,7 +846,7 @@ def get_matrix_progress(matrix_type: str = "currency"):
     return {"progress": MATRIX_PROGRESS.get(matrix_type, 0.0)}
 
 @app.get("/api/v1/matrix")
-async def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str = "fx", end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
+def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str = "fx", end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
     import time
     cache_key = f"{n_hours}_{vol_days}_{matrix_type}_{end_time}_{brokerTimezone}"
     current_time = time.time()
@@ -1198,7 +1182,7 @@ async def strategy_worker():
                     allowed_keys = ['pct1', 'pct2', 'gridMode', 'fixedPips', 'rowCount', 'timeoutHours', 'dvpLookbackDays', 'mfTargetPct', 'mfTimeoutMins', 'vwapLength', 'vwapMult', 'rvolLookbackDays', 'peakVolLookbackDays', 'momLength', 'matrixLookbackHours', 'momPct1', 'momPct2', 'momPct3', 'maVolLength', 'momMaLength', 'smaMomLength', 'momFlipFilterPct', 'momFlipVolFilterPct', 'volPct1', 'volPct2', 'volPct3', 'volPct4', 'timeShiftHours', 'browserOffsetHours', 'autoDst', 'asiaStart', 'asiaEnd', 'euroStart', 'euroEnd', 'usStart', 'usEnd', 'brokerTimezone']
                     kwargs = {k: v for k, v in configs.items() if k in allowed_keys}
                     
-                    ohlcv_res = get_ohlcv(symbol=symbol, timeframe=timeframe, count=1000, latest_only=True, **kwargs)
+                    ohlcv_res = await asyncio.to_thread(get_ohlcv, symbol, timeframe, 1000, 0, True, **kwargs)
                     
                     if not ohlcv_res: continue
                     records = ohlcv_res.get("data", [])
