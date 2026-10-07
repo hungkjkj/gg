@@ -476,7 +476,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     current_time_val = time.time()
     
     use_cache = False
-    if latest_only and cache_key in _VP_BOXES_CACHE:
+    if end_time == 0 and latest_only and cache_key in _VP_BOXES_CACHE:
         cache_entry = _VP_BOXES_CACHE[cache_key]
         if current_time_val - cache_entry['time'] < 60:
             use_cache = True
@@ -719,7 +719,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                         b['last_idx'] = i
                         
         # Flush remaining active bins, extending them to the right edge of the chart
-        last_time = times[-1] if len(times) > 0 else 0
+        last_time = max(times[-1] if len(times) > 0 else 0, df['time'].iloc[-1] if not df.empty else 0)
         for bin_idx, b in active_bins.items():
             completed_boxes.append({
                 'bin_idx': bin_idx,
