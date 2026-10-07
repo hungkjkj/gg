@@ -2087,9 +2087,11 @@ useEffect(() => {
 
 const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, initialMatrixVolDays, onSaveMatrixSettings, symbol }) => {
   const [matrixData, setMatrixData] = useState(null);
+  const [matrixDataLong, setMatrixDataLong] = useState(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [matrixHours, setMatrixHours] = useState(initialMatrixHours || Number(localStorage.getItem('currencyMatrixHours')) || 24);
+  const [matrixHoursLong, setMatrixHoursLong] = useState(Number(localStorage.getItem('currencyMatrixHoursLong')) || 89);
   const [matrixVolDays, setMatrixVolDays] = useState(initialMatrixVolDays || Number(localStorage.getItem('currencyMatrixVolDays')) || 30);
   const [matrixType, setMatrixType] = useState((localStorage.getItem('matrixType') === 'currency' ? 'fx' : localStorage.getItem('matrixType')) || 'fx');
 
@@ -2132,11 +2134,14 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       const cached = localStorage.getItem(`matrixCache_${matrixType}`);
       const cachedTime = localStorage.getItem(`matrixCacheTime_${matrixType}`);
       const cachedHours = localStorage.getItem(`matrixCacheHours_${matrixType}`);
+      const cachedHoursLong = localStorage.getItem(`matrixCacheHoursLong_${matrixType}`);
       const cachedVolDays = localStorage.getItem(`matrixCacheVolDays_${matrixType}`);
-      if (cached && cachedTime && cachedHours == matrixHours && cachedVolDays == matrixVolDays) {
+      if (cached && cachedTime && cachedHours == matrixHours && cachedHoursLong == matrixHoursLong && cachedVolDays == matrixVolDays) {
         const age = Date.now() - parseInt(cachedTime);
         if (age < 60 * 1000) {
-          setMatrixData(JSON.parse(cached));
+          const parsed = JSON.parse(cached);
+          setMatrixData(parsed.short);
+          setMatrixDataLong(parsed.long);
           return;
         }
       }
@@ -2144,17 +2149,26 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     
     setLoading(true);
     try {
-      const response = await axios.get(`${API_BASE}/api/v1/matrix`, {
+      const responseShort = await axios.get(`${API_BASE}/api/v1/matrix`, {
         params: { n_hours: matrixHours, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone }
       });
-      setMatrixData(response.data);
+      setMatrixData(responseShort.data);
+      
+      const responseLong = await axios.get(`${API_BASE}/api/v1/matrix`, {
+        params: { n_hours: matrixHoursLong, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone }
+      });
+      setMatrixDataLong(responseLong.data);
+      
       if (!simulatedTime) {
-          localStorage.setItem(`matrixCache_${matrixType}`, JSON.stringify(response.data));
+          const combo = { short: responseShort.data, long: responseLong.data };
+          localStorage.setItem(`matrixCache_${matrixType}`, JSON.stringify(combo));
           localStorage.setItem(`matrixCacheTime_${matrixType}`, Date.now().toString());
           localStorage.setItem(`matrixCacheHours_${matrixType}`, matrixHours.toString());
+          localStorage.setItem(`matrixCacheHoursLong_${matrixType}`, matrixHoursLong.toString());
           localStorage.setItem(`matrixCacheVolDays_${matrixType}`, matrixVolDays.toString());
       }
       localStorage.setItem('currencyMatrixHours', matrixHours.toString());
+      localStorage.setItem('currencyMatrixHoursLong', matrixHoursLong.toString());
       localStorage.setItem('currencyMatrixVolDays', matrixVolDays.toString());
       localStorage.setItem('matrixType', matrixType);
     } catch (err) {
@@ -2233,20 +2247,28 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           ))}
         </div>
         
-        <label>Chu kỳ (Giờ):</label>
+        <label>Ngắn hạn (Giờ):</label>
         <input 
           type="number" 
           value={matrixHours} 
           onChange={e => { const val = Number(e.target.value); setMatrixHours(val); localStorage.setItem('currencyMatrixHours', val.toString()); }}
-          style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '80px' }}
+          style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '70px' }}
         />
         
-        <label style={{ marginLeft: '10px' }}>So sánh Khối lượng (Ngày):</label>
+        <label style={{ marginLeft: '10px' }}>Dài hạn (Giờ):</label>
+        <input 
+          type="number" 
+          value={matrixHoursLong} 
+          onChange={e => { const val = Number(e.target.value); setMatrixHoursLong(val); localStorage.setItem('currencyMatrixHoursLong', val.toString()); }}
+          style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '70px' }}
+        />
+        
+        <label style={{ marginLeft: '10px' }}>Volume (Ngày):</label>
         <input 
           type="number" 
           value={matrixVolDays} 
           onChange={e => { const val = Number(e.target.value); setMatrixVolDays(val); localStorage.setItem('currencyMatrixVolDays', val.toString()); }}
-          style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '80px' }}
+          style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '70px' }}
         />
         <button 
           onClick={() => fetchMatrix(true)}
@@ -2259,74 +2281,77 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         </span>
       </div>
 
-      <div style={{ display: 'flex', gap: '40px' }}>
-      {/* Bảng xếp hạng đồng tiền */}
-      <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px' }}>
-        <h2 style={{ marginBottom: '20px', color: '#60a5fa' }}>Xếp hạng Sức mạnh Tiền tệ ({matrixHours}H)</h2>
-        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '16px 0', textAlign: 'left' }}>
-           <thead>
-            <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-              <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hạng</th>
-              <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Đồng tiền</th>
-              <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Điểm sức mạnh (Score)</th>
-              <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>% Mom</th>
-              <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Khối lượng (Top %)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {matrixData.ranking.map((item, index) => {
-              // Color logic cho Volume Percentile
-              let volColor = 'var(--text-primary)';
-              if (item.vol_percentile >= 75) volColor = '#4ade80'; // Xanh lá sáng
-              else if (item.vol_percentile <= 20) volColor = '#f87171'; // Đỏ nhạt
-              
-              // Color logic cho Mom Percentile
-              let momColor = 'var(--text-primary)';
-              if (item.mom_percentile >= 50) momColor = '#4ade80';
-              else if (item.mom_percentile <= -50) momColor = '#f87171';
-              
-              return (
-              <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                <td style={{ padding: '12px 0', fontWeight: 'bold' }}>#{index + 1}</td>
-                <td style={{ padding: '12px 0' }}>{item.currency}</td>
-                <td style={{ padding: '12px 0', color: item.score > 0 ? 'var(--up-color)' : (item.score < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
-                  {item.score > 0 ? '+' : ''}{item.score.toFixed(2)}
-                </td>
-                <td style={{ padding: '12px 0', color: momColor, fontWeight: Math.abs(item.mom_percentile || 0) >= 50 ? 'bold' : 'normal' }}>
-                  {item.mom_percentile > 0 ? '+' : ''}{item.mom_percentile != null ? item.mom_percentile.toFixed(2) : '0.00'}%
-                </td>
-                <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal' }}>
-                  {item.vol_percentile}%
-                </td>
-              </tr>
-            )})}
-          </tbody>
-        </table>
-      </div>
+      {[{title: "Ngắn hạn", hours: matrixHours, data: matrixData}, {title: "Dài hạn", hours: matrixHoursLong, data: matrixDataLong}].map((panel, idx) => {
+        if (!panel.data) return null;
+        return (
+          <div key={idx} style={{ display: 'flex', gap: '40px', marginBottom: idx === 0 ? '40px' : '0' }}>
+            {/* Bảng xếp hạng đồng tiền */}
+            <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px' }}>
+              <h2 style={{ marginBottom: '20px', color: '#60a5fa' }}>Xếp hạng Sức mạnh Tiền tệ ({panel.title} - {panel.hours}H)</h2>
+              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '16px 0', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hạng</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Đồng tiền</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Điểm sức mạnh (Score)</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>% Mom</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Khối lượng (Top %)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {panel.data.ranking.map((item, index) => {
+                    let volColor = 'var(--text-primary)';
+                    if (item.vol_percentile >= 75) volColor = '#4ade80';
+                    else if (item.vol_percentile <= 20) volColor = '#f87171';
+                    
+                    let momColor = 'var(--text-primary)';
+                    if (item.mom_percentile >= 50) momColor = '#4ade80';
+                    else if (item.mom_percentile <= -50) momColor = '#f87171';
+                    
+                    return (
+                    <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <td style={{ padding: '12px 0', fontWeight: 'bold' }}>#{index + 1}</td>
+                      <td style={{ padding: '12px 0' }}>{item.currency}</td>
+                      <td style={{ padding: '12px 0', color: item.score > 0 ? 'var(--up-color)' : (item.score < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
+                        {item.score > 0 ? '+' : ''}{item.score.toFixed(2)}
+                      </td>
+                      <td style={{ padding: '12px 0', color: momColor, fontWeight: Math.abs(item.mom_percentile || 0) >= 50 ? 'bold' : 'normal' }}>
+                        {item.mom_percentile > 0 ? '+' : ''}{item.mom_percentile != null ? item.mom_percentile.toFixed(2) : '0.00'}%
+                      </td>
+                      <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal' }}>
+                        {item.vol_percentile}%
+                      </td>
+                    </tr>
+                  )})}
+                </tbody>
+              </table>
+            </div>
 
-      {/* Dữ liệu chi tiết các cặp */}
-      <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', maxHeight: '400px', overflowY: 'auto' }}>
-        <h2 style={{ marginBottom: '20px', color: '#a78bfa' }}>Chi tiết Thay đổi VWMA (15 Cặp)</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-              <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Cặp tiền</th>
-              <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Δ VWMA (%)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {matrixData.pairs_data.map(item => (
-              <tr key={item.pair} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                <td style={{ padding: '12px 0' }}>{item.pair}</td>
-                <td style={{ padding: '12px 0', color: item.change_pct > 0 ? 'var(--up-color)' : (item.change_pct < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
-                  {item.change_pct > 0 ? '+' : ''}{item.change_pct.toFixed(2)}%
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      </div>
+            {/* Dữ liệu chi tiết các cặp */}
+            <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', maxHeight: '400px', overflowY: 'auto' }}>
+              <h2 style={{ marginBottom: '20px', color: '#a78bfa' }}>Chi tiết Thay đổi VWMA (15 Cặp - {panel.title})</h2>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Cặp tiền</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Δ VWMA (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {panel.data.pairs_data.map(item => (
+                    <tr key={item.pair} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <td style={{ padding: '12px 0' }}>{item.pair}</td>
+                      <td style={{ padding: '12px 0', color: item.change_pct > 0 ? 'var(--up-color)' : (item.change_pct < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
+                        {item.change_pct > 0 ? '+' : ''}{item.change_pct.toFixed(2)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
       
       {/* Ma trận Tương quan */}
       {matrixData.corr_matrix && matrixData.corr_matrix.length > 0 && (
@@ -2923,7 +2948,7 @@ function App() {
   const [showMomChart, setShowMomChart] = useState(localStorage.getItem('showMomChart') !== 'false');
   const [showMatrixBubble, setShowMatrixBubble] = useState(localStorage.getItem('showMatrixBubble') === 'true');
   const [bubbleMatrixData, setBubbleMatrixData] = useState(null);
-  
+  const [bubbleMatrixDataLong, setBubbleMatrixDataLong] = useState(null);
 
   
   const [configs, setConfigs] = useState(() => ({
@@ -2978,16 +3003,26 @@ function App() {
     if (!showMatrixBubble) return;
     const fetchBubbleMatrix = () => {
       const bTime = configs.brokerTimezone || 'Europe/Athens';
-      const mHours = configs.matrixHours || 24;
+      const mHours = Number(localStorage.getItem('currencyMatrixHours')) || 24;
+      const mHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || 89;
       const mVolDays = configs.matrixVolDays || 30;
       const mType = getMatrixTypeForSymbol(symbol);
-      let url = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}`;
+      let urlShort = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}`;
+      let urlLong = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHoursLong}&vol_days=${mVolDays}&matrix_type=${mType}`;
+      
       if (viewMode === 'backtest' && window.currentSimulatedTime) {
-        url += `&end_time=${window.currentSimulatedTime}`;
+        urlShort += `&end_time=${window.currentSimulatedTime}`;
+        urlLong += `&end_time=${window.currentSimulatedTime}`;
       }
-      axios.get(url).then(res => {
+      axios.get(urlShort).then(res => {
         if (res.data && res.data.ranking) {
           setBubbleMatrixData(res.data.ranking);
+        }
+      }).catch(err => console.error(err));
+      
+      axios.get(urlLong).then(res => {
+        if (res.data && res.data.ranking) {
+          setBubbleMatrixDataLong(res.data.ranking);
         }
       }).catch(err => console.error(err));
     };
@@ -3065,6 +3100,7 @@ function App() {
         showMatrixBubble={showMatrixBubble}
         setShowMatrixBubble={setShowMatrixBubble}
         bubbleMatrixData={bubbleMatrixData}
+        bubbleMatrixDataLong={bubbleMatrixDataLong}
         volMode={configs.volMode}
         handleVolModeToggle={(checked) => setConfigs(prev => ({ ...prev, volMode: checked ? 'mean_vol' : 'normal' }))}
       />
