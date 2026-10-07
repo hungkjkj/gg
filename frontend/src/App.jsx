@@ -2281,13 +2281,12 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         </span>
       </div>
 
-      {[{title: "Ngắn hạn", hours: matrixHours, data: matrixData}, {title: "Dài hạn", hours: matrixHoursLong, data: matrixDataLong}].map((panel, idx) => {
-        if (!panel.data) return null;
+      {(matrixData && matrixDataLong) && (() => {
         return (
-          <div key={idx} style={{ display: 'flex', gap: '40px', marginBottom: idx === 0 ? '40px' : '0' }}>
+          <div style={{ display: 'flex', gap: '40px', marginBottom: '40px' }}>
             {/* Bảng xếp hạng đồng tiền */}
             <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px' }}>
-              <h2 style={{ marginBottom: '20px', color: '#60a5fa' }}>Xếp hạng Sức mạnh Tiền tệ ({panel.title} - {panel.hours}H)</h2>
+              <h2 style={{ marginBottom: '20px', color: '#60a5fa' }}>Xếp hạng Sức mạnh Tiền tệ ({matrixHoursLong}H / {matrixHours}H)</h2>
               <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '16px 0', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
@@ -2299,7 +2298,8 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                   </tr>
                 </thead>
                 <tbody>
-                  {panel.data.ranking.map((item, index) => {
+                  {matrixDataLong.ranking.map((item, index) => {
+                    const shortItem = matrixData.ranking ? matrixData.ranking.find(x => x.currency === item.currency) : null;
                     let volColor = 'var(--text-primary)';
                     if (item.vol_percentile >= 75) volColor = '#4ade80';
                     else if (item.vol_percentile <= 20) volColor = '#f87171';
@@ -2307,19 +2307,25 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                     let momColor = 'var(--text-primary)';
                     if (item.mom_percentile >= 50) momColor = '#4ade80';
                     else if (item.mom_percentile <= -50) momColor = '#f87171';
+
+                    const renderVal = (val, shortVal, suffix = '', precision = 2) => {
+                       const mainStr = (val > 0 && suffix !== '%' ? '+' : '') + (val != null ? val.toFixed(precision) : '0') + suffix;
+                       const shortStr = shortVal ? ` (${shortVal > 0 && suffix !== '%' ? '+' : ''}${shortVal != null ? shortVal.toFixed(precision) : '0'}${suffix})` : '';
+                       return <>{mainStr} <span style={{fontSize:'12px', color:'#9ca3af', marginLeft: '4px'}}>{shortStr}</span></>;
+                    };
                     
                     return (
                     <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                       <td style={{ padding: '12px 0', fontWeight: 'bold' }}>#{index + 1}</td>
                       <td style={{ padding: '12px 0' }}>{item.currency}</td>
                       <td style={{ padding: '12px 0', color: item.score > 0 ? 'var(--up-color)' : (item.score < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
-                        {item.score > 0 ? '+' : ''}{item.score.toFixed(2)}
+                        {renderVal(item.score, shortItem?.score, '', 2)}
                       </td>
                       <td style={{ padding: '12px 0', color: momColor, fontWeight: Math.abs(item.mom_percentile || 0) >= 50 ? 'bold' : 'normal' }}>
-                        {item.mom_percentile > 0 ? '+' : ''}{item.mom_percentile != null ? item.mom_percentile.toFixed(2) : '0.00'}%
+                        {renderVal(item.mom_percentile, shortItem?.mom_percentile, '%', 2)}
                       </td>
                       <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal' }}>
-                        {item.vol_percentile}%
+                        {renderVal(item.vol_percentile, shortItem?.vol_percentile, '%', 0)}
                       </td>
                     </tr>
                   )})}
@@ -2328,8 +2334,8 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
             </div>
 
             {/* Dữ liệu chi tiết các cặp */}
-            <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', maxHeight: '400px', overflowY: 'auto' }}>
-              <h2 style={{ marginBottom: '20px', color: '#a78bfa' }}>Chi tiết Thay đổi VWMA (15 Cặp - {panel.title})</h2>
+            <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', maxHeight: '550px', overflowY: 'auto' }}>
+              <h2 style={{ marginBottom: '20px', color: '#a78bfa' }}>Chi tiết Thay đổi VWMA (15 Cặp)</h2>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
@@ -2338,20 +2344,23 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                   </tr>
                 </thead>
                 <tbody>
-                  {panel.data.pairs_data.map(item => (
+                  {matrixDataLong.pairs_data.map(item => {
+                    const shortItem = matrixData.pairs_data ? matrixData.pairs_data.find(x => x.pair === item.pair) : null;
+                    return (
                     <tr key={item.pair} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                       <td style={{ padding: '12px 0' }}>{item.pair}</td>
                       <td style={{ padding: '12px 0', color: item.change_pct > 0 ? 'var(--up-color)' : (item.change_pct < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
                         {item.change_pct > 0 ? '+' : ''}{item.change_pct.toFixed(2)}%
+                        {shortItem && <span style={{fontSize:'12px', color:'#9ca3af', marginLeft: '6px'}}>({shortItem.change_pct > 0 ? '+' : ''}{shortItem.change_pct.toFixed(2)}%)</span>}
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
           </div>
         );
-      })}
+      })()}
       
       {/* Ma trận Tương quan */}
       {matrixData.corr_matrix && matrixData.corr_matrix.length > 0 && (
