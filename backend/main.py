@@ -268,6 +268,9 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         
     tf_mapping = {
         'M1': 60,
+        'M2': 120,
+        'M3': 180,
+        'M4': 240,
         'M5': 300,
         'M15': 900,
         'M30': 1800,

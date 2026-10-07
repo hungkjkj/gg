@@ -36,6 +36,9 @@ def _get_mt5_timeframe(tf_string: str):
     """Chuyển đổi chuỗi Timeframe (H1, M5) sang hằng số của MT5"""
     tf_map = {
         "M1": mt5.TIMEFRAME_M1,
+        "M2": mt5.TIMEFRAME_M2,
+        "M3": mt5.TIMEFRAME_M3,
+        "M4": mt5.TIMEFRAME_M4,
         "M5": mt5.TIMEFRAME_M5,
         "M15": mt5.TIMEFRAME_M15,
         "M30": mt5.TIMEFRAME_M30,

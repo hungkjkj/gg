@@ -3131,6 +3131,7 @@ function App() {
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Khung thời gian (Timeframe)</label>
             <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)} style={{ width: '100%' }}>
+              <option value="M3">3 Minutes</option>
               <option value="M5">5 Minutes</option>
               <option value="M15">15 Minutes</option>
               <option value="H1">1 Hour</option>
