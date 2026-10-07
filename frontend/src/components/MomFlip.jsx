@@ -74,7 +74,7 @@ export const AssistiveTouch = ({
           position: 'absolute', 
           ...(position.y < window.innerHeight / 2 ? { top: '70px' } : { bottom: '70px' }),
           ...(position.x > window.innerWidth / 2 ? { right: '0px' } : { left: '0px' }),
-          background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(12px)', padding: '16px', borderRadius: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1)', width: (showMatrixBubble && (bubbleMatrixData || bubbleMatrixDataLong)) ? '540px' : '320px', border: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', flexDirection: 'column', gap: '12px', animation: 'fadeInBub 0.2s ease-out' 
+          background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(12px)', padding: '16px', borderRadius: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1)', width: (showMatrixBubble && (bubbleMatrixData || bubbleMatrixDataLong)) ? '420px' : '320px', border: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', flexDirection: 'column', gap: '12px', animation: 'fadeInBub 0.2s ease-out' 
         }}>
           <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
             <input type="checkbox" checked={showSdBands} onChange={e => { setShowSdBands(e.target.checked); localStorage.setItem('showSdBands', e.target.checked); }} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
@@ -101,80 +101,62 @@ export const AssistiveTouch = ({
             Xếp hạng Matrix
           </label>
           
-          {showMatrixBubble && (bubbleMatrixData || bubbleMatrixDataLong) && (
-            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)', maxHeight: '400px', overflowY: 'auto', display: 'flex', gap: '16px' }}>
-              
-              {bubbleMatrixData && (
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '13px', color: '#60a5fa', marginBottom: '8px', fontWeight: 'bold' }}>Ngắn hạn</div>
-                  <table style={{ width: '100%', fontSize: '13px', color: '#e2e8f0', borderCollapse: 'collapse', marginBottom: '16px' }}>
-                    <thead>
-                      <tr style={{ color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                        <th style={{ textAlign: 'left', paddingBottom: '4px' }}>#</th>
-                        <th style={{ textAlign: 'left', paddingBottom: '4px' }}>Cur</th>
-                        <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Mom %</th>
-                        <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Vol %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bubbleMatrixData.map((item, idx) => {
-                          let momColor = '#e2e8f0';
-                          if (item.mom_percentile >= 50) momColor = '#4ade80';
-                          else if (item.mom_percentile <= -50) momColor = '#f87171';
-                          
-                          let volColor = '#e2e8f0';
-                          if (item.vol_percentile >= 75) volColor = '#4ade80';
-                          else if (item.vol_percentile <= 20) volColor = '#f87171';
-                          
-                          return (
-                        <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                          <td style={{ padding: '6px 0' }}>{idx + 1}</td>
-                          <td style={{ padding: '6px 0', fontWeight: 'bold' }}>{item.currency}</td>
-                          <td style={{ padding: '6px 0', textAlign: 'right', color: momColor }}>{item.mom_percentile > 0 ? '+' : ''}{item.mom_percentile != null ? item.mom_percentile.toFixed(2) : 0}%</td>
-                          <td style={{ padding: '6px 0', textAlign: 'right', color: volColor }}>{item.vol_percentile != null ? item.vol_percentile.toFixed(2) : 0}%</td>
-                        </tr>
-                      )})}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+          {showMatrixBubble && (bubbleMatrixData || bubbleMatrixDataLong) && (() => {
+            const primaryData = bubbleMatrixDataLong || bubbleMatrixData;
+            return (
+              <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)', maxHeight: '400px', overflowY: 'auto' }}>
+                <div style={{ fontSize: '13px', color: '#60a5fa', marginBottom: '8px', fontWeight: 'bold' }}>Xếp hạng Dài hạn (Ngắn hạn)</div>
+                <table style={{ width: '100%', fontSize: '13px', color: '#e2e8f0', borderCollapse: 'collapse', marginBottom: '16px' }}>
+                  <thead>
+                    <tr style={{ color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                      <th style={{ textAlign: 'left', paddingBottom: '4px' }}>#</th>
+                      <th style={{ textAlign: 'left', paddingBottom: '4px' }}>Cur</th>
+                      <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Mom %</th>
+                      <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Vol %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {primaryData.map((item, idx) => {
+                      const shortItem = bubbleMatrixData ? bubbleMatrixData.find(x => x.currency === item.currency) : null;
+                      
+                      let momColor = '#e2e8f0';
+                      if (item.mom_percentile >= 50) momColor = '#4ade80';
+                      else if (item.mom_percentile <= -50) momColor = '#f87171';
+                      
+                      let volColor = '#e2e8f0';
+                      if (item.vol_percentile >= 75) volColor = '#4ade80';
+                      else if (item.vol_percentile <= 20) volColor = '#f87171';
+                      
+                      const momStr = (item.mom_percentile > 0 ? '+' : '') + (item.mom_percentile != null ? item.mom_percentile.toFixed(1) : 0) + '%';
+                      const volStr = (item.vol_percentile != null ? item.vol_percentile.toFixed(1) : 0) + '%';
+                      
+                      let shortMomStr = '';
+                      let shortVolStr = '';
+                      if (shortItem) {
+                        shortMomStr = ' (' + (shortItem.mom_percentile > 0 ? '+' : '') + (shortItem.mom_percentile != null ? shortItem.mom_percentile.toFixed(1) : 0) + '%)';
+                        shortVolStr = ' (' + (shortItem.vol_percentile != null ? shortItem.vol_percentile.toFixed(1) : 0) + '%)';
+                      }
 
-              {bubbleMatrixDataLong && (
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '13px', color: '#60a5fa', marginBottom: '8px', fontWeight: 'bold' }}>Dài hạn</div>
-                  <table style={{ width: '100%', fontSize: '13px', color: '#e2e8f0', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                        <th style={{ textAlign: 'left', paddingBottom: '4px' }}>#</th>
-                        <th style={{ textAlign: 'left', paddingBottom: '4px' }}>Cur</th>
-                        <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Mom %</th>
-                        <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Vol %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bubbleMatrixDataLong.map((item, idx) => {
-                          let momColor = '#e2e8f0';
-                          if (item.mom_percentile >= 50) momColor = '#4ade80';
-                          else if (item.mom_percentile <= -50) momColor = '#f87171';
-                          
-                          let volColor = '#e2e8f0';
-                          if (item.vol_percentile >= 75) volColor = '#4ade80';
-                          else if (item.vol_percentile <= 20) volColor = '#f87171';
-                          
-                          return (
+                      return (
                         <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                           <td style={{ padding: '6px 0' }}>{idx + 1}</td>
                           <td style={{ padding: '6px 0', fontWeight: 'bold' }}>{item.currency}</td>
-                          <td style={{ padding: '6px 0', textAlign: 'right', color: momColor }}>{item.mom_percentile > 0 ? '+' : ''}{item.mom_percentile != null ? item.mom_percentile.toFixed(2) : 0}%</td>
-                          <td style={{ padding: '6px 0', textAlign: 'right', color: volColor }}>{item.vol_percentile != null ? item.vol_percentile.toFixed(2) : 0}%</td>
+                          <td style={{ padding: '6px 0', textAlign: 'right', color: momColor }}>
+                            {momStr}
+                            <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '4px' }}>{shortMomStr}</span>
+                          </td>
+                          <td style={{ padding: '6px 0', textAlign: 'right', color: volColor }}>
+                            {volStr}
+                            <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '4px' }}>{shortVolStr}</span>
+                          </td>
                         </tr>
-                      )})}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </div>
       )}
       <div 
