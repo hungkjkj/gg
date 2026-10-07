@@ -276,7 +276,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
           console.error("Error setting news markers", e);
       }
     }
-  }, [newsData, chartRef.current, timeframe]);
+  }, [newsData, chartReady, timeframe]);
 
   
   const lastClickTimeRef = useRef(0);
