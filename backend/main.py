@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, ORJSONResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import pandas as pd
 import time
@@ -228,7 +228,7 @@ def get_ticks(symbols: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/v1/ohlcv", response_class=ORJSONResponse)
+@app.get("/api/v1/ohlcv")
 def get_ohlcv(symbol: str, timeframe: str, count: int = 10000, 
               end_time: int = 0, latest_only: bool = False,
               pct1: float = 75.0, pct2: float = 85.0, 
@@ -827,7 +827,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         }
         
 
-    return ORJSONResponse(content={
+    return {
         "symbol": symbol, 
         "timeframe": timeframe, 
         "data": records,
@@ -835,7 +835,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
             "vp_boxes": vp_boxes,
             "vol_stats": vol_stats
         }
-    })
+    }
 
 MATRIX_PROGRESS = {"currency": 0.0, "crypto": 0.0, "metals": 0.0}
 _MATRIX_CACHE = {}
@@ -992,10 +992,12 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
             return (pair, diff_pct_current, base_currency, quote_currency, diff_array, vol_array, log_ret)
         return None
 
-
-    # Chạy song song đa luồng để lấy dữ liệu 15 cặp siêu tốc
-    with concurrent.futures.ThreadPoolExecutor(max_workers=total_pairs) as executor:
-        results = list(executor.map(process_pair, pairs))
+    # Fetch and process pairs sequentially to prevent MT5 deadlock
+    results = []
+    for i, pair in enumerate(pairs):
+        res = process_pair(pair)
+        results.append(res)
+        MATRIX_PROGRESS[matrix_type] = round(((i + 1) / total_pairs) * 100, 2)
         
     scores_hist = {c: [] for c in currencies}
     vol_hist = {c: [] for c in currencies}
