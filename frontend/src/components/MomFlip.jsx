@@ -132,9 +132,18 @@ export const AssistiveTouch = ({
                       
                       let shortMomStr = '';
                       let shortVolStr = '';
+                      let shortMomColor = '#94a3b8';
+                      let shortVolColor = '#94a3b8';
+                      
                       if (shortItem) {
                         shortMomStr = ' (' + (shortItem.mom_percentile > 0 ? '+' : '') + (shortItem.mom_percentile != null ? shortItem.mom_percentile.toFixed(1) : 0) + '%)';
                         shortVolStr = ' (' + (shortItem.vol_percentile != null ? shortItem.vol_percentile.toFixed(1) : 0) + '%)';
+                        
+                        if (shortItem.mom_percentile >= 50) shortMomColor = '#4ade80';
+                        else if (shortItem.mom_percentile <= -50) shortMomColor = '#f87171';
+                        
+                        if (shortItem.vol_percentile >= 75) shortVolColor = '#4ade80';
+                        else if (shortItem.vol_percentile <= 20) shortVolColor = '#f87171';
                       }
 
                       return (
@@ -143,11 +152,11 @@ export const AssistiveTouch = ({
                           <td style={{ padding: '6px 0', fontWeight: 'bold' }}>{item.currency}</td>
                           <td style={{ padding: '6px 0', textAlign: 'right', color: momColor }}>
                             {momStr}
-                            <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '4px' }}>{shortMomStr}</span>
+                            <span style={{ fontSize: '11px', color: shortMomColor, marginLeft: '4px' }}>{shortMomStr}</span>
                           </td>
                           <td style={{ padding: '6px 0', textAlign: 'right', color: volColor }}>
                             {volStr}
-                            <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '4px' }}>{shortVolStr}</span>
+                            <span style={{ fontSize: '11px', color: shortVolColor, marginLeft: '4px' }}>{shortVolStr}</span>
                           </td>
                         </tr>
                       );

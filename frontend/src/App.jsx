@@ -2308,10 +2308,24 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                     if (item.mom_percentile >= 50) momColor = '#4ade80';
                     else if (item.mom_percentile <= -50) momColor = '#f87171';
 
-                    const renderVal = (val, shortVal, suffix = '', precision = 2) => {
+                    const renderVal = (val, shortVal, suffix = '', precision = 2, valType = '') => {
                        const mainStr = (val > 0 && suffix !== '%' ? '+' : '') + (val != null ? val.toFixed(precision) : '0') + suffix;
                        const shortStr = shortVal ? ` (${shortVal > 0 && suffix !== '%' ? '+' : ''}${shortVal != null ? shortVal.toFixed(precision) : '0'}${suffix})` : '';
-                       return <>{mainStr} <span style={{fontSize:'12px', color:'#9ca3af', marginLeft: '4px'}}>{shortStr}</span></>;
+                       
+                       let shortColor = '#9ca3af';
+                       if (shortVal != null) {
+                         if (valType === 'mom') {
+                           if (shortVal >= 50) shortColor = '#4ade80';
+                           else if (shortVal <= -50) shortColor = '#f87171';
+                         } else if (valType === 'vol') {
+                           if (shortVal >= 75) shortColor = '#4ade80';
+                           else if (shortVal <= 20) shortColor = '#f87171';
+                         } else if (valType === 'score') {
+                           if (shortVal > 0) shortColor = 'var(--up-color)';
+                           else if (shortVal < 0) shortColor = 'var(--down-color)';
+                         }
+                       }
+                       return <>{mainStr} <span style={{fontSize:'12px', color:shortColor, marginLeft: '4px'}}>{shortStr}</span></>;
                     };
                     
                     return (
@@ -2319,13 +2333,13 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                       <td style={{ padding: '12px 0', fontWeight: 'bold' }}>#{index + 1}</td>
                       <td style={{ padding: '12px 0' }}>{item.currency}</td>
                       <td style={{ padding: '12px 0', color: item.score > 0 ? 'var(--up-color)' : (item.score < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
-                        {renderVal(item.score, shortItem?.score, '', 2)}
+                        {renderVal(item.score, shortItem?.score, '', 2, 'score')}
                       </td>
                       <td style={{ padding: '12px 0', color: momColor, fontWeight: Math.abs(item.mom_percentile || 0) >= 50 ? 'bold' : 'normal' }}>
-                        {renderVal(item.mom_percentile, shortItem?.mom_percentile, '%', 2)}
+                        {renderVal(item.mom_percentile, shortItem?.mom_percentile, '%', 2, 'mom')}
                       </td>
                       <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal' }}>
-                        {renderVal(item.vol_percentile, shortItem?.vol_percentile, '%', 0)}
+                        {renderVal(item.vol_percentile, shortItem?.vol_percentile, '%', 0, 'vol')}
                       </td>
                     </tr>
                   )})}
@@ -2351,7 +2365,12 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                       <td style={{ padding: '12px 0' }}>{item.pair}</td>
                       <td style={{ padding: '12px 0', color: item.change_pct > 0 ? 'var(--up-color)' : (item.change_pct < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
                         {item.change_pct > 0 ? '+' : ''}{item.change_pct.toFixed(2)}%
-                        {shortItem && <span style={{fontSize:'12px', color:'#9ca3af', marginLeft: '6px'}}>({shortItem.change_pct > 0 ? '+' : ''}{shortItem.change_pct.toFixed(2)}%)</span>}
+                        {shortItem && (() => {
+                          let shortColor = '#9ca3af';
+                          if (shortItem.change_pct > 0) shortColor = 'var(--up-color)';
+                          else if (shortItem.change_pct < 0) shortColor = 'var(--down-color)';
+                          return <span style={{fontSize:'12px', color:shortColor, marginLeft: '6px'}}>({shortItem.change_pct > 0 ? '+' : ''}{shortItem.change_pct.toFixed(2)}%)</span>;
+                        })()}
                       </td>
                     </tr>
                   )})}
