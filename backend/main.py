@@ -381,10 +381,10 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     
     # N = số lượng nến trong V-block
     N_candles = np.maximum(i_arr - j_current + 1, 1.0)
-    time_span = N_candles / mom_window
     
-    # Trung bình cộng động lượng trong V-block chuẩn hóa theo V_series và time_span
-    df['mom_raw_raw'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) / time_span, 0.0)
+    # Trung bình cộng động lượng trong V-block (net_mom_cur / V_series) đã tương đương với (Displacement / N)
+    # Nhân với mom_window để khôi phục lại Scale gốc (Tổng lực tương đương N nến chuẩn)
+    df['mom_raw_raw'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) * mom_window, 0.0)
     df['abs_mom_raw'] = df['mom_raw_raw'].abs()
     
     # Tính median động lượng trong chu kỳ N giờ
@@ -929,9 +929,9 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         net_mom_cur = cum_candle_mom - np.where(has_j_cur, cum_candle_mom[j_cur_m1], 0)
         
         N_candles = np.maximum(i_arr - j_current + 1, 1.0)
-        time_span = N_candles / window_size
         
-        df['diff_pct'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) / time_span, 0.0)
+        # Scale lại bằng cách nhân window_size (tương tự mom_window ở main chart)
+        df['diff_pct'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) * window_size, 0.0)
         
         df['vol_rolling'] = df['value'].rolling(window=window_size, min_periods=1).sum()
         
