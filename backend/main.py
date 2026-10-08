@@ -282,9 +282,9 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     }
     tf_seconds = tf_mapping.get(timeframe.upper(), 3600)
     
-    vwap_window = max(1, int((vwapLength * 3600) / tf_seconds))
-    mom_window = max(1, int((momLength * 3600) / tf_seconds))
-    ma_vol_window = max(1, int((maVolLength * 60) / tf_seconds))
+    vwap_window = max(1, int(vwapLength))
+    mom_window = max(1, int(momLength))
+    ma_vol_window = max(1, int(maVolLength))
     mom_ma_window = mom_window
 
     
@@ -347,8 +347,8 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     h_m_pc = (high_win - prev_close_win).abs()
     l_m_pc = (low_win - prev_close_win).abs()
     tr_win = np.maximum(h_m_l, np.maximum(h_m_pc, l_m_pc))
-    atr_window = max(1, int(momLength * mom_window))
-    df['atr'] = tr_win.rolling(window=atr_window, min_periods=1).mean()
+    atr_window = max(1, int(momLength))
+    df['atr'] = tr_win.ewm(alpha=1.0/atr_window, adjust=False).mean()
     
     lookback_candles = max(1, int((matrixLookbackHours * 3600) / tf_seconds))
     
@@ -902,11 +902,11 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         tr_win = np.maximum(h_m_l, np.maximum(h_m_pc, l_m_pc))
         mom_length = config.get('momLength', 20)
         atr_window = int(mom_length * window_size)
-        df['atr'] = tr_win.rolling(window=atr_window, min_periods=1).mean()
+        df['atr'] = tr_win.ewm(alpha=1.0/atr_window, adjust=False).mean()
 
         # VF-Momentum Logic
         lookback_candles = int(vol_days * 24 * candles_per_hour)
-        rolling_vol_N = df['value'].rolling(window=window_size, min_periods=1).sum()
+        rolling_vol_N = df['value'].rolling(window=int(window_size * mom_length), min_periods=1).sum()
         target_pct = config.get('mfTargetPct', 75) / 100.0
         V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(target_pct).fillna(1.0).values, 1.0)
         
@@ -930,7 +930,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         N_candles = np.maximum(i_arr - j_current + 1, 1.0)
         
         # Scale lại bằng cách nhân window_size (tương tự mom_window ở main chart)
-        df['diff_pct'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) * window_size, 0.0)
+        df['diff_pct'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) * int(window_size * mom_length), 0.0)
         
         df['vol_rolling'] = df['value'].rolling(window=window_size, min_periods=1).sum()
         
