@@ -203,8 +203,11 @@ def fetch_ff_calendar():
     current_time = time.time()
     
     needs_update = False
-    
-    if len(NEWS_CACHE["data"]) == 0:
+    # Cooldown 2 phút (120 giây) cho mỗi lần check bất kể thành công hay thất bại
+    # để tránh treo toàn bộ hệ thống (timeout 20s) khi gọi API liên tục
+    if current_time - NEWS_CACHE.get("last_fetch", 0) < 120:
+        needs_update = False
+    elif len(NEWS_CACHE["data"]) == 0:
         needs_update = True
     else:
         # Kiểm tra xem có tin nào đã qua giờ, chưa có actual, và chưa được check
@@ -218,6 +221,11 @@ def fetch_ff_calendar():
         return NEWS_CACHE["data"]
         
     print("Fetching new Catalyst data from ForexFactory...")
+    
+    # Cập nhật last_fetch TRƯỚC KHI cào để đảm bảo cooldown hoạt động dù cào lỗi
+    NEWS_CACHE["last_fetch"] = current_time
+    save_cache(NEWS_CACHE)
+    
     events_this = scrape_ff_week('this')
     
     # Chỉ tải tuần sau nếu hôm nay là Chủ Nhật (weekday() == 6) hoặc Thứ Bảy (5)
@@ -233,11 +241,10 @@ def fetch_ff_calendar():
                 ev["checked"] = True
                     
         NEWS_CACHE["data"] = all_events
-        NEWS_CACHE["last_fetch"] = current_time
         save_cache(NEWS_CACHE)
         return all_events
     
-    # Cào thất bại (all_events rỗng) -> KHÔNG đánh dấu checked, lần sau sẽ thử lại
+    # Cào thất bại (all_events rỗng) -> KHÔNG đánh dấu checked, trả về data cũ
     return NEWS_CACHE["data"]
 
 def get_news_for_symbol(symbol: str):
