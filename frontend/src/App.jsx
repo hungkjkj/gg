@@ -8,6 +8,9 @@ import './index.css';
 
 const API_BASE = window.location.port === '5173' ? `${API_BASE}` : window.location.origin;
 
+// Ngăn chặn treo vĩnh viễn: Tự động hủy mọi Request nếu Backend/MT5 không phản hồi sau 15 giây
+axios.defaults.timeout = 15000;
+
 const customTimeFormatter = (time) => {
     const date = new Date(time * 1000);
     const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
