@@ -282,9 +282,9 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     }
     tf_seconds = tf_mapping.get(timeframe.upper(), 3600)
     
-    vwap_window = max(1, int(vwapLength))
-    mom_window = max(1, int(momLength))
-    ma_vol_window = max(1, int(maVolLength))
+    vwap_window = max(1, int((vwapLength * 3600) / tf_seconds))
+    mom_window = max(1, int((momLength * 3600) / tf_seconds))
+    ma_vol_window = max(1, int((maVolLength * 60) / tf_seconds))
     mom_ma_window = mom_window
 
     
@@ -347,7 +347,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     h_m_pc = (high_win - prev_close_win).abs()
     l_m_pc = (low_win - prev_close_win).abs()
     tr_win = np.maximum(h_m_l, np.maximum(h_m_pc, l_m_pc))
-    atr_window = max(1, int(momLength))
+    atr_window = mom_window
     df['atr'] = tr_win.ewm(alpha=1.0/atr_window, adjust=False).mean()
     
     lookback_candles = max(1, int((matrixLookbackHours * 3600) / tf_seconds))
