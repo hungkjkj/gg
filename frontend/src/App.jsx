@@ -65,7 +65,6 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const mom75DnRef = useRef(null);
   const mom50UpRef = useRef(null);
   const mom50DnRef = useRef(null);
-  const momMaSeriesRef = useRef(null);
   
   // Các đường xác suất Volume
   const normVolSeriesRef = useRef(null);
@@ -126,7 +125,6 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const isPlayingRef = useRef(false);
   const lastVwapColorRef = useRef(null);
   const lastMaVolColorRef = useRef(null);
-  const lastMomMaColorRef = useRef(null);
   const lastHl2ColorRef = useRef(null);
   const lastBandwidthRef = useRef(null);
   const lastSdColorRef = useRef(null);
@@ -1013,7 +1011,6 @@ useEffect(() => {
         if (maVolSeriesRef.current) maVolSeriesRef.current.setData([]);
         lastVwapColorRef.current = null;
         lastMaVolColorRef.current = null;
-        lastMomMaColorRef.current = null;
         lastHl2ColorRef.current = null;
         lastBandwidthRef.current = null;
         lastSdColorRef.current = null;
@@ -1247,24 +1244,6 @@ useEffect(() => {
           return {time: i.time, value: i.ma_vol, color: col};
         });
         if (maVolData.length > 0) lastMaVolColorRef.current = maVolData[maVolData.length - 1].color;
-        
-        const sortedRawForMomMa = rawData.filter(d => d.mom_ma != null && !isNaN(d.mom_ma)).sort((a,b)=>a.time-b.time);
-        const momMaData = sortedRawForMomMa.map((i, index, arr) => {
-          let col = "rgba(128, 128, 128, 0.8)";
-          if (index < arr.length - 1) {
-            if (arr[index + 1].mom_ma >= i.mom_ma) col = "rgba(0, 255, 0, 1)";
-            else col = "rgba(255, 0, 0, 1)";
-          } else {
-            if (index > 0) {
-              if (i.mom_ma >= arr[index - 1].mom_ma) col = "rgba(0, 255, 0, 1)";
-              else col = "rgba(255, 0, 0, 1)";
-            } else if (lastMomMaColorRef.current !== null) {
-              col = lastMomMaColorRef.current;
-            }
-          }
-          return {time: i.time, value: i.mom_ma, color: col};
-        });
-        if (momMaData.length > 0) lastMomMaColorRef.current = momMaData[momMaData.length - 1].color;
         
         const lvl1Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl1' : 'vol_lvl1';
         const lvl2Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl2' : 'vol_lvl2';
@@ -2559,9 +2538,7 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
         <details style={styleGroup}>
           <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#f59e0b' }}>Chỉ báo Động lượng Lõi (Momentum)</summary>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Chu kỳ Động lượng (momLength)</label>
-            <input type="number" value={local.momLength} onChange={e => handleChange('momLength', Number(e.target.value))} style={styleInput} />
-          </div>
+</div>
           <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Chu kỳ Ma trận chung (Giờ)</label>
             <input type="number" value={local.matrixLookbackHours} onChange={e => handleChange('matrixLookbackHours', Number(e.target.value))} style={styleInput} title="Nhập số giờ để tính toán phân phối cho cả Động Lượng và Khối Lượng" />
@@ -3027,7 +3004,6 @@ function App() {
     mfTimeoutCandles: 120.0,
     vwapLength: 89,
     vwapMult: 2.0,
-    momLength: 20,
     matrixLookbackHours: 24,
     momFlipFilterPct: 75.0,
     momFlipVolFilterPct: 50.0,

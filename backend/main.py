@@ -236,7 +236,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
               rowCount: int = 50, timeoutHours: float = 1.0, dvpLookbackDays: float = 5.0, mfTargetPct: float = 75.0, mfTimeoutCandles: float = 120.0,
               vwapLength: int = 89, vwapMult: float = 2.0,
               rvolLookbackDays: int = 10, peakVolLookbackDays: int = 60,
-              momLength: int = 20, matrixLookbackHours: float = 89.0,
+              matrixLookbackHours: float = 89.0,
               momPct1: float = 85.0, momPct2: float = 75.0, momPct3: float = 50.0,
               maVolLength: int = 2, momMaLength: int = 3, smaMomLength: int = 10, momFlipFilterPct: float = 75.0, momFlipVolFilterPct: float = 50.0,
               volPct1: float = 85.0, volPct2: float = 75.0, volPct3: float = 50.0, volPct4: float = 15.0,
@@ -283,9 +283,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     tf_seconds = tf_mapping.get(timeframe.upper(), 3600)
     
     vwap_window = max(1, int((vwapLength * 3600) / tf_seconds))
-    mom_window = max(1, int((momLength * 3600) / tf_seconds))
     ma_vol_window = max(1, int((maVolLength * 60) / tf_seconds))
-    mom_ma_window = mom_window
 
     
     # --- 1. VWAP & SD Bands ---
@@ -338,18 +336,6 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     else:
         df['hl2'] = df['hlc3']
     
-    # Window ATR calculation for Main Chart Momentum
-    high_win = df['high'].rolling(window=mom_window, min_periods=1).max()
-    low_win = df['low'].rolling(window=mom_window, min_periods=1).min()
-    prev_close_win = df['close'].shift(mom_window).bfill()
-    
-    h_m_l = high_win - low_win
-    h_m_pc = (high_win - prev_close_win).abs()
-    l_m_pc = (low_win - prev_close_win).abs()
-    tr_win = np.maximum(h_m_l, np.maximum(h_m_pc, l_m_pc))
-    atr_window = mom_window
-    df['atr'] = tr_win.ewm(alpha=1.0/atr_window, adjust=False).mean()
-    
     lookback_candles = max(1, int((matrixLookbackHours * 3600) / tf_seconds))
     
     # --- New VF-Momentum Logic directly on current timeframe ---
@@ -363,8 +349,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     # --- New User-defined Momentum Formula ---
     # Động lượng tức thời của từng nến: ((hlc3 - hlc3_pre) / atr) * vol
     df['hlc3_diff'] = df['hlc3'] - df['hlc3'].shift(1).fillna(df['hlc3'])
-    safe_atr = np.where(df['atr'].values > 0, df['atr'].values, 1e-9)
-    df['candle_mom'] = (df['hlc3_diff'] / safe_atr) * df['value']
+    df['candle_mom'] = df['hlc3_diff'] * df['value']
     cum_candle_mom = df['candle_mom'].cumsum().values
     
     n = len(df)
@@ -384,7 +369,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     
     # Trung bình cộng động lượng trong V-block (net_mom_cur / V_series) đã tương đương với (Displacement / N)
     # Không nhân thêm mom_window, giữ nguyên giá trị nguyên bản
-    df['mom_raw_raw'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series), 0.0)
+    df['mom_raw_raw'] = np.where(vol_cur > 0, net_mom_cur / V_series, 0.0)
     df['abs_mom_raw'] = df['mom_raw_raw'].abs()
     
     # Tính median động lượng trong chu kỳ N giờ
@@ -422,7 +407,6 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     # Tính toán các đường xác suất Momentum (Momentum đã chuẩn hóa theo median)
     df['mom_raw'] = df['mom_raw_raw'] / rolling_median_mom
     df['abs_mom'] = df['abs_mom_raw'] / rolling_median_mom
-    df['mom_ma'] = pd.Series(df['abs_mom']).rolling(window=mom_ma_window, min_periods=1).mean()
     
     df['mom_lvl1'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct1 / 100.0)
     df['mom_lvl2'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct2 / 100.0)
@@ -892,19 +876,6 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
             
         df['hlc3'] = (df['high'] + df['low'] + df['close']) / 3
         df['vwap_vol'] = df['hlc3'] * df['tick_volume']
-        
-        # Window ATR calculation
-        high_win = df['high'].rolling(window=window_size, min_periods=1).max()
-        low_win = df['low'].rolling(window=window_size, min_periods=1).min()
-        prev_close_win = df['close'].shift(window_size).bfill()
-        
-        h_m_l = high_win - low_win
-        h_m_pc = (high_win - prev_close_win).abs()
-        l_m_pc = (low_win - prev_close_win).abs()
-        
-        tr_win = np.maximum(h_m_l, np.maximum(h_m_pc, l_m_pc))
-        atr_window = window_size
-        df['atr'] = tr_win.ewm(alpha=1.0/atr_window, adjust=False).mean()
 
         # VF-Momentum Logic
         lookback_candles = int(vol_days * 24 * candles_per_hour)
@@ -914,8 +885,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         
         cum_vol = df['value'].cumsum().values
         df['hlc3_diff'] = df['hlc3'] - df['hlc3'].shift(1).fillna(df['hlc3'])
-        safe_atr = np.where(df['atr'].values > 0, df['atr'].values, 1e-9)
-        df['candle_mom'] = (df['hlc3_diff'] / safe_atr) * df['value']
+        df['candle_mom'] = df['hlc3_diff'] * df['value']
         cum_candle_mom = df['candle_mom'].cumsum().values
         
         n = len(df)
@@ -932,7 +902,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         N_candles = np.maximum(i_arr - j_current + 1, 1.0)
         
         # Scale lại bằng chính window_size (thuần túy theo khung thời gian người dùng cấu hình)
-        df['diff_pct'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) * window_size, 0.0)
+        df['diff_pct'] = np.where(vol_cur > 0, (net_mom_cur / V_series) * window_size, 0.0)
         
         df['vol_rolling'] = df['value'].rolling(window=window_size, min_periods=1).sum()
         
