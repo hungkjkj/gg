@@ -57,6 +57,7 @@ import os
 import threading
 
 ea_lock = threading.Lock()
+mt5_api_lock = threading.Lock()
 
 _SYMBOL_CACHE = {}
 _ALL_SYMBOLS_CACHE = None
@@ -141,62 +142,64 @@ def get_tick(symbol: str):
         
     # Xử lý riêng GLOBAL_INDEX
     if symbol == "GLOBAL_INDEX":
-        sym_eur = _get_real_symbol("EURUSD")
-        sym_jpy = _get_real_symbol("USDJPY")
-        sym_gbp = _get_real_symbol("GBPUSD")
-        
-        if mt5.symbol_select(sym_eur, True) and mt5.symbol_select(sym_jpy, True) and mt5.symbol_select(sym_gbp, True):
-            t_eur = mt5.symbol_info_tick(sym_eur)
-            t_jpy = mt5.symbol_info_tick(sym_jpy)
-            t_gbp = mt5.symbol_info_tick(sym_gbp)
+        with mt5_api_lock:
+            sym_eur = _get_real_symbol("EURUSD")
+            sym_jpy = _get_real_symbol("USDJPY")
+            sym_gbp = _get_real_symbol("GBPUSD")
             
-            if t_eur and t_jpy and t_gbp and t_eur.bid > 0 and t_jpy.bid > 0 and t_gbp.bid > 0:
-                eur_bid, jpy_bid, gbp_bid = t_eur.bid, t_jpy.bid, t_gbp.bid
-                dxy_bid = 50.14 * (eur_bid ** -0.576) * (jpy_bid ** 0.136) * (gbp_bid ** -0.119)
-                gi_bid = 10000.0 / dxy_bid
-                return {
-                    "time": int(t_eur.time),
-                    "bid": gi_bid,
-                    "ask": gi_bid,
-                    "last": gi_bid
-                }
-            else:
-                # Fallback to copy_rates if tick is unavailable
-                r_eur = mt5.copy_rates_from_pos(sym_eur, mt5.TIMEFRAME_M1, 0, 1)
-                r_jpy = mt5.copy_rates_from_pos(sym_jpy, mt5.TIMEFRAME_M1, 0, 1)
-                r_gbp = mt5.copy_rates_from_pos(sym_gbp, mt5.TIMEFRAME_M1, 0, 1)
-                if r_eur is not None and r_jpy is not None and r_gbp is not None and len(r_eur) > 0 and len(r_jpy) > 0 and len(r_gbp) > 0:
-                    eur_c, jpy_c, gbp_c = r_eur[0]['close'], r_jpy[0]['close'], r_gbp[0]['close']
-                    dxy_c = 50.14 * (eur_c ** -0.576) * (jpy_c ** 0.136) * (gbp_c ** -0.119)
-                    gi_c = 10000.0 / dxy_c
+            if mt5.symbol_select(sym_eur, True) and mt5.symbol_select(sym_jpy, True) and mt5.symbol_select(sym_gbp, True):
+                t_eur = mt5.symbol_info_tick(sym_eur)
+                t_jpy = mt5.symbol_info_tick(sym_jpy)
+                t_gbp = mt5.symbol_info_tick(sym_gbp)
+                
+                if t_eur and t_jpy and t_gbp and t_eur.bid > 0 and t_jpy.bid > 0 and t_gbp.bid > 0:
+                    eur_bid, jpy_bid, gbp_bid = t_eur.bid, t_jpy.bid, t_gbp.bid
+                    dxy_bid = 50.14 * (eur_bid ** -0.576) * (jpy_bid ** 0.136) * (gbp_bid ** -0.119)
+                    gi_bid = 10000.0 / dxy_bid
                     return {
-                        "time": int(r_eur[0]['time']),
-                        "bid": float(gi_c),
-                        "ask": float(gi_c),
-                        "last": float(gi_c)
+                        "time": int(t_eur.time),
+                        "bid": gi_bid,
+                        "ask": gi_bid,
+                        "last": gi_bid
                     }
+                else:
+                    # Fallback to copy_rates if tick is unavailable
+                    r_eur = mt5.copy_rates_from_pos(sym_eur, mt5.TIMEFRAME_M1, 0, 1)
+                    r_jpy = mt5.copy_rates_from_pos(sym_jpy, mt5.TIMEFRAME_M1, 0, 1)
+                    r_gbp = mt5.copy_rates_from_pos(sym_gbp, mt5.TIMEFRAME_M1, 0, 1)
+                    if r_eur is not None and r_jpy is not None and r_gbp is not None and len(r_eur) > 0 and len(r_jpy) > 0 and len(r_gbp) > 0:
+                        eur_c, jpy_c, gbp_c = r_eur[0]['close'], r_jpy[0]['close'], r_gbp[0]['close']
+                        dxy_c = 50.14 * (eur_c ** -0.576) * (jpy_c ** 0.136) * (gbp_c ** -0.119)
+                        gi_c = 10000.0 / dxy_c
+                        return {
+                            "time": int(r_eur[0]['time']),
+                            "bid": float(gi_c),
+                            "ask": float(gi_c),
+                            "last": float(gi_c)
+                        }
         return None
         
     real_sym = _get_real_symbol(symbol)
-    if mt5.symbol_select(real_sym, True):
-        tick = mt5.symbol_info_tick(real_sym)
-        if tick is not None and tick.bid > 0:
-            return {
-                "time": tick.time,
-                "bid": tick.bid,
-                "ask": tick.ask,
-                "last": tick.last
-            }
-        else:
-            rates = mt5.copy_rates_from_pos(real_sym, mt5.TIMEFRAME_M1, 0, 1)
-            if rates is not None and len(rates) > 0:
-                last_rate = rates[0]
+    with mt5_api_lock:
+        if mt5.symbol_select(real_sym, True):
+            tick = mt5.symbol_info_tick(real_sym)
+            if tick is not None and tick.bid > 0:
                 return {
-                    "time": int(last_rate['time']),
-                    "bid": float(last_rate['close']),
-                    "ask": float(last_rate['close']),
-                    "last": float(last_rate['close'])
+                    "time": tick.time,
+                    "bid": tick.bid,
+                    "ask": tick.ask,
+                    "last": tick.last
                 }
+            else:
+                rates = mt5.copy_rates_from_pos(real_sym, mt5.TIMEFRAME_M1, 0, 1)
+                if rates is not None and len(rates) > 0:
+                    last_rate = rates[0]
+                    return {
+                        "time": int(last_rate['time']),
+                        "bid": float(last_rate['close']),
+                        "ask": float(last_rate['close']),
+                        "last": float(last_rate['close'])
+                    }
     return None
 
 
@@ -308,21 +311,24 @@ def _fetch_raw_data(symbol: str, timeframe: str, count: int = 1000, end_time: in
     if mt5.terminal_info() is not None:
         tf = _get_mt5_timeframe(timeframe)
         real_sym = _get_real_symbol(symbol)
-        if mt5.symbol_select(real_sym, True):
-            if end_time > 0:
-                # end_time nhận vào là UTC timestamp, cần đổi sang Broker Time
-                utc_dt = pd.to_datetime(end_time, unit='s', utc=True)
-                try:
-                    broker_dt = utc_dt.tz_convert(brokerTimezone)
-                except Exception:
-                    # Fallback if timezone is invalid
-                    broker_dt = utc_dt
-                # Fix: tính naive broker timestamp trực tiếp, tránh .timestamp() interpret theo system TZ
-                naive_broker = broker_dt.replace(tzinfo=None)
-                end_time_broker = int((naive_broker - pd.Timestamp("1970-01-01")).total_seconds())
-                rates = mt5.copy_rates_from(real_sym, tf, end_time_broker, count)
+        with mt5_api_lock:
+            if mt5.symbol_select(real_sym, True):
+                if end_time > 0:
+                    # end_time nhận vào là UTC timestamp, cần đổi sang Broker Time
+                    utc_dt = pd.to_datetime(end_time, unit='s', utc=True)
+                    try:
+                        broker_dt = utc_dt.tz_convert(brokerTimezone)
+                    except Exception:
+                        # Fallback if timezone is invalid
+                        broker_dt = utc_dt
+                    # Fix: tính naive broker timestamp trực tiếp, tránh .timestamp() interpret theo system TZ
+                    naive_broker = broker_dt.replace(tzinfo=None)
+                    end_time_broker = int((naive_broker - pd.Timestamp("1970-01-01")).total_seconds())
+                    rates = mt5.copy_rates_from(real_sym, tf, end_time_broker, count)
+                else:
+                    rates = mt5.copy_rates_from_pos(real_sym, tf, 0, count)
             else:
-                rates = mt5.copy_rates_from_pos(real_sym, tf, 0, count)
+                rates = None
                 
             if rates is not None and len(rates) > 0:
                 df = pd.DataFrame(rates)

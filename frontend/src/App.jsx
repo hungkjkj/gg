@@ -995,10 +995,13 @@ useEffect(() => {
     }
   };
 
+  const isPollingRef = useRef(false);
+
   // Fetch data từ FastAPI backend
   const fetchData = async (isPolling = false, targetEndTime = 0) => {
     // Không cho phép gửi Polling request nếu hệ thống đang bận tải Full Load
-    if (isPolling && loadingRef.current) return;
+    if (isPolling && (loadingRef.current || isPollingRef.current)) return;
+    if (isPolling) isPollingRef.current = true;
     
     const currentSymbol = symbol;
     if (!isPolling && candlestickSeriesRef.current) {
@@ -1612,11 +1615,13 @@ useEffect(() => {
         if (!isPolling) {
             // Trì hoãn việc tắt Loading một chút để Lightweight Charts (Canvas) kịp vẽ xong 10,000 nến
             setTimeout(() => {
-            setLoading(false);
+                setLoading(false);
                 loadingRef.current = false;
             }, 300);
+        } else {
+            // Polling request âm thầm chạy ngầm, không được phép điều khiển biến loading
+            isPollingRef.current = false;
         }
-        // Polling request âm thầm chạy ngầm, không được phép điều khiển biến loading
       }
     };
 
