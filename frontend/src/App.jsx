@@ -186,7 +186,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   // Apply News Markers
   useEffect(() => {
     if (newsSeriesRef.current) {
-      const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
+      const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
 
       // Align news to timeframe grid to prevent blank gaps in chart
       const alignedNewsData = newsData.map(ev => {
@@ -1407,7 +1407,7 @@ useEffect(() => {
             
             // Re-generate future timeline to ensure news markers don't compress when jumping in backtest
             if (newsSeriesRef.current && newsDataRef.current) {
-                const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
+                const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
                 let cTime = formattedData.length > 0 ? formattedData[formattedData.length - 1].time : Math.floor(Date.now() / 1000);
                 cTime = cTime - (cTime % tfSec);
                 
@@ -1669,7 +1669,7 @@ useEffect(() => {
     const playNext = async () => {
       if (viewMode !== 'backtest' || !isPlayingRef.current) return;
       
-      const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
+      const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
       simulatedTimeRef.current += tfSec;
       window.currentSimulatedTime = simulatedTimeRef.current;
       window.dispatchEvent(new Event('simulatedTimeChanged'));
@@ -3229,7 +3229,7 @@ function App() {
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Khung thời gian (Timeframe)</label>
             <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)} style={{ width: '100%' }}>
-              <option value="M3">3 Minutes</option>
+              <option value="M1">1 Minute</option>
               <option value="M5">5 Minutes</option>
               <option value="M15">15 Minutes</option>
               <option value="H1">1 Hour</option>
