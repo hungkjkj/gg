@@ -354,7 +354,8 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     
     # --- New VF-Momentum Logic directly on current timeframe ---
     # 1. Tính V = percentile mfTargetPct của tổng volume N nến (mom_window) trong cửa sổ chung
-    rolling_vol_N = df['value'].rolling(window=mom_window, min_periods=1).sum()
+    target_vol_candles = max(1, int(mfTimeoutCandles))
+    rolling_vol_N = df['value'].rolling(window=target_vol_candles, min_periods=1).sum()
     V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(mfTargetPct / 100.0).fillna(1.0).values, 1.0)
     
     cum_vol = df['value'].cumsum().values
@@ -906,7 +907,8 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
 
         # VF-Momentum Logic
         lookback_candles = int(vol_days * 24 * candles_per_hour)
-        rolling_vol_N = df['value'].rolling(window=int(window_size * mom_length), min_periods=1).sum()
+        target_vol_candles = config.get('mfTimeoutCandles', 3)
+        rolling_vol_N = df['value'].rolling(window=int(window_size * target_vol_candles), min_periods=1).sum()
         target_pct = config.get('mfTargetPct', 75) / 100.0
         V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(target_pct).fillna(1.0).values, 1.0)
         
