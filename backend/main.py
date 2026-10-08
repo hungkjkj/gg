@@ -533,8 +533,10 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         
         if autoDst and tz_name in summer_offsets:
             tz_series = true_utc_series.dt.tz_convert(tz_name)
-            # Calculate utcoffset by subtracting naive UTC time from naive local time
-            utcoffset = tz_series.dt.tz_localize(None) - true_utc_series.dt.tz_localize(None)
+            # Calculate utcoffset by subtracting naive UTC time from naive local time using DatetimeIndex for speed
+            tz_naive = pd.Series(pd.DatetimeIndex(tz_series).tz_localize(None), index=tz_series.index)
+            utc_naive = pd.Series(pd.DatetimeIndex(true_utc_series).tz_localize(None), index=true_utc_series.index)
+            utcoffset = tz_naive - utc_naive
             dst_shift_mins = (utcoffset - summer_offsets[tz_name]).dt.total_seconds() / 60
         else:
             dst_shift_mins = pd.Series(0, index=df.index)
