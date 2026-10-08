@@ -8,9 +8,6 @@ import './index.css';
 
 const API_BASE = window.location.port === '5173' ? `${API_BASE}` : window.location.origin;
 
-// Ngăn chặn treo vĩnh viễn: Tự động hủy mọi Request nếu Backend/MT5 không phản hồi sau 15 giây
-axios.defaults.timeout = 15000;
-
 const customTimeFormatter = (time) => {
     const date = new Date(time * 1000);
     const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -47,6 +44,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const momentumChartRef = useRef(null);
   const volumeChartRef = useRef(null);
   const chartRef = useRef(null);
+  const abortControllerRef = useRef(null);
   const candlestickSeriesRef = useRef(null);
   const lineCloseSeriesRef = useRef(null);
   const [chartReady, setChartReady] = useState(false);
@@ -1046,12 +1044,20 @@ useEffect(() => {
     setError(null);
       
       try {
+        if (!isPolling) {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+            abortControllerRef.current = new AbortController();
+        }
+        
         const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
         
         // Lọc bỏ các params không thuộc OHLCV API (email config, volMode...)
         const { emailSender, emailPassword, emailReceiver, volMode, ...ohlcvConfigs } = configs;
         
         const response = await axios.get(`${API_BASE}/api/v1/ohlcv`, {
+          signal: !isPolling ? abortControllerRef.current.signal : undefined,
           params: { symbol, timeframe, count: 10000, end_time: targetEndTime, browserOffsetHours, latest_only: isPolling, _t: Date.now(), ...ohlcvConfigs }
         });
         
@@ -1830,7 +1836,23 @@ useEffect(() => {
           }}>
             <div className="spinner" style={{ marginBottom: '15px' }}></div>
             <div style={{ color: '#60a5fa', fontSize: '1.2rem', fontWeight: 'bold' }}>Đang tải dữ liệu {symbol}...</div>
-            <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '5px' }}>Vui lòng đợi trong giây lát</div>
+            <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '5px', marginBottom: '15px' }}>Vui lòng đợi trong giây lát</div>
+            <button 
+              onClick={() => {
+                if (abortControllerRef.current) {
+                    abortControllerRef.current.abort();
+                }
+                setLoading(false);
+                loadingRef.current = false;
+                setError("Người dùng đã hủy tải dữ liệu. (Bấm chọn mã hoặc khung thời gian khác để tải lại)");
+              }}
+              style={{
+                background: '#ef4444', color: 'white', border: 'none', padding: '8px 16px',
+                borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold'
+              }}
+            >
+              Hủy Tác Vụ
+            </button>
           </div>
         )}
         {error && (
