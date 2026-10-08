@@ -1,6 +1,6 @@
 # Phân tích kỹ thuật & Công thức Chỉ báo (tech.md)
 
-Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `backend/main.py` để bạn dễ dàng rà soát lại toàn bộ công thức tính các chỉ báo.
+Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `backend/main.py` ĐÃ ĐƯỢC LƯỢC BỎ TẤT CẢ ATR VÀ BIẾN NORM_LENGTH. Bạn dễ dàng rà soát lại toàn bộ công thức tính các chỉ báo.
 
 ---
 
@@ -60,25 +60,11 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
         df['hl2'] = df['hlc3']
 ```
 
-### 3. ATR (Độ biến động trung bình)
-```python
-    # Window ATR calculation for Main Chart Momentum
-    high_win = df['high'].rolling(window=mom_window, min_periods=1).max()
-    low_win = df['low'].rolling(window=mom_window, min_periods=1).min()
-    prev_close_win = df['close'].shift(mom_window).bfill()
-    
-    h_m_l = high_win - low_win
-    h_m_pc = (high_win - prev_close_win).abs()
-    l_m_pc = (low_win - prev_close_win).abs()
-    tr_win = np.maximum(h_m_l, np.maximum(h_m_pc, l_m_pc))
-    atr_window = mom_window
-    df['atr'] = tr_win.ewm(alpha=1.0/atr_window, adjust=False).mean()
-```
-
-### 4. VF-Momentum (Động lượng dòng tiền tinh khiết trên biểu đồ chính)
+### 3. VF-Momentum (Động lượng dòng tiền tinh khiết trên biểu đồ chính)
+*(Đã XÓA BỎ hoàn toàn ATR)*
 ```python
     # --- New VF-Momentum Logic directly on current timeframe ---
-    # 1. Tính V = percentile mfTargetPct của tổng volume N nến (mom_window) trong cửa sổ chung
+    # 1. Tính V = percentile mfTargetPct của tổng volume N nến trong cửa sổ chung
     target_vol_candles = max(1, int(mfTimeoutCandles))
     rolling_vol_N = df['value'].rolling(window=target_vol_candles, min_periods=1).sum()
     V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(mfTargetPct / 100.0).fillna(1.0).values, 1.0)
@@ -86,10 +72,9 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
     cum_vol = df['value'].cumsum().values
     
     # --- New User-defined Momentum Formula ---
-    # Động lượng tức thời của từng nến: ((hlc3 - hlc3_pre) / atr) * vol
+    # Động lượng tức thời của từng nến: (hlc3 - hlc3_pre) * vol
     df['hlc3_diff'] = df['hlc3'] - df['hlc3'].shift(1).fillna(df['hlc3'])
-    safe_atr = np.where(df['atr'].values > 0, df['atr'].values, 1e-9)
-    df['candle_mom'] = (df['hlc3_diff'] / safe_atr) * df['value']
+    df['candle_mom'] = df['hlc3_diff'] * df['value']
     cum_candle_mom = df['candle_mom'].cumsum().values
     
     n = len(df)
@@ -107,13 +92,12 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
     # N = số lượng nến trong V-block
     N_candles = np.maximum(i_arr - j_current + 1, 1.0)
     
-    # Trung bình cộng động lượng trong V-block (net_mom_cur / V_series) đã tương đương với (Displacement / N)
-    # Không nhân thêm mom_window, giữ nguyên giá trị nguyên bản
-    df['mom_raw_raw'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series), 0.0)
+    # Trung bình cộng động lượng trong V-block (net_mom_cur / V_series) 
+    df['mom_raw_raw'] = np.where(vol_cur > 0, net_mom_cur / V_series, 0.0)
     df['abs_mom_raw'] = df['mom_raw_raw'].abs()
 ```
 
-### 5. Mom Flip (Phân phối và Lọc khối lượng để tìm điểm bứt phá)
+### 4. Mom Flip (Phân phối và Lọc khối lượng để tìm điểm bứt phá)
 ```python
     # Tính median động lượng trong chu kỳ N giờ
     rolling_median_mom = df['abs_mom_raw'].rolling(window=lookback_candles, min_periods=1).median().replace(0, np.nan).fillna(1e-9)
@@ -148,7 +132,7 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
     df['mom_flip'] = mom_flip_metric_valid.rolling(window=lookback_candles, min_periods=1).rank(pct=True, method='max') * 100.0
 ```
 
-### 6. Normalized Volume (Khối lượng chuẩn hóa theo Median hiện tại)
+### 5. Normalized Volume (Khối lượng chuẩn hóa theo Median hiện tại)
 ```python
     # --- Tính toán Normalized Volume ---
     df['vol_median'] = df['value'].rolling(window=lookback_candles, min_periods=1).median()
@@ -156,7 +140,7 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
     df['ma_vol'] = pd.Series(df['norm_vol']).rolling(window=ma_vol_window, min_periods=1).mean()
 ```
 
-### 7. RVOL (Khối lượng tương đối xét theo Ngày & Giờ)
+### 6. RVOL (Khối lượng tương đối xét theo Ngày & Giờ)
 ```python
     # --- Tính toán RVol (Relative Volume theo cùng khung giờ & cùng thứ trong tuần) ---
     df['broker_dt'] = pd.to_datetime(df['broker_time'], unit='s')
@@ -166,22 +150,9 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
     df['rvol'] = np.where(df['rvol_mean'] > 0, df['value'] / df['rvol_mean'], 0)
 ```
 
-### 8. Hệ thống Xếp hạng Tiền tệ (Matrix)
-*(Đây là khối mã đã được cách ly hoàn toàn, dùng window_size thuần túy không nhân thêm timeout hay mom_length)*
+### 7. Hệ thống Xếp hạng Tiền tệ (Matrix)
+*(Tuyệt đối không còn sự xuất hiện của ATR và norm_length)*
 ```python
-        # Window ATR calculation
-        high_win = df['high'].rolling(window=window_size, min_periods=1).max()
-        low_win = df['low'].rolling(window=window_size, min_periods=1).min()
-        prev_close_win = df['close'].shift(window_size).bfill()
-        
-        h_m_l = high_win - low_win
-        h_m_pc = (high_win - prev_close_win).abs()
-        l_m_pc = (low_win - prev_close_win).abs()
-        
-        tr_win = np.maximum(h_m_l, np.maximum(h_m_pc, l_m_pc))
-        atr_window = window_size
-        df['atr'] = tr_win.ewm(alpha=1.0/atr_window, adjust=False).mean()
-
         # VF-Momentum Logic
         lookback_candles = int(vol_days * 24 * candles_per_hour)
         target_pct = config.get('mfTargetPct', 75) / 100.0
@@ -190,8 +161,7 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
         
         cum_vol = df['value'].cumsum().values
         df['hlc3_diff'] = df['hlc3'] - df['hlc3'].shift(1).fillna(df['hlc3'])
-        safe_atr = np.where(df['atr'].values > 0, df['atr'].values, 1e-9)
-        df['candle_mom'] = (df['hlc3_diff'] / safe_atr) * df['value']
+        df['candle_mom'] = df['hlc3_diff'] * df['value']
         cum_candle_mom = df['candle_mom'].cumsum().values
         
         n = len(df)
@@ -208,5 +178,5 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
         N_candles = np.maximum(i_arr - j_current + 1, 1.0)
         
         # Scale lại bằng chính window_size (thuần túy theo khung thời gian người dùng cấu hình)
-        df['diff_pct'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) * window_size, 0.0)
+        df['diff_pct'] = np.where(vol_cur > 0, (net_mom_cur / V_series) * window_size, 0.0)
 ```
