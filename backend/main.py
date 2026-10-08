@@ -383,8 +383,8 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     N_candles = np.maximum(i_arr - j_current + 1, 1.0)
     
     # Trung bình cộng động lượng trong V-block (net_mom_cur / V_series) đã tương đương với (Displacement / N)
-    # Nhân với mom_window để khôi phục lại Scale gốc (Tổng lực tương đương N nến chuẩn)
-    df['mom_raw_raw'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) * mom_window, 0.0)
+    # Không nhân thêm mom_window, giữ nguyên giá trị nguyên bản
+    df['mom_raw_raw'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series), 0.0)
     df['abs_mom_raw'] = df['mom_raw_raw'].abs()
     
     # Tính median động lượng trong chu kỳ N giờ
