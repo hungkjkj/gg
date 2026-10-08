@@ -909,9 +909,8 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
 
         # VF-Momentum Logic
         lookback_candles = int(vol_days * 24 * candles_per_hour)
-        target_vol_candles = config.get('mfTimeoutCandles', 3)
-        rolling_vol_N = df['value'].rolling(window=int(window_size * target_vol_candles), min_periods=1).sum()
         target_pct = config.get('mfTargetPct', 75) / 100.0
+        rolling_vol_N = df['value'].rolling(window=window_size, min_periods=1).sum()
         V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(target_pct).fillna(1.0).values, 1.0)
         
         cum_vol = df['value'].cumsum().values
