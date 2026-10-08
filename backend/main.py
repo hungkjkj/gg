@@ -411,18 +411,21 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     # nhân động lượng hiện tại / median động lượng, rồi nhân với hệ số flip
     mom_flip_metric = (df['abs_mom_raw'] / rolling_median_mom) * flip_ratio
     
+    # --- Khối lượng trung bình của V-block ---
+    df['vblock_avg_vol'] = vol_cur / np.maximum(i_arr - j_current + 1, 1.0)
+    
     # 1. Tính ngưỡng lọc flip dựa trên phần trăm mom người dùng chọn
     filter_threshold = df['abs_mom_raw'].rolling(window=lookback_candles, min_periods=1).quantile(momFlipFilterPct / 100.0)
     mom_valid_mask = df['abs_mom_raw'] >= filter_threshold
     
-    # 2. Tạo Series volume chỉ chứa những nến thoả mãn mom
-    vol_valid = df['value'].where(mom_valid_mask, np.nan)
+    # 2. Tạo Series volume chỉ chứa những nến thoả mãn mom (Dùng khối lượng trung bình của V-block)
+    vol_valid = df['vblock_avg_vol'].where(mom_valid_mask, np.nan)
     
     # 3. Tính ngưỡng lọc volume trên chính nhóm đã lọc mom
     vol_filter_threshold = vol_valid.rolling(window=lookback_candles, min_periods=1).quantile(momFlipVolFilterPct / 100.0)
     
     # 4. Valid mask cuối cùng là thoả mãn cả hai
-    valid_mask = mom_valid_mask & (df['value'] >= vol_filter_threshold)
+    valid_mask = mom_valid_mask & (df['vblock_avg_vol'] >= vol_filter_threshold)
 
     mom_flip_metric_valid = mom_flip_metric.where(valid_mask, np.nan)
     
