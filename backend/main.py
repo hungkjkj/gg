@@ -360,55 +360,31 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     
     cum_vol = df['value'].cumsum().values
     
-    # Tính khối lượng thuận chiều để tránh fake flip do nến xả nhưng lại đẩy vol của V-block
-    bull_vol = np.where(df['close'] >= df['open'], df['value'], 0)
-    bear_vol = np.where(df['close'] < df['open'], df['value'], 0)
-    cum_bull_vol = bull_vol.cumsum()
-    cum_bear_vol = bear_vol.cumsum()
+    # --- New User-defined Momentum Formula ---
+    # Động lượng tức thời của từng nến: ((hlc3 - hlc3_pre) / atr) * vol
+    df['hlc3_diff'] = df['hlc3'] - df['hlc3'].shift(1).fillna(df['hlc3'])
+    safe_atr = np.where(df['atr'].values > 0, df['atr'].values, 1e-9)
+    df['candle_mom'] = (df['hlc3_diff'] / safe_atr) * df['value']
+    cum_candle_mom = df['candle_mom'].cumsum().values
     
-    cum_vwap_vol = (df['hl2'] * df['value']).cumsum().values
     n = len(df)
     i_arr = np.arange(n)
     
-    # 2. V-block hiện tại
+    # V-block hiện tại
     target_current = cum_vol - V_series
     j_current = np.searchsorted(cum_vol, target_current, side='right')
     j_cur_m1 = np.where(j_current > 0, j_current - 1, 0)
     has_j_cur = j_current > 0
+    
     vol_cur = cum_vol - np.where(has_j_cur, cum_vol[j_cur_m1], 0)
-    vwap_cur_vol = cum_vwap_vol - np.where(has_j_cur, cum_vwap_vol[j_cur_m1], 0)
-    safe_vol_cur = np.where(vol_cur > 0, vol_cur, 1.0)
-    vwap_cur = np.where(vol_cur > 0, vwap_cur_vol / safe_vol_cur, df['hl2'].values)
+    net_mom_cur = cum_candle_mom - np.where(has_j_cur, cum_candle_mom[j_cur_m1], 0)
     
-    # 3. V-block trước đó (không chồng lấn)
-    prev_end = j_current - 1
-    valid_prev_end = prev_end >= 0
-    prev_end_safe = np.where(valid_prev_end, prev_end, 0)
+    # N = số lượng nến trong V-block
+    N_candles = np.maximum(i_arr - j_current + 1, 1.0)
+    time_span = N_candles / mom_window
     
-    target_prev = np.where(valid_prev_end, cum_vol[prev_end_safe] - V_series, -1)
-    valid_prev = target_prev >= 0
-    j_prev = np.searchsorted(cum_vol, target_prev, side='right')
-    j_prev_m1 = np.where(j_prev > 0, j_prev - 1, 0)
-    has_j_prev = j_prev > 0
-    
-    vol_prev = np.where(valid_prev_end, cum_vol[prev_end_safe] - np.where(has_j_prev, cum_vol[j_prev_m1], 0), 0)
-    vwap_prev_vol = np.where(valid_prev_end, cum_vwap_vol[prev_end_safe] - np.where(has_j_prev, cum_vwap_vol[j_prev_m1], 0), 0)
-    safe_vol_prev = np.where(vol_prev > 0, vol_prev, 1.0)
-    vwap_prev = np.where(vol_prev > 0, vwap_prev_vol / safe_vol_prev, df['hl2'].values)
-    
-    full_valid = valid_prev_end & valid_prev & (vol_cur > 0) & (vol_prev > 0) & (df['atr'].values > 0)
-    
-    displacement = np.where(full_valid, vwap_cur - vwap_prev, 0)
-    time_span = np.maximum(i_arr - j_current + 1, 1.0) / mom_window
-    
-    # Tính supporting_vol: Chỉ lấy volume CÙNG CHIỀU với hướng dịch chuyển
-    bull_vol_cur = cum_bull_vol - np.where(has_j_cur, cum_bull_vol[j_cur_m1], 0)
-    bear_vol_cur = cum_bear_vol - np.where(has_j_cur, cum_bear_vol[j_cur_m1], 0)
-    supporting_vol = np.where(displacement > 0, bull_vol_cur, np.where(displacement < 0, bear_vol_cur, vol_cur))
-    
-    # 4. Độ dịch chuyển / atr / thời gian chuẩn hóa * Hệ số khuyếch đại Vol (supporting_vol / V_series)
-    vol_ratio = supporting_vol / V_series
-    df['mom_raw_raw'] = np.where(full_valid, ((displacement / df['atr'].values) / time_span) * vol_ratio, 0.0)
+    # Trung bình cộng động lượng trong V-block chuẩn hóa theo V_series và time_span
+    df['mom_raw_raw'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) / time_span, 0.0)
     df['abs_mom_raw'] = df['mom_raw_raw'].abs()
     
     # Tính median động lượng trong chu kỳ N giờ
@@ -936,11 +912,11 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(target_pct).fillna(1.0).values, 1.0)
         
         cum_vol = df['value'].cumsum().values
-        bull_vol = np.where(df['close'] >= df['open'], df['value'], 0)
-        bear_vol = np.where(df['close'] < df['open'], df['value'], 0)
-        cum_bull_vol = bull_vol.cumsum()
-        cum_bear_vol = bear_vol.cumsum()
-        cum_vwap_vol = (df['hlc3'] * df['value']).cumsum().values
+        df['hlc3_diff'] = df['hlc3'] - df['hlc3'].shift(1).fillna(df['hlc3'])
+        safe_atr = np.where(df['atr'].values > 0, df['atr'].values, 1e-9)
+        df['candle_mom'] = (df['hlc3_diff'] / safe_atr) * df['value']
+        cum_candle_mom = df['candle_mom'].cumsum().values
+        
         n = len(df)
         i_arr = np.arange(n)
         
@@ -948,37 +924,14 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         j_current = np.searchsorted(cum_vol, target_current, side='right')
         j_cur_m1 = np.where(j_current > 0, j_current - 1, 0)
         has_j_cur = j_current > 0
+        
         vol_cur = cum_vol - np.where(has_j_cur, cum_vol[j_cur_m1], 0)
-        vwap_cur_vol = cum_vwap_vol - np.where(has_j_cur, cum_vwap_vol[j_cur_m1], 0)
-        safe_vol_cur = np.where(vol_cur > 0, vol_cur, 1.0)
-        vwap_cur = np.where(vol_cur > 0, vwap_cur_vol / safe_vol_cur, df['hlc3'].values)
+        net_mom_cur = cum_candle_mom - np.where(has_j_cur, cum_candle_mom[j_cur_m1], 0)
         
-        prev_end = j_current - 1
-        valid_prev_end = prev_end >= 0
-        prev_end_safe = np.where(valid_prev_end, prev_end, 0)
+        N_candles = np.maximum(i_arr - j_current + 1, 1.0)
+        time_span = N_candles / window_size
         
-        target_prev = np.where(valid_prev_end, cum_vol[prev_end_safe] - V_series, -1)
-        valid_prev = target_prev >= 0
-        j_prev = np.searchsorted(cum_vol, target_prev, side='right')
-        j_prev_m1 = np.where(j_prev > 0, j_prev - 1, 0)
-        has_j_prev = j_prev > 0
-        
-        vol_prev = np.where(valid_prev_end, cum_vol[prev_end_safe] - np.where(has_j_prev, cum_vol[j_prev_m1], 0), 0)
-        vwap_prev_vol = np.where(valid_prev_end, cum_vwap_vol[prev_end_safe] - np.where(has_j_prev, cum_vwap_vol[j_prev_m1], 0), 0)
-        safe_vol_prev = np.where(vol_prev > 0, vol_prev, 1.0)
-        vwap_prev = np.where(vol_prev > 0, vwap_prev_vol / safe_vol_prev, df['hlc3'].values)
-        
-        full_valid = valid_prev_end & valid_prev & (vol_cur > 0) & (vol_prev > 0) & (df['atr'].values > 0)
-        
-        displacement = np.where(full_valid, vwap_cur - vwap_prev, 0)
-        time_span = np.maximum(i_arr - j_current + 1, 1.0) / window_size
-        
-        bull_vol_cur = cum_bull_vol - np.where(has_j_cur, cum_bull_vol[j_cur_m1], 0)
-        bear_vol_cur = cum_bear_vol - np.where(has_j_cur, cum_bear_vol[j_cur_m1], 0)
-        supporting_vol = np.where(displacement > 0, bull_vol_cur, np.where(displacement < 0, bear_vol_cur, vol_cur))
-        
-        vol_ratio = supporting_vol / V_series
-        df['diff_pct'] = np.where(full_valid, ((displacement / df['atr'].values) / time_span) * vol_ratio, 0.0)
+        df['diff_pct'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) / time_span, 0.0)
         
         df['vol_rolling'] = df['value'].rolling(window=window_size, min_periods=1).sum()
         
