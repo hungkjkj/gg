@@ -1581,6 +1581,10 @@ useEffect(() => {
         
         setLastUpdateSignal(Date.now());
       } catch (err) {
+        if (axios.isCancel(err)) {
+            console.log("Request canceled by user.");
+            return;
+        }
         console.error("Error fetching data:", err);
         if (!isPolling) {
             setError(`Không thể tải dữ liệu ${symbol}. Hãy kiểm tra MT5 và Backend (Có thể mã không tồn tại trên sàn).`);
