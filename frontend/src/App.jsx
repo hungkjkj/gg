@@ -2500,7 +2500,7 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
           </div>
           <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Chu kỳ tính Target Volume (Nến)</label>
-            <input type="number" value={local.mfTimeoutMins !== undefined ? local.mfTimeoutMins : 120} onChange={e => handleChange('mfTimeoutMins', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} />
+            <input type="number" value={local.mfTimeoutCandles !== undefined ? local.mfTimeoutCandles : 120} onChange={e => handleChange('mfTimeoutCandles', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Top Level 1 (Màu Đỏ) %</label>
@@ -2992,7 +2992,7 @@ function App() {
     timeoutHours: 1.0,
     dvpLookbackDays: 5,
     mfTargetPct: 50.0,
-    mfTimeoutMins: 120.0,
+    mfTimeoutCandles: 120.0,
     vwapLength: 89,
     vwapMult: 2.0,
     momLength: 20,
