@@ -396,8 +396,8 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     sma_mom = df['abs_mom_raw'].shift(1).rolling(window=sma_mom_window, min_periods=1).mean().replace(0, np.nan).fillna(1e-9)
     # hệ số flip = động lượng hiện tại / SMA moment (so sánh với trung bình N nến thay vì chỉ 1 nến trước)
     flip_ratio = df['abs_mom_raw'] / sma_mom
-    # nhân động lượng hiện tại / median động lượng, rồi nhân với hệ số flip
-    mom_flip_metric = (df['abs_mom_raw'] / rolling_median_mom) * flip_ratio
+    # Theo chuẩn của bạn: Flip Metric chỉ đơn giản là gia tốc bứt phá so với sự ỳ ạch gần nhất
+    mom_flip_metric = flip_ratio
     
     # --- Khối lượng trung bình của V-block ---
     df['vblock_avg_vol'] = vol_cur / np.maximum(i_arr - j_current + 1, 1.0)
