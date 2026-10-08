@@ -1068,6 +1068,7 @@ useEffect(() => {
         if (response.data.symbol && (response.data.symbol !== symbolRef.current || response.data.timeframe !== timeframeRef.current)) {
             return;
         }
+        if (!chartRef.current || !candlestickSeriesRef.current) return;
 
                 let rawData = response.data.data;
         // Deduplicate rawData by time to prevent Lightweight Charts "Value is not ascending" errors
@@ -1585,7 +1586,7 @@ useEffect(() => {
         setLastUpdateSignal(Date.now());
       } catch (err) {
         if (axios.isCancel(err)) {
-            console.log("Request canceled by user.");
+            // Silently ignore aborts
             return;
         }
         console.error("Error fetching data:", err);
