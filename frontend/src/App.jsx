@@ -744,9 +744,6 @@ useEffect(() => {
     mom50UpRef.current = mom50Up;
     mom50DnRef.current = mom50Dn;
     
-    const momMaSeries = momentumChart.addLineSeries({ color: 'rgba(255, 255, 255, 0.8)', lineWidth: 1, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
-    momMaSeriesRef.current = momMaSeries;
-    
     normVolSeriesRef.current = normVolSeries;
     maVolSeriesRef.current = maVolSeries;
     vol85Ref.current = vol85Line;
@@ -1007,7 +1004,6 @@ useEffect(() => {
         if (vwapSeriesRef.current) vwapSeriesRef.current.setData([]);
         if (momentumSeriesRef.current) momentumSeriesRef.current.setData([]);
         if (normVolSeriesRef.current) normVolSeriesRef.current.setData([]);
-        if (momMaSeriesRef.current) momMaSeriesRef.current.setData([]);
         if (maVolSeriesRef.current) maVolSeriesRef.current.setData([]);
         lastVwapColorRef.current = null;
         lastMaVolColorRef.current = null;
@@ -1364,7 +1360,6 @@ useEffect(() => {
               m50Up.forEach(d => safeUpdate(mom50UpRef.current, d));
             }
             if (mom50DnRef.current) m50Dn.forEach(d => safeUpdate(mom50DnRef.current, d));
-            if (momMaSeriesRef.current) momMaData.forEach(d => safeUpdate(momMaSeriesRef.current, d));
             
             if (normVolSeriesRef.current) {
               normVolData.forEach(d => safeUpdate(normVolSeriesRef.current, d));
@@ -1478,7 +1473,6 @@ useEffect(() => {
               mom50UpRef.current.setData(m50Up.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             }
             if (mom50DnRef.current) mom50DnRef.current.setData(m50Dn.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-            if (momMaSeriesRef.current) momMaSeriesRef.current.setData(momMaData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             
             if (normVolSeriesRef.current) {
               normVolSeriesRef.current.setData(normVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
@@ -1579,7 +1573,6 @@ useEffect(() => {
             if (vwapSeriesRef.current) vwapSeriesRef.current.setData([]);
             if (momentumSeriesRef.current) momentumSeriesRef.current.setData([]);
             if (normVolSeriesRef.current) normVolSeriesRef.current.setData([]);
-            if (momMaSeriesRef.current) momMaSeriesRef.current.setData([]);
             if (maVolSeriesRef.current) maVolSeriesRef.current.setData([]);
             setVpBoxes([]);
             setVolStats(null);
