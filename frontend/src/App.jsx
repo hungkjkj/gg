@@ -3013,7 +3013,7 @@ function App() {
     rowCount: 50,
     timeoutHours: 1.0,
     dvpLookbackDays: 5,
-    mfTargetPct: 50.0,
+    mfTargetPct: 75.0,
     mfTimeoutCandles: 120.0,
     vwapLength: 89,
     vwapMult: 2.0,

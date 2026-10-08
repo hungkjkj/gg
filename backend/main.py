@@ -233,7 +233,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
               end_time: int = 0, latest_only: bool = False,
               pct1: float = 75.0, pct2: float = 85.0, 
               gridMode: str = "auto", fixedPips: float = 10.0,
-              rowCount: int = 50, timeoutHours: float = 1.0, dvpLookbackDays: float = 5.0, mfTargetPct: float = 50.0, mfTimeoutCandles: float = 120.0,
+              rowCount: int = 50, timeoutHours: float = 1.0, dvpLookbackDays: float = 5.0, mfTargetPct: float = 75.0, mfTimeoutCandles: float = 120.0,
               vwapLength: int = 89, vwapMult: float = 2.0,
               rvolLookbackDays: int = 10, peakVolLookbackDays: int = 60,
               momLength: int = 20, matrixLookbackHours: float = 89.0,
@@ -353,9 +353,8 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     lookback_candles = max(1, int((matrixLookbackHours * 3600) / tf_seconds))
     
     # --- New VF-Momentum Logic directly on current timeframe ---
-    sma_mom_window = max(1, smaMomLength)
-    # 1. Tính V = percentile mfTargetPct của tổng volume N nến (sma_mom_window) trong cửa sổ chung
-    rolling_vol_N = df['value'].rolling(window=sma_mom_window, min_periods=1).sum()
+    # 1. Tính V = percentile mfTargetPct của tổng volume N nến (mom_window) trong cửa sổ chung
+    rolling_vol_N = df['value'].rolling(window=mom_window, min_periods=1).sum()
     V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(mfTargetPct / 100.0).fillna(1.0).values, 1.0)
     
     cum_vol = df['value'].cumsum().values
