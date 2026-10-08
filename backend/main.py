@@ -903,8 +903,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         l_m_pc = (low_win - prev_close_win).abs()
         
         tr_win = np.maximum(h_m_l, np.maximum(h_m_pc, l_m_pc))
-        mom_length = config.get('momLength', 20)
-        atr_window = int(mom_length * window_size)
+        atr_window = window_size
         df['atr'] = tr_win.ewm(alpha=1.0/atr_window, adjust=False).mean()
 
         # VF-Momentum Logic
@@ -932,8 +931,8 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         
         N_candles = np.maximum(i_arr - j_current + 1, 1.0)
         
-        # Scale lại bằng cách nhân window_size (tương tự mom_window ở main chart)
-        df['diff_pct'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) * int(window_size * mom_length), 0.0)
+        # Scale lại bằng chính window_size (thuần túy theo khung thời gian người dùng cấu hình)
+        df['diff_pct'] = np.where((vol_cur > 0) & (df['atr'].values > 0), (net_mom_cur / V_series) * window_size, 0.0)
         
         df['vol_rolling'] = df['value'].rolling(window=window_size, min_periods=1).sum()
         
