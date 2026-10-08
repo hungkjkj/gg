@@ -1643,39 +1643,47 @@ useEffect(() => {
       if (viewMode !== 'backtest' || !isPlayingRef.current) return;
       
       const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
-      simulatedTimeRef.current += tfSec;
-      window.currentSimulatedTime = simulatedTimeRef.current;
-      window.dispatchEvent(new Event('simulatedTimeChanged'));
+      const speed = playbackSpeedRef.current;
+      // Số nến tiến mỗi tick: tốc độ > 1 thì tiến nhiều nến, tốc độ <= 1 thì 1 nến
+      const candlesPerTick = Math.max(1, Math.round(speed));
       
-      // Bỏ qua Thứ 7, Chủ Nhật để Backtest không bị "treo" (trừ Crypto)
       const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
-      if (!isCrypto) {
-          const d = new Date(simulatedTimeRef.current * 1000);
-          const day = d.getUTCDay();
-          const h = d.getUTCHours();
-          const m = d.getUTCMinutes();
-          const s = d.getUTCSeconds();
-          
-          let skip = false;
-          let jumpHours = 0;
-          
-          if (day === 5 && h >= 22) { // Thứ 6 sau 22:00 UTC (05:00 sáng T7 giờ VN)
-              skip = true;
-              jumpHours = 24 - h + 24 + 21; // Nhảy thẳng tới Chủ Nhật 21:00 UTC (04:00 sáng T2 VN)
-          } else if (day === 6) { // Nếu lỡ bước sang Thứ 7
-              skip = true;
-              jumpHours = 24 - h + 21;
-          } else if (day === 0 && h < 21) { // Chủ Nhật trước 21:00 UTC
-              skip = true;
-              jumpHours = 21 - h;
-          }
-          
-          if (skip) {
-              simulatedTimeRef.current += (jumpHours * 3600) - (m * 60) - s;
+      
+      // Tiến nhiều nến cùng lúc, chỉ gọi API 1 lần ở cuối
+      for (let step = 0; step < candlesPerTick; step++) {
+        simulatedTimeRef.current += tfSec;
+        
+        // Bỏ qua Thứ 7, Chủ Nhật để Backtest không bị "treo" (trừ Crypto)
+        if (!isCrypto) {
+            const d = new Date(simulatedTimeRef.current * 1000);
+            const day = d.getUTCDay();
+            const h = d.getUTCHours();
+            const m = d.getUTCMinutes();
+            const s = d.getUTCSeconds();
+            
+            let skip = false;
+            let jumpHours = 0;
+            
+            if (day === 5 && h >= 22) {
+                skip = true;
+                jumpHours = 24 - h + 24 + 21;
+            } else if (day === 6) {
+                skip = true;
+                jumpHours = 24 - h + 21;
+            } else if (day === 0 && h < 21) {
+                skip = true;
+                jumpHours = 21 - h;
+            }
+            
+            if (skip) {
+                simulatedTimeRef.current += (jumpHours * 3600) - (m * 60) - s;
+            }
+        }
+      }
+      
+      // Cập nhật thời gian giả lập 1 lần duy nhất sau khi tiến xong
       window.currentSimulatedTime = simulatedTimeRef.current;
       window.dispatchEvent(new Event('simulatedTimeChanged'));
-          }
-      }
       
       // Phát hiện qua tuần mới -> tải tin tức tuần mới
       const currentMonday = getWeekMonday(simulatedTimeRef.current);
@@ -1693,7 +1701,6 @@ useEffect(() => {
                  time: item.time + (configs.timeShiftHours * 3600)
               }));
             }
-            // Gộp tin mới vào (không trùng lặp dựa trên time+title)
             setNewsData(prev => {
               const existingKeys = new Set(prev.map(e => `${e.time}_${e.title}`));
               const merged = [...prev];
@@ -1714,7 +1721,10 @@ useEffect(() => {
       await fetchData(true, simulatedTimeRef.current);
       
       if (isPlayingRef.current && viewMode === 'backtest') {
-        timeoutId = setTimeout(playNext, 1000 / playbackSpeedRef.current);
+        // Tốc độ <= 1: dùng delay dài hơn (ví dụ 0.5x = 2 giây/nến)
+        // Tốc độ > 1: luôn 1 giây/tick (số nến đã tăng ở trên)
+        const delay = speed <= 1 ? (1000 / speed) : 1000;
+        timeoutId = setTimeout(playNext, delay);
       }
     };
 
