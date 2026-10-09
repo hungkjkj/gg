@@ -1033,7 +1033,9 @@ useEffect(() => {
                ctx.lineWidth = 1.5;
                for (let i = 0; i < volStatsRef.current.v_lines.length; i++) {
                   const line = volStatsRef.current.v_lines[i];
-                  const x = timeScale.timeToCoordinate(line.time);
+                  const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
+                  const alignedTime = line.time - (line.time % tfSec);
+                  const x = timeScale.timeToCoordinate(alignedTime);
                   if (x !== null) {
                     ctx.beginPath();
                     ctx.moveTo(x, 0);
@@ -1428,6 +1430,7 @@ useEffect(() => {
                 safeUpdate(lineCloseSeriesRef.current, { time: d.time, value: d.close });
                 safeUpdate(lineHighSeriesRef.current, { time: d.time, value: d.high });
                 safeUpdate(lineLowSeriesRef.current, { time: d.time, value: d.low });
+                if (alertsSeriesRef.current) safeUpdate(alertsSeriesRef.current, { time: d.time, value: d.close });
             });
             vwapData.forEach(d => safeUpdate(vwapSeriesRef.current, d));
             if (fairValueSeriesRef.current) fairValueData.forEach(d => safeUpdate(fairValueSeriesRef.current, d));
@@ -1463,6 +1466,7 @@ useEffect(() => {
               lastUpdateTimeRef.current = formattedData[formattedData.length - 1].time;
             }
             candlestickSeriesRef.current.setData(formattedData);
+            if (alertsSeriesRef.current) alertsSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.close })));
             
             // Re-generate future timeline to ensure news markers don't compress when jumping in backtest
             if (newsSeriesRef.current && newsDataRef.current) {
