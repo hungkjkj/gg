@@ -993,13 +993,13 @@ useEffect(() => {
   const isPollingRef = useRef(false);
 
   // Fetch data từ FastAPI backend
-  const fetchData = async (isPolling = false, targetEndTime = 0) => {
+  const fetchData = async (isPolling = false, targetEndTime = 0, skipLoadingUI = false) => {
     // Không cho phép gửi Polling request nếu hệ thống đang bận tải Full Load
     if (isPolling && (loadingRef.current || isPollingRef.current)) return;
     if (isPolling) isPollingRef.current = true;
     
     const currentSymbol = symbol;
-    if (!isPolling && candlestickSeriesRef.current) {
+    if (!isPolling && !skipLoadingUI && candlestickSeriesRef.current) {
         candlestickSeriesRef.current.setData([]);
         if (vwapSeriesRef.current) vwapSeriesRef.current.setData([]);
         if (momentumSeriesRef.current) momentumSeriesRef.current.setData([]);
@@ -1022,7 +1022,7 @@ useEffect(() => {
         }
     }
     
-    if (!isPolling) {
+    if (!isPolling && !skipLoadingUI) {
         // Lưu lại Viewport hiện tại trước khi fetch dữ liệu mới
         if (chartRef.current) {
             try {
@@ -1585,15 +1585,15 @@ useEffect(() => {
             }
         }
       } finally {
-        if (!isPolling) {
+        if (isPolling) {
+            // Polling request âm thầm chạy ngầm, không được phép điều khiển biến loading
+            isPollingRef.current = false;
+        } else if (!skipLoadingUI) {
             // Trì hoãn việc tắt Loading một chút để Lightweight Charts (Canvas) kịp vẽ xong 10,000 nến
             setTimeout(() => {
                 setLoading(false);
                 loadingRef.current = false;
             }, 300);
-        } else {
-            // Polling request âm thầm chạy ngầm, không được phép điều khiển biến loading
-            isPollingRef.current = false;
         }
       }
     };
@@ -1718,7 +1718,13 @@ useEffect(() => {
         }
       }
       
-      await fetchData(true, simulatedTimeRef.current);
+      // Tốc độ > 1: dùng full reload (setData) để không bị thiếu nến giữa chừng, nhưng không flash loading
+      // Tốc độ <= 1: dùng polling (safeUpdate) cho mượt
+      if (candlesPerTick > 1) {
+        await fetchData(false, simulatedTimeRef.current, true);
+      } else {
+        await fetchData(true, simulatedTimeRef.current);
+      }
       
       if (isPlayingRef.current && viewMode === 'backtest') {
         // Tốc độ <= 1: dùng delay dài hơn (ví dụ 0.5x = 2 giây/nến)
