@@ -46,6 +46,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const chartRef = useRef(null);
   const abortControllerRef = useRef(null);
   const candlestickSeriesRef = useRef(null);
+  const alertsSeriesRef = useRef(null);
   const lineCloseSeriesRef = useRef(null);
   const [chartReady, setChartReady] = useState(false);
   const lineHighSeriesRef = useRef(null);
@@ -395,15 +396,15 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
      // Remove old lines
      Object.keys(alertLinesRef.current).forEach(id => {
          if (!currentAlerts.find(a => a.id.toString() === id)) {
-             candlestickSeriesRef.current.removePriceLine(alertLinesRef.current[id]);
+             if (alertsSeriesRef.current) alertsSeriesRef.current.removePriceLine(alertLinesRef.current[id]);
              delete alertLinesRef.current[id];
          }
      });
      
      // Add new lines
      currentAlerts.forEach(a => {
-         if (!alertLinesRef.current[a.id]) {
-             const line = candlestickSeriesRef.current.createPriceLine({
+         if (!alertLinesRef.current[a.id] && alertsSeriesRef.current) {
+             const line = alertsSeriesRef.current.createPriceLine({
                  price: a.price,
                  color: '#eab308',
                  lineWidth: 2,
@@ -493,6 +494,14 @@ useEffect(() => {
         minMove: minMove,
       },
     });
+
+    const alertsSeries = chart.addLineSeries({
+      color: 'rgba(0,0,0,0)',
+      crosshairMarkerVisible: false,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+    alertsSeriesRef.current = alertsSeries;
 
     const candlestickSeries = chart.addCandlestickSeries({
       upColor: '#00e676',
@@ -1446,8 +1455,8 @@ useEffect(() => {
                     const ask = bid + ((validLastItem.spread || 0) * minMove);
                     
                     if (Number.isFinite(ask) && Number.isFinite(bid)) {
-                        if (!bidPriceLineRef.current) {
-                            bidPriceLineRef.current = candlestickSeriesRef.current.createPriceLine({
+                        if (!bidPriceLineRef.current && alertsSeriesRef.current) {
+                            bidPriceLineRef.current = alertsSeriesRef.current.createPriceLine({
                                 price: bid,
                                 color: 'rgba(128, 128, 128, 0.7)',
                                 lineWidth: 1,
@@ -1459,8 +1468,8 @@ useEffect(() => {
                             bidPriceLineRef.current.applyOptions({ price: bid });
                         }
                         
-                        if (!askPriceLineRef.current) {
-                            askPriceLineRef.current = candlestickSeriesRef.current.createPriceLine({
+                        if (!askPriceLineRef.current && alertsSeriesRef.current) {
+                            askPriceLineRef.current = alertsSeriesRef.current.createPriceLine({
                                 price: ask,
                                 color: 'rgba(255, 7, 58, 0.7)',
                                 lineWidth: 1,
