@@ -1018,7 +1018,7 @@ useEffect(() => {
       // --- DRAW VERTICAL LINES FOR PEAKS/BOTTOMS ON VOLUME CHART AND MOMENTUM CHART ---
       const drawVerticalLines = (targetChartRef, targetCanvasRef, targetContainerRef) => {
           if (targetChartRef.current && targetCanvasRef.current && targetContainerRef.current) {
-             const timeScale = targetChartRef.current.timeScale(); 
+             const timeScale = (chartRef.current || targetChartRef.current).timeScale(); 
              const canvas = targetCanvasRef.current;
              const ctx = canvas.getContext('2d');
              const rect = targetContainerRef.current.getBoundingClientRect();
