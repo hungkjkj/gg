@@ -36,6 +36,22 @@ const customTickMarkFormatter = (time, tickMarkType) => {
     return `${dayStr} ${hh}:${mm}`;
 };
 
+const generateFutureTimeline = (cTime, tfSec, count) => {
+    const futureTimes = [];
+    let t = cTime + tfSec;
+    for (let i = 0; i < count; i++) {
+        const date = new Date(t * 1000);
+        const day = date.getUTCDay();
+        if (day !== 0 && day !== 6) {
+            futureTimes.push({ time: t, value: 0 });
+        } else {
+            i--; // Skip weekends
+        }
+        t += tfSec;
+    }
+    return futureTimes;
+};
+
 const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
   const [momFlipData, setMomFlipData] = useState([]);
   const chartContainerRef = useRef(null);
@@ -251,20 +267,12 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       if (!currentTime || currentTime === 0) currentTime = baseTime;
       currentTime = currentTime - (currentTime % tfSec);
       
-      const futureTimes = [];
-      let t = currentTime + tfSec;
-      let futureBars = 0;
-      const MIN_FUTURE_BARS = 150;
-      while (t <= maxFutureTime || futureBars < MIN_FUTURE_BARS) {
-         const date = new Date(t * 1000);
-         const day = date.getUTCDay();
-         // Bỏ qua Thứ 7 (6) và Chủ Nhật (0)
-         if (day !== 0 && day !== 6) {
-             futureTimes.push({ time: t, value: 0 });
-             futureBars++;
-         }
-         t += tfSec;
-      }
+      // Calculate how many bars we need to reach maxFutureTime, minimum 150
+      let requiredBars = Math.ceil((maxFutureTime - currentTime) / tfSec);
+      if (requiredBars < 150) requiredBars = 150;
+      
+      const futureTimes = generateFutureTimeline(currentTime, tfSec, requiredBars);
+
       
       const allTimesMap = new Map();
       let historicalData = [];
@@ -1279,36 +1287,30 @@ useEffect(() => {
             const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
             let cTime = formattedData.length > 0 ? formattedData[formattedData.length - 1].time : Math.floor(Date.now() / 1000);
             cTime = cTime - (cTime % tfSec);
-            let t = cTime + tfSec;
             
             const rawMap = new Map();
             rawData.forEach(d => rawMap.set(d.time, d));
             
-            for (let i = 0; i < 1500; i++) {
-                const date = new Date(t * 1000);
-                const day = date.getUTCDay();
-                if (day !== 0 && day !== 6) {
-                    const pastTime = t - (7 * 86400); // 1 week ago
-                    const pastRaw = rawMap.get(pastTime);
-                    if (pastRaw && pastRaw.mean_ma_vol != null && !isNaN(pastRaw.mean_ma_vol)) {
-                        let color = 'rgba(156, 39, 176, 0.4)'; // Purple semi-transparent
-                        const value = pastRaw.mean_ma_vol;
-                        const lvl1 = pastRaw.mean_vol_lvl1;
-                        const lvl2 = pastRaw.mean_vol_lvl2;
-                        const lvl3 = pastRaw.mean_vol_lvl3;
-                        const lvl4 = pastRaw.mean_vol_lvl4;
-                        if (value <= lvl4) color = 'rgba(0, 51, 255, 0.4)';
-                        else if (value <= lvl3) color = 'rgba(255, 140, 0, 0.4)';
-                        else if (value <= lvl2) color = 'rgba(255, 255, 0, 0.4)';
-                        else if (value <= lvl1) color = 'rgba(255, 23, 68, 0.4)';
-                        
-                        projectedNormVol.push({ time: t, value: value, color });
-                    }
-                } else {
-                    i--;
+            const futureTimes = generateFutureTimeline(cTime, tfSec, 1500);
+            
+            futureTimes.forEach(ft => {
+                const pastTime = ft.time - (7 * 86400); // 1 week ago
+                const pastRaw = rawMap.get(pastTime);
+                if (pastRaw && pastRaw.mean_ma_vol != null && !isNaN(pastRaw.mean_ma_vol)) {
+                    let color = 'rgba(156, 39, 176, 0.4)'; // Purple semi-transparent
+                    const value = pastRaw.mean_ma_vol;
+                    const lvl1 = pastRaw.mean_vol_lvl1;
+                    const lvl2 = pastRaw.mean_vol_lvl2;
+                    const lvl3 = pastRaw.mean_vol_lvl3;
+                    const lvl4 = pastRaw.mean_vol_lvl4;
+                    if (value <= lvl4) color = 'rgba(0, 51, 255, 0.4)';
+                    else if (value <= lvl3) color = 'rgba(255, 140, 0, 0.4)';
+                    else if (value <= lvl2) color = 'rgba(255, 255, 0, 0.4)';
+                    else if (value <= lvl1) color = 'rgba(255, 23, 68, 0.4)';
+                    
+                    projectedNormVol.push({ time: ft.time, value: value, color });
                 }
-                t += tfSec;
-            }
+            });
         }
 
         let normVolData = rawData.filter(d => {
@@ -1516,18 +1518,7 @@ useEffect(() => {
                 let cTime = formattedData.length > 0 ? formattedData[formattedData.length - 1].time : Math.floor(Date.now() / 1000);
                 cTime = cTime - (cTime % tfSec);
                 
-                const futureTimes = [];
-                let t = cTime + tfSec;
-                for (let i = 0; i < 1500; i++) {
-                    const date = new Date(t * 1000);
-                    const day = date.getUTCDay();
-                    if (day !== 0 && day !== 6) {
-                        futureTimes.push({ time: t, value: 0 });
-                    } else {
-                        i--; // Bỏ qua cuối tuần
-                    }
-                    t += tfSec;
-                }
+                const futureTimes = generateFutureTimeline(cTime, tfSec, 1500);
                 
                 const allTimesMap = new Map();
                 formattedData.forEach(d => allTimesMap.set(d.time, { time: d.time, value: 0 }));
