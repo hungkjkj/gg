@@ -157,6 +157,8 @@ const StrategyBuilderTab = ({ symbol: currentSymbol, timeframe: currentTimeframe
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '5px' }}>Khung giờ (TF)</label>
             <select value={newTimeframe} onChange={e => setNewTimeframe(e.target.value)} style={{ padding: '8px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-color)', width: '120px' }}>
+              <option value="M1">1 Minute</option>
+              <option value="M3">3 Minutes</option>
               <option value="M5">5 Minutes</option>
               <option value="M15">15 Minutes</option>
               <option value="H1">1 Hour</option>
