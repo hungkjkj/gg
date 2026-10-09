@@ -347,9 +347,10 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     cum_vol = df['value'].cumsum().values
     
     # --- New User-defined Momentum Formula ---
-    # Động lượng tức thời của từng nến: (hlc3 - hlc3_pre) * vol
-    df['hlc3_diff'] = df['hlc3'] - df['hlc3'].shift(1).fillna(df['hlc3'])
-    df['candle_mom'] = df['hlc3_diff'] * df['value']
+    # Động lượng tức thời của từng nến (quy về % thay vì giá tuyệt đối): ((hlc3 - hlc3_pre) / hlc3_pre) * 100 * vol
+    hlc3_pre = df['hlc3'].shift(1).fillna(df['hlc3'])
+    df['hlc3_diff_pct'] = np.where(hlc3_pre > 0, (df['hlc3'] - hlc3_pre) / hlc3_pre * 100, 0.0)
+    df['candle_mom'] = df['hlc3_diff_pct'] * df['value']
     cum_candle_mom = df['candle_mom'].cumsum().values
     
     n = len(df)
@@ -884,8 +885,9 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(target_pct).fillna(1.0).values, 1.0)
         
         cum_vol = df['value'].cumsum().values
-        df['hlc3_diff'] = df['hlc3'] - df['hlc3'].shift(1).fillna(df['hlc3'])
-        df['candle_mom'] = df['hlc3_diff'] * df['value']
+        hlc3_pre = df['hlc3'].shift(1).fillna(df['hlc3'])
+        df['hlc3_diff_pct'] = np.where(hlc3_pre > 0, (df['hlc3'] - hlc3_pre) / hlc3_pre * 100, 0.0)
+        df['candle_mom'] = df['hlc3_diff_pct'] * df['value']
         cum_candle_mom = df['candle_mom'].cumsum().values
         
         n = len(df)
