@@ -1274,7 +1274,44 @@ useEffect(() => {
         const m50Up = rawData.filter(d => d.mom_lvl3 != null && !isNaN(d.mom_lvl3)).map(i => ({time: i.time, value: i.mom_lvl3})).sort((a,b)=>a.time-b.time);
         const m50Dn = rawData.filter(d => d.mom_lvl3 != null && !isNaN(d.mom_lvl3)).map(i => ({time: i.time, value: -i.mom_lvl3})).sort((a,b)=>a.time-b.time);
 
-        const normVolData = rawData.filter(d => {
+        let projectedNormVol = [];
+        if (configs.volMode === 'mean_vol') {
+            const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
+            let cTime = formattedData.length > 0 ? formattedData[formattedData.length - 1].time : Math.floor(Date.now() / 1000);
+            cTime = cTime - (cTime % tfSec);
+            let t = cTime + tfSec;
+            
+            const rawMap = new Map();
+            rawData.forEach(d => rawMap.set(d.time, d));
+            
+            for (let i = 0; i < 1500; i++) {
+                const date = new Date(t * 1000);
+                const day = date.getUTCDay();
+                if (day !== 0 && day !== 6) {
+                    const pastTime = t - (7 * 86400); // 1 week ago
+                    const pastRaw = rawMap.get(pastTime);
+                    if (pastRaw && pastRaw.mean_ma_vol != null && !isNaN(pastRaw.mean_ma_vol)) {
+                        let color = 'rgba(156, 39, 176, 0.4)'; // Purple semi-transparent
+                        const value = pastRaw.mean_ma_vol;
+                        const lvl1 = pastRaw.mean_vol_lvl1;
+                        const lvl2 = pastRaw.mean_vol_lvl2;
+                        const lvl3 = pastRaw.mean_vol_lvl3;
+                        const lvl4 = pastRaw.mean_vol_lvl4;
+                        if (value <= lvl4) color = 'rgba(0, 51, 255, 0.4)';
+                        else if (value <= lvl3) color = 'rgba(255, 140, 0, 0.4)';
+                        else if (value <= lvl2) color = 'rgba(255, 255, 0, 0.4)';
+                        else if (value <= lvl1) color = 'rgba(255, 23, 68, 0.4)';
+                        
+                        projectedNormVol.push({ time: t, value: value, color });
+                    }
+                } else {
+                    i--;
+                }
+                t += tfSec;
+            }
+        }
+
+        let normVolData = rawData.filter(d => {
           if (configs.volMode === 'rvol') return d.rvol != null && !isNaN(d.rvol);
           if (configs.volMode === 'mean_vol') return d.mean_ma_vol != null && !isNaN(d.mean_ma_vol);
           return d.norm_vol != null && !isNaN(d.norm_vol);
@@ -1299,10 +1336,13 @@ useEffect(() => {
             else if (value <= lvl3) color = '#ff8c00'; // Orange
             else if (value <= lvl2) color = '#ffff00'; // Yellow
             else if (value <= lvl1) color = '#ff1744'; // Red
-            // > lvl1 defaults to '#9c27b0' (Purple)
           }
           return { time: i.time, value: value, color };
         }).sort((a,b)=>a.time-b.time);
+        
+        if (projectedNormVol.length > 0) {
+            normVolData = [...normVolData, ...projectedNormVol].sort((a,b) => a.time - b.time);
+        }
 
         const newSessionData = rawData.filter(i => i.session_color).map(i => ({
           time: i.time,
@@ -1458,14 +1498,6 @@ useEffect(() => {
             }
             if (mom50DnRef.current) m50Dn.forEach(d => safeUpdate(mom50DnRef.current, d));
             
-            if (normVolSeriesRef.current) {
-              normVolData.forEach(d => safeUpdate(normVolSeriesRef.current, d));
-              maVolData.forEach(d => safeUpdate(maVolSeriesRef.current, d));
-              v85.forEach(d => safeUpdate(vol85Ref.current, d));
-              v75.forEach(d => safeUpdate(vol75Ref.current, d));
-              v50.forEach(d => safeUpdate(vol50Ref.current, d));
-              v15.forEach(d => safeUpdate(vol15Ref.current, d));
-            }
             if (formattedData.length > 0) {
               lastUpdateTimeRef.current = Math.max(lastUpdateTimeRef.current, formattedData[formattedData.length - 1].time);
             }
@@ -1577,12 +1609,21 @@ useEffect(() => {
             if (mom50DnRef.current) mom50DnRef.current.setData(m50Dn.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             
             if (normVolSeriesRef.current) {
-              normVolSeriesRef.current.setData(normVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-              maVolSeriesRef.current.setData(maVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-              vol85Ref.current.setData(v85.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-              vol75Ref.current.setData(v75.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-              vol50Ref.current.setData(v50.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-              vol15Ref.current.setData(v15.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+              if (isPolling) {
+                  normVolData.forEach(d => safeUpdate(normVolSeriesRef.current, d));
+                  maVolData.forEach(d => safeUpdate(maVolSeriesRef.current, d));
+                  v85.forEach(d => safeUpdate(vol85Ref.current, d));
+                  v75.forEach(d => safeUpdate(vol75Ref.current, d));
+                  v50.forEach(d => safeUpdate(vol50Ref.current, d));
+                  v15.forEach(d => safeUpdate(vol15Ref.current, d));
+              } else {
+                  normVolSeriesRef.current.setData(normVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                  maVolSeriesRef.current.setData(maVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                  vol85Ref.current.setData(v85.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                  vol75Ref.current.setData(v75.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                  vol50Ref.current.setData(v50.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                  vol15Ref.current.setData(v15.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+              }
             }
             
             if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 200);
