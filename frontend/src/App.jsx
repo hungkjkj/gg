@@ -181,8 +181,8 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     fetchNews();
   }, [symbol, configs.timeShiftHours]);
 
-  // Apply News Markers
-  useEffect(() => {
+  // Apply News Markers and Future Timeline (for v_lines and news)
+  const applyTimelineAndMarkers = () => {
     if (newsSeriesRef.current) {
       const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
 
@@ -275,6 +275,16 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
           console.error("Error setting news markers", e);
       }
     }
+  };
+
+  useEffect(() => {
+    applyTimelineAndMarkers();
+  }, [newsData, chartReady, timeframe]);
+
+  // Expose applyTimelineAndMarkers for manual calls when volStats changes
+  useEffect(() => {
+    window.updateTimelineForVLines = applyTimelineAndMarkers;
+    return () => { window.updateTimelineForVLines = null; };
   }, [newsData, chartReady, timeframe]);
 
   
@@ -1554,6 +1564,7 @@ useEffect(() => {
         if (response.data.indicators && response.data.indicators.vol_stats) {
             setVolStats(response.data.indicators.vol_stats);
             volStatsRef.current = response.data.indicators.vol_stats;
+            if (window.updateTimelineForVLines) window.updateTimelineForVLines();
         }
         
         setLastUpdateSignal(Date.now());
