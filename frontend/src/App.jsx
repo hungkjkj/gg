@@ -187,6 +187,8 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   
   const [newsData, setNewsData] = useState([]);
   const newsSeriesRef = useRef(null);
+  const momentumDummySeriesRef = useRef(null);
+  const volumeDummySeriesRef = useRef(null);
   const newsDataRef = useRef([]);
   const [selectedNewsGroup, setSelectedNewsGroup] = useState(null);
   
@@ -275,7 +277,10 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       const newsSeriesData = Array.from(allTimesMap.values()).sort((a,b) => a.time - b.time);
       
       try {
-          if (newsSeriesRef.current) newsSeriesRef.current.setData(newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+          const validNewsSeriesData = newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time));
+          if (newsSeriesRef.current) newsSeriesRef.current.setData(validNewsSeriesData);
+          if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(validNewsSeriesData);
+          if (volumeDummySeriesRef.current) volumeDummySeriesRef.current.setData(validNewsSeriesData);
 
           // Group events by time
           const eventsByTime = {};
@@ -652,6 +657,9 @@ useEffect(() => {
       const mom50Up = momentumChart.addLineSeries({ color: 'rgba(128, 128, 128, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
       const mom50Dn = momentumChart.addLineSeries({ color: 'rgba(128, 128, 128, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
       
+      const momentumDummySeries = momentumChart.addLineSeries({ color: 'rgba(0,0,0,0)', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      momentumDummySeriesRef.current = momentumDummySeries;
+      
       const volumeChart = createChart(volumeChartContainerRef.current, {
         autoSize: false,
         layout: {
@@ -683,6 +691,9 @@ useEffect(() => {
       const vol75Line = volumeChart.addLineSeries({ color: 'rgba(225, 230, 38, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
       const vol50Line = volumeChart.addLineSeries({ color: 'rgba(128, 128, 128, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
       const vol15Line = volumeChart.addLineSeries({ color: 'rgba(0, 191, 255, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
+      
+      const volumeDummySeries = volumeChart.addLineSeries({ color: 'rgba(0,0,0,0)', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      volumeDummySeriesRef.current = volumeDummySeries;
 
       // Sync time scales (LogicalRange is safer and prevents infinite loops with guards)
       let isSyncingLeft = false;
@@ -1018,7 +1029,7 @@ useEffect(() => {
       // --- DRAW VERTICAL LINES FOR PEAKS/BOTTOMS ON VOLUME CHART AND MOMENTUM CHART ---
       const drawVerticalLines = (targetChartRef, targetCanvasRef, targetContainerRef) => {
           if (targetChartRef.current && targetCanvasRef.current && targetContainerRef.current) {
-             const timeScale = (chartRef.current || targetChartRef.current).timeScale(); 
+             const timeScale = targetChartRef.current.timeScale(); 
              const canvas = targetCanvasRef.current;
              const ctx = canvas.getContext('2d');
              const rect = targetContainerRef.current.getBoundingClientRect();
@@ -1493,7 +1504,9 @@ useEffect(() => {
                 
                 const newsSeriesData = Array.from(allTimesMap.values()).sort((a,b) => a.time - b.time);
                 const finalNewsData = newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time));
-                newsSeriesRef.current.setData(finalNewsData);
+                if (newsSeriesRef.current) newsSeriesRef.current.setData(finalNewsData);
+                if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(finalNewsData);
+                if (volumeDummySeriesRef.current) volumeDummySeriesRef.current.setData(finalNewsData);
             }
             lineCloseSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.close })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             lineHighSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.high })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
