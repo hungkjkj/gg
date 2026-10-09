@@ -267,20 +267,19 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       }
       
       const allTimesMap = new Map();
+      let historicalData = [];
+      if (candlestickSeriesRef.current) historicalData = candlestickSeriesRef.current.data() || [];
+      historicalData.forEach(d => allTimesMap.set(d.time, { time: d.time, value: 0 }));
       newsTimes.forEach(nt => allTimesMap.set(nt, { time: nt, value: 0 }));
-      futureTimes.forEach(ft => {
-          if (!allTimesMap.has(ft.time)) {
-              allTimesMap.set(ft.time, ft);
-          }
-      });
+      futureTimes.forEach(ft => allTimesMap.set(ft.time, ft));
       
-      const newsSeriesData = Array.from(allTimesMap.values()).sort((a,b) => a.time - b.time);
+      const fullTimelineData = Array.from(allTimesMap.values()).sort((a,b) => a.time - b.time);
+      const finalFullData = fullTimelineData.filter(d => d && Number.isFinite(d.time));
       
       try {
-          const validNewsSeriesData = newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time));
-          if (newsSeriesRef.current) newsSeriesRef.current.setData(validNewsSeriesData);
-          if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(validNewsSeriesData);
-          if (volumeDummySeriesRef.current) volumeDummySeriesRef.current.setData(validNewsSeriesData);
+          if (newsSeriesRef.current) newsSeriesRef.current.setData(finalFullData);
+          if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(finalFullData);
+          if (volumeDummySeriesRef.current) volumeDummySeriesRef.current.setData(finalFullData);
 
           // Group events by time
           const eventsByTime = {};
@@ -1499,14 +1498,16 @@ useEffect(() => {
                 }
                 
                 const allTimesMap = new Map();
+                formattedData.forEach(d => allTimesMap.set(d.time, { time: d.time, value: 0 }));
                 newsDataRef.current.forEach(ev => allTimesMap.set(ev.time, { time: ev.time, value: 0 }));
                 futureTimes.forEach(ft => allTimesMap.set(ft.time, ft));
                 
-                const newsSeriesData = Array.from(allTimesMap.values()).sort((a,b) => a.time - b.time);
-                const finalNewsData = newsSeriesData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time));
-                if (newsSeriesRef.current) newsSeriesRef.current.setData(finalNewsData);
-                if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(finalNewsData);
-                if (volumeDummySeriesRef.current) volumeDummySeriesRef.current.setData(finalNewsData);
+                const fullTimelineData = Array.from(allTimesMap.values()).sort((a,b) => a.time - b.time);
+                const finalFullData = fullTimelineData.filter(d => d && Number.isFinite(d.time));
+                
+                if (newsSeriesRef.current) newsSeriesRef.current.setData(finalFullData);
+                if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(finalFullData);
+                if (volumeDummySeriesRef.current) volumeDummySeriesRef.current.setData(finalFullData);
             }
             lineCloseSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.close })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             lineHighSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.high })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
