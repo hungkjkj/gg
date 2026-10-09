@@ -72,6 +72,44 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const maVolSeriesRef = useRef(null);
   
   const [contextMenu, setContextMenu] = useState(null);
+  
+  const [drawnLines, setDrawnLines] = useState(() => {
+     try { return JSON.parse(localStorage.getItem('userDrawnLines')) || []; }
+     catch(e) { return []; }
+  });
+  const drawnLinePrimitivesRef = useRef({});
+  
+  const handleAddDrawnLine = (price) => {
+      const newLine = { id: Date.now(), symbol: symbolRef.current, price };
+      const updated = [...drawnLines, newLine];
+      setDrawnLines(updated);
+      localStorage.setItem('userDrawnLines', JSON.stringify(updated));
+      closeContextMenu();
+  };
+  
+  const handleRemoveNearestDrawnLine = (price) => {
+      const currentLines = drawnLines.filter(l => l.symbol === symbolRef.current);
+      if (currentLines.length === 0) {
+          closeContextMenu();
+          return;
+      }
+      
+      let nearest = currentLines[0];
+      let minDiff = Math.abs(currentLines[0].price - price);
+      for (const l of currentLines) {
+          const diff = Math.abs(l.price - price);
+          if (diff < minDiff) {
+              minDiff = diff;
+              nearest = l;
+          }
+      }
+      
+      const updated = drawnLines.filter(l => l.id !== nearest.id);
+      setDrawnLines(updated);
+      localStorage.setItem('userDrawnLines', JSON.stringify(updated));
+      closeContextMenu();
+  };
+  
   const [rrTools, setRrTools] = useState([]);
 
   const addRrTool = (type, price, logical) => {
@@ -416,6 +454,33 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
          }
      });
   }, [alerts, symbol, chartReady]);
+
+  // Sync drawn observation lines
+  useEffect(() => {
+     if (!chartReady || !alertsSeriesRef.current) return;
+     const currentLines = drawnLines.filter(l => l.symbol === symbol);
+     
+     Object.keys(drawnLinePrimitivesRef.current).forEach(id => {
+         if (!currentLines.find(l => l.id.toString() === id)) {
+             alertsSeriesRef.current.removePriceLine(drawnLinePrimitivesRef.current[id]);
+             delete drawnLinePrimitivesRef.current[id];
+         }
+     });
+     
+     currentLines.forEach(l => {
+         if (!drawnLinePrimitivesRef.current[l.id]) {
+             const line = alertsSeriesRef.current.createPriceLine({
+                 price: l.price,
+                 color: '#38bdf8', // Light blue
+                 lineWidth: 1,
+                 lineStyle: 0, // Solid
+                 axisLabelVisible: true,
+                 title: 'Quan sát',
+             });
+             drawnLinePrimitivesRef.current[l.id] = line;
+         }
+     });
+  }, [drawnLines, symbol, chartReady]);
 
 useEffect(() => {
     // Khởi tạo biểu đồ
@@ -2016,6 +2081,23 @@ useEffect(() => {
             >
               🌊 Thêm cảnh báo % Mom Flip...
             </div>
+            
+            <div 
+              className="context-menu-item"
+              onClick={() => handleAddDrawnLine(contextMenu.price)}
+            >
+              ➖ Kẻ đường ngang...
+            </div>
+            {drawnLines.filter(l => l.symbol === symbol).length > 0 && (
+                <div 
+                  className="context-menu-item"
+                  style={{ color: '#ef4444' }}
+                  onClick={() => handleRemoveNearestDrawnLine(contextMenu.price)}
+                >
+                  ❌ Xóa đường ngang gần nhất
+                </div>
+            )}
+            
             <div 
               className="context-menu-item"
               onClick={() => {
