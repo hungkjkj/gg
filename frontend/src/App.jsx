@@ -3191,10 +3191,11 @@ function App() {
               </optgroup>
               {availableSymbols ? (
                 Object.keys(availableSymbols).map(group => {
-                  const filtered = availableSymbols[group].filter(s => 
-                    s.name.toLowerCase().includes(searchSymbol.toLowerCase()) || 
-                    s.description.toLowerCase().includes(searchSymbol.toLowerCase())
-                  );
+                  const filtered = availableSymbols[group].filter(s => {
+                    const searchStr = searchSymbol.trim().toLowerCase();
+                    return s.name.toLowerCase().includes(searchStr) || 
+                           s.description.toLowerCase().includes(searchStr);
+                  });
                   if (filtered.length === 0) return null;
                   return (
                     <optgroup key={group} label={group}>
