@@ -347,7 +347,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     cum_vol = df['value'].cumsum().values
     
     # --- New User-defined Momentum Formula ---
-    # Động lượng tức thời của từng nến: ((hlc3 - hlc3_pre) / atr) * vol
+    # Động lượng tức thời của từng nến: (hlc3 - hlc3_pre) * vol
     df['hlc3_diff'] = df['hlc3'] - df['hlc3'].shift(1).fillna(df['hlc3'])
     df['candle_mom'] = df['hlc3_diff'] * df['value']
     cum_candle_mom = df['candle_mom'].cumsum().values
