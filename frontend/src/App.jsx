@@ -1644,8 +1644,8 @@ useEffect(() => {
       
       const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
       const speed = playbackSpeedRef.current;
-      // Số nến tiến mỗi tick: tốc độ > 1 thì tiến nhiều nến, tốc độ <= 1 thì 1 nến
-      const candlesPerTick = Math.max(1, Math.round(speed));
+      // Luôn tiến 1 nến, nhưng giảm thời gian chờ (delay) để tạo cảm giác nhanh và mượt
+      const candlesPerTick = 1;
       
       const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
       
@@ -1718,18 +1718,12 @@ useEffect(() => {
         }
       }
       
-      // Tốc độ > 1: dùng full reload (setData) để không bị thiếu nến giữa chừng, nhưng không flash loading
-      // Tốc độ <= 1: dùng polling (safeUpdate) cho mượt
-      if (candlesPerTick > 1) {
-        await fetchData(true, simulatedTimeRef.current, true);
-      } else {
-        await fetchData(true, simulatedTimeRef.current);
-      }
+      // Luôn dùng polling (safeUpdate) cho mượt vì candlesPerTick = 1
+      await fetchData(true, simulatedTimeRef.current);
       
       if (isPlayingRef.current && viewMode === 'backtest') {
-        // Tốc độ <= 1: dùng delay dài hơn (ví dụ 0.5x = 2 giây/nến)
-        // Tốc độ > 1: luôn 1 giây/tick (số nến đã tăng ở trên)
-        const delay = speed <= 1 ? (1000 / speed) : 1000;
+        // Tốc độ quyết định delay (1x = 1000ms, 10x = 100ms, 50x = 20ms)
+        const delay = 1000 / speed;
         timeoutId = setTimeout(playNext, delay);
       }
     };
