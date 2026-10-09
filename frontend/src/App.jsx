@@ -3326,6 +3326,38 @@ function App() {
               placeholder="Tìm kiếm mã hoặc tên tài sản..."
               value={searchSymbol}
               onChange={(e) => setSearchSymbol(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const searchStr = searchSymbol.trim().toLowerCase();
+                  if (!searchStr) return;
+                  
+                  let matchedSymbol = null;
+                  
+                  if ("thị trường chung fx gi global_index".includes(searchStr)) matchedSymbol = "GLOBAL_INDEX";
+                  else if ("us stocks us_stocks_gi".includes(searchStr)) matchedSymbol = "US_STOCKS_GI";
+                  else if ("hàng hóa commodities commodities_gi".includes(searchStr)) matchedSymbol = "COMMODITIES_GI";
+                  else if ("tiền điện tử crypto crypto_gi".includes(searchStr)) matchedSymbol = "CRYPTO_GI";
+                  
+                  if (!matchedSymbol && availableSymbols) {
+                    for (const group of Object.keys(availableSymbols)) {
+                      const match = availableSymbols[group].find(s => 
+                        s.name.toLowerCase().includes(searchStr) || 
+                        s.description.toLowerCase().includes(searchStr)
+                      );
+                      if (match) {
+                        matchedSymbol = match.name;
+                        break;
+                      }
+                    }
+                  }
+                  
+                  if (matchedSymbol) {
+                    setSymbol(matchedSymbol);
+                    setSearchSymbol(''); 
+                    e.target.blur();
+                  }
+                }
+              }}
               style={{ width: '100%', marginBottom: '8px', padding: '8px', borderRadius: '4px', border: '1px solid #374151', background: '#1f2937', color: '#fff', fontSize: '0.85rem' }}
             />
             <select value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ width: '100%' }}>
