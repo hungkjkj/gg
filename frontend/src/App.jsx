@@ -85,6 +85,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   
   // Các đường xác suất Volume
   const normVolSeriesRef = useRef(null);
+  const projectedVolSeriesRef = useRef(null);
   const maVolSeriesRef = useRef(null);
   
   const [contextMenu, setContextMenu] = useState(null);
@@ -692,6 +693,9 @@ useEffect(() => {
       const normVolSeries = volumeChart.addHistogramSeries({
         priceFormat: { type: 'volume' },
       });
+      const projectedVolSeries = volumeChart.addHistogramSeries({
+        priceFormat: { type: 'volume' },
+      });
       const maVolSeries = volumeChart.addLineSeries({ color: 'rgba(57, 255, 20, 0.8)', lineWidth: 2 });
       
       const vol85Line = volumeChart.addLineSeries({ color: 'rgba(255, 165, 0, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
@@ -847,6 +851,7 @@ useEffect(() => {
     mom50DnRef.current = mom50Dn;
     
     normVolSeriesRef.current = normVolSeries;
+    projectedVolSeriesRef.current = projectedVolSeries;
     maVolSeriesRef.current = maVolSeries;
     vol85Ref.current = vol85Line;
     vol75Ref.current = vol75Line;
@@ -1108,6 +1113,7 @@ useEffect(() => {
         if (vwapSeriesRef.current) vwapSeriesRef.current.setData([]);
         if (momentumSeriesRef.current) momentumSeriesRef.current.setData([]);
         if (normVolSeriesRef.current) normVolSeriesRef.current.setData([]);
+        if (projectedVolSeriesRef.current) projectedVolSeriesRef.current.setData([]);
         if (maVolSeriesRef.current) maVolSeriesRef.current.setData([]);
         lastVwapColorRef.current = null;
         lastMaVolColorRef.current = null;
@@ -1283,7 +1289,7 @@ useEffect(() => {
         const m50Dn = rawData.filter(d => d.mom_lvl3 != null && !isNaN(d.mom_lvl3)).map(i => ({time: i.time, value: -i.mom_lvl3})).sort((a,b)=>a.time-b.time);
 
         let projectedNormVol = [];
-        if (configs.volMode === 'mean_vol' && viewMode !== 'backtest') {
+        if (configs.volMode === 'mean_vol') {
             const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
             let cTime = formattedData.length > 0 ? formattedData[formattedData.length - 1].time : Math.floor(Date.now() / 1000);
             cTime = cTime - (cTime % tfSec);
@@ -1342,9 +1348,7 @@ useEffect(() => {
           return { time: i.time, value: value, color };
         }).sort((a,b)=>a.time-b.time);
         
-        if (projectedNormVol.length > 0) {
-            normVolData = [...normVolData, ...projectedNormVol].sort((a,b) => a.time - b.time);
-        }
+        // projectedNormVol is now handled by projectedVolSeriesRef
 
         const newSessionData = rawData.filter(i => i.session_color).map(i => ({
           time: i.time,
@@ -1616,6 +1620,9 @@ useEffect(() => {
                   vol15Ref.current.setData(v15.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
               }
             }
+            if (projectedVolSeriesRef.current && !isPolling) {
+                projectedVolSeriesRef.current.setData(projectedNormVol.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            }
             
             if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 200);
             
@@ -1708,6 +1715,7 @@ useEffect(() => {
             if (vwapSeriesRef.current) vwapSeriesRef.current.setData([]);
             if (momentumSeriesRef.current) momentumSeriesRef.current.setData([]);
             if (normVolSeriesRef.current) normVolSeriesRef.current.setData([]);
+            if (projectedVolSeriesRef.current) projectedVolSeriesRef.current.setData([]);
             if (maVolSeriesRef.current) maVolSeriesRef.current.setData([]);
             setVpBoxes([]);
             setVolStats(null);
