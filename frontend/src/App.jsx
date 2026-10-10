@@ -3224,7 +3224,11 @@ function App() {
 
   useEffect(() => {
     if (!showMatrixBubble) return;
+    
+    let isFetching = false;
     const fetchBubbleMatrix = () => {
+      if (isFetching) return;
+      
       const bTime = configs.brokerTimezone || 'Europe/Athens';
       const mHours = Number(localStorage.getItem('currencyMatrixHours')) || 24;
       const mHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || 89;
@@ -3241,6 +3245,8 @@ function App() {
         urlShortTrend += `&end_time=${window.currentSimulatedTime}`;
         urlLongTrend += `&end_time=${window.currentSimulatedTime}`;
       }
+      
+      isFetching = true;
       Promise.all([
           axios.get(urlShortFlow), axios.get(urlLongFlow),
           axios.get(urlShortTrend), axios.get(urlLongTrend)
@@ -3249,7 +3255,11 @@ function App() {
           setBubbleMatrixDataLong(res[1].data?.ranking);
           setBubbleMatrixDataTrend(res[2].data?.ranking);
           setBubbleMatrixDataTrendLong(res[3].data?.ranking);
-      }).catch(err => console.error(err));
+          isFetching = false;
+      }).catch(err => {
+          console.error(err);
+          isFetching = false;
+      });
     };
     
     fetchBubbleMatrix();
