@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import axios from 'axios';
 import { AssistiveTouch, MomFlipChartComponent } from './components/MomFlip';
@@ -75,7 +75,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const sdFillSeriesRef = useRef(null);
   const momentumSeriesRef = useRef(null);
   
-  // CÃ¡c Ä‘Æ°á»ng xÃ¡c suáº¥t Momentum
+  // Các đường xác suất Momentum
   const mom85UpRef = useRef(null);
   const mom85DnRef = useRef(null);
   const mom75UpRef = useRef(null);
@@ -83,7 +83,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const mom50UpRef = useRef(null);
   const mom50DnRef = useRef(null);
   
-  // CÃ¡c Ä‘Æ°á»ng xÃ¡c suáº¥t Volume
+  // Các đường xác suất Volume
   const normVolSeriesRef = useRef(null);
   const maVolSeriesRef = useRef(null);
   
@@ -184,7 +184,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const lastBandwidthRef = useRef(null);
   const lastSdColorRef = useRef(null);
   
-  // Dá»«ng backtest khi Ä‘á»•i cáº·p tiá»n hoáº·c khung thá»i gian
+  // Dừng backtest khi đổi cặp tiền hoặc khung thời gian
   useEffect(() => {
     if (isPlayingRef.current) {
       setIsPlaying(false);
@@ -356,7 +356,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     e.preventDefault();
     if (!chartContainerRef.current || !candlestickSeriesRef.current) return;
     
-    // ÄÃ³ng modal cÅ© náº¿u Ä‘ang má»Ÿ
+    // Đóng modal cũ nếu đang mở
     setCustomAlertModal(null);
     setAlertNoteInput('');
 
@@ -380,15 +380,15 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   useEffect(() => {
     document.addEventListener('click', closeContextMenu);
     
-    // NgÄƒn cháº·n menu máº·c Ä‘á»‹nh cá»§a trÃ¬nh duyá»‡t/WebView TOÃ€N Cá»¤C
+    // Ngăn chặn menu mặc định của trình duyệt/WebView TOÀN CỤC
     const preventGlobalContext = (e) => { 
       e.preventDefault(); 
       
-      // Náº¿u click vÃ o trong khu vá»±c MAIN chart
+      // Nếu click vào trong khu vực MAIN chart
       if (chartContainerRef.current && chartContainerRef.current.contains(e.target)) {
         if (!candlestickSeriesRef.current) return;
         
-        // ÄÃ³ng modal cÅ© náº¿u Ä‘ang má»Ÿ
+        // Đóng modal cũ nếu đang mở
         setCustomAlertModal(null);
         setAlertNoteInput('');
 
@@ -411,7 +411,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
             logical: logical
           });
           
-          if (setAlerts) { // Táº­n dá»¥ng setAlerts hoáº·c toast Ä‘á»ƒ debug
+          if (setAlerts) { // Tận dụng setAlerts hoặc toast để debug
             console.log("Context menu opened at price", price);
           }
         }
@@ -423,7 +423,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     document.addEventListener('contextmenu', preventGlobalContext, { capture: true });
 
     const handleDocumentClick = (e) => {
-        // Chá»‰ close náº¿u khÃ´ng click vÃ o context menu
+        // Chỉ close nếu không click vào context menu
         if (!e.target.closest('.custom-context-menu-wrapper')) {
             closeContextMenu();
         }
@@ -460,7 +460,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
                  lineWidth: 2,
                  lineStyle: 2,
                  axisLabelVisible: true,
-                 title: a.note ? `ðŸ”” ${a.note}` : 'ðŸ”” Alert',
+                 title: a.note ? `🔔 ${a.note}` : '🔔 Alert',
              });
              alertLinesRef.current[a.id] = line;
          }
@@ -487,7 +487,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
                  lineWidth: 1,
                  lineStyle: 0, // Solid
                  axisLabelVisible: true,
-                 title: 'Quan sÃ¡t',
+                 title: 'Quan sát',
              });
              drawnLinePrimitivesRef.current[l.id] = line;
          }
@@ -495,7 +495,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   }, [drawnLines, symbol, chartReady]);
 
 useEffect(() => {
-    // Khá»Ÿi táº¡o biá»ƒu Ä‘á»“
+    // Khởi tạo biểu đồ
     const chart = createChart(chartContainerRef.current, {
       autoSize: false,
       layout: {
@@ -762,7 +762,7 @@ useEffect(() => {
       };
 
       chart.subscribeClick((param) => {
-        // Xá»­ lÃ½ click cho quáº£ bÃ³ng tin tá»©c
+        // Xử lý click cho quả bóng tin tức
         if (param.time && newsDataRef.current) {
           const events = newsDataRef.current.filter(ev => ev.time === param.time);
           if (events.length > 0) {
@@ -776,7 +776,7 @@ useEffect(() => {
       });
 
       chart.subscribeDblClick((param) => {
-        // ÄÃ£ xÃ³a double click, thay báº±ng context menu
+        // Đã xóa double click, thay bằng context menu
       });
 
       chart.subscribeCrosshairMove(param => handleCrosshairMove(param, [momentumChart, volumeChart], [momentumSeries, normVolSeries]));
@@ -801,14 +801,14 @@ useEffect(() => {
 
     chartRef.current = chart;
     
-    // Theo dÃµi hÃ nh Ä‘á»™ng cuá»™n cá»§a ngÆ°á»i dÃ¹ng
+    // Theo dõi hành động cuộn của người dùng
     chart.timeScale().subscribeVisibleLogicalRangeChange((logicalRange) => {
       if (updateOverlaysRef.current) updateOverlaysRef.current();
       if (logicalRange && candlestickSeriesRef.current) {
         const data = candlestickSeriesRef.current.data();
         if (data && data.length > 0) {
           const totalCandles = data.length;
-          // Náº¿u mÃ©p pháº£i cá»§a mÃ n hÃ¬nh cÃ¡ch hiá»‡n táº¡i quÃ¡ 5 náº¿n, coi nhÆ° lÃ  Ä‘Ã£ kÃ©o vá» quÃ¡ khá»©
+          // Nếu mép phải của màn hình cách hiện tại quá 5 nến, coi như là đã kéo về quá khứ
           if (logicalRange.to < totalCandles - 5) {
             if (!isScrolledRef.current) {
               isScrolledRef.current = true;
@@ -853,7 +853,7 @@ useEffect(() => {
     vol50Ref.current = vol50Line;
     vol15Ref.current = vol15Line;
     
-    // LÆ°u ref cho Session BG
+    // Lưu ref cho Session BG
 
     let isDisposed = false;
 
@@ -947,7 +947,7 @@ useEffect(() => {
     }
   }, [chartTheme]);
   
-  // HÃ m cáº­p nháº­t toáº¡ Ä‘á»™ HTML Overlay liÃªn tá»¥c
+  // Hàm cập nhật toạ độ HTML Overlay liên tục
   const updateOverlays = () => {
     updateOverlaysRef.current = updateOverlays;
     try {
@@ -1018,7 +1018,7 @@ useEffect(() => {
            }
            
            const width = Math.max(1, finalEndX - finalStartX);
-           // Fix: Äáº£m báº£o chiá»u cao tá»‘i thiá»ƒu lÃ  1 pixel Ä‘á»ƒ khÃ´ng bá»‹ biáº¿n máº¥t khi thu nhá» thanh giÃ¡ (sub-pixel rendering)
+           // Fix: Đảm bảo chiều cao tối thiểu là 1 pixel để không bị biến mất khi thu nhỏ thanh giá (sub-pixel rendering)
            const height = Math.max(1, Math.abs(bottomY - topY));
            
            ctx.fillStyle = box.color;
@@ -1096,9 +1096,9 @@ useEffect(() => {
 
   const isPollingRef = useRef(false);
 
-  // Fetch data tá»« FastAPI backend
+  // Fetch data từ FastAPI backend
   const fetchData = async (isPolling = false, targetEndTime = 0, skipLoadingUI = false) => {
-    // KhÃ´ng cho phÃ©p gá»­i Polling request náº¿u há»‡ thá»‘ng Ä‘ang báº­n táº£i Full Load
+    // Không cho phép gửi Polling request nếu hệ thống đang bận tải Full Load
     if (isPolling && (loadingRef.current || isPollingRef.current)) return;
     if (isPolling) isPollingRef.current = true;
     
@@ -1127,7 +1127,7 @@ useEffect(() => {
     }
     
     if (!isPolling && !skipLoadingUI) {
-        // LÆ°u láº¡i Viewport hiá»‡n táº¡i trÆ°á»›c khi fetch dá»¯ liá»‡u má»›i
+        // Lưu lại Viewport hiện tại trước khi fetch dữ liệu mới
         if (chartRef.current) {
             try {
                 const currentRange = chartRef.current.timeScale().getVisibleRange();
@@ -1135,7 +1135,7 @@ useEffect(() => {
                     savedTimeRangeRef.current = currentRange;
                 }
             } catch (e) {
-                console.error("KhÃ´ng thá»ƒ láº¥y Viewport hiá»‡n táº¡i:", e);
+                console.error("Không thể lấy Viewport hiện tại:", e);
             }
         }
         setLoading(true);
@@ -1153,7 +1153,7 @@ useEffect(() => {
         
         const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
         
-        // Lá»c bá» cÃ¡c params khÃ´ng thuá»™c OHLCV API (email config, volMode...)
+        // Lọc bỏ các params không thuộc OHLCV API (email config, volMode...)
         const { emailSender, emailPassword, emailReceiver, volMode, ...ohlcvConfigs } = configs;
         
         const response = await axios.get(`${API_BASE}/api/v1/ohlcv`, {
@@ -1161,7 +1161,7 @@ useEffect(() => {
           params: { symbol, timeframe, count: 10000, end_time: targetEndTime, browserOffsetHours, latest_only: isPolling, _t: Date.now(), ...ohlcvConfigs }
         });
         
-        // Bá» qua náº¿u response tráº£ vá» dá»¯ liá»‡u cá»§a symbol/timeframe cÅ© (Race condition)
+        // Bỏ qua nếu response trả về dữ liệu của symbol/timeframe cũ (Race condition)
         if (response.data.symbol && (response.data.symbol !== symbolRef.current || response.data.timeframe !== timeframeRef.current)) {
             return;
         }
@@ -1221,7 +1221,7 @@ useEffect(() => {
         if (lineHighSeriesRef.current) lineHighSeriesRef.current.applyOptions({ priceFormat });
         if (lineLowSeriesRef.current) lineLowSeriesRef.current.applyOptions({ priceFormat });
         
-        // Format náº¿n (há»— trá»£ khoáº£ng trá»‘ng thá»i gian - whitespace data)
+        // Format nến (hỗ trợ khoảng trống thời gian - whitespace data)
         let formattedData = rawData
           .map(item => {
             if (item.open == null || item.high == null || item.low == null || item.close == null || isNaN(item.open) || isNaN(item.high) || isNaN(item.low) || isNaN(item.close)) {
@@ -1253,7 +1253,7 @@ useEffect(() => {
         // Format VWAP & Bands
         const sortedRawForVwap = rawData.filter(d => d.vwap != null && !isNaN(d.vwap)).sort((a,b)=>a.time-b.time);
         const vwapData = sortedRawForVwap.map((item, index, arr) => {
-            let col = '#39ff14'; // Máº·c Ä‘á»‹nh xanh
+            let col = '#39ff14'; // Mặc định xanh
             if (index > 0) {
               if (item.vwap >= arr[index - 1].vwap) col = '#39ff14';
               else col = '#ff073a';
@@ -1542,7 +1542,7 @@ useEffect(() => {
             sdFillSeriesRef.current.setData(sdFillData.filter(d => d && Number.isFinite(d.high) && Number.isFinite(d.time)));
             momentumSeriesRef.current.setData(momentumData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             
-            // Cáº­p nháº­t Ä‘Æ°á»ng Spread (Bid / Ask)
+            // Cập nhật đường Spread (Bid / Ask)
             if (formattedData.length > 0 && candlestickSeriesRef.current) {
                 // Find the last item that actually has a close price (ignore future timeline records)
                 let validLastItem = null;
@@ -1632,8 +1632,8 @@ useEffect(() => {
                         throw new Error("Out of bounds or empty view");
                     }
                 } catch (e) {
-                    // Log dáº¡ng thÃ´ng bÃ¡o bÃ¬nh thÆ°á»ng vÃ¬ Ä‘Ã¢y lÃ  cÆ¡ cháº¿ báº£o vá»‡ há»£p lá»‡
-                    console.log("ÄÃ£ kÃ­ch hoáº¡t cÆ¡ cháº¿ Há»§y Neo Trá»¥c Y (Do vÃ¹ng thá»i gian cÅ© khÃ´ng cÃ³ dá»¯ liá»‡u á»Ÿ tÃ i sáº£n má»›i). Trá»Ÿ vá» Viewport máº·c Ä‘á»‹nh.");
+                    // Log dạng thông báo bình thường vì đây là cơ chế bảo vệ hợp lệ
+                    console.log("Đã kích hoạt cơ chế Hủy Neo Trục Y (Do vùng thời gian cũ không có dữ liệu ở tài sản mới). Trở về Viewport mặc định.");
                     const visibleBars = 50; // Zoom in to 50 candles
                     const halfBars = Math.floor(visibleBars / 2);
                     const startLogical = Math.max(0, totalCandles - 1 - halfBars);
@@ -1656,7 +1656,7 @@ useEffect(() => {
                 if (volumeChartRef.current) volumeChartRef.current.timeScale().setVisibleLogicalRange(range);
             }
             
-            // ÄÆ°a vÃ o setTimeout Ä‘á»ƒ trÃ¡nh race condition vá»›i hÃ m setData() cá»§a Lightweight Charts
+            // Đưa vào setTimeout để tránh race condition với hàm setData() của Lightweight Charts
             setTimeout(() => {
                 const currentLogicalRange = chartRef.current ? chartRef.current.timeScale().getVisibleLogicalRange() : null;
                 if (chartRef.current) {
@@ -1675,12 +1675,12 @@ useEffect(() => {
                 }
             }, 50);
             
-            // XÃ³a bá»™ nhá»› táº¡m viewport sau khi Ä‘Ã£ Ã¡p dá»¥ng xong
+            // Xóa bộ nhớ tạm viewport sau khi đã áp dụng xong
             savedTimeRangeRef.current = null;
           }
         }
         
-        // LÆ°u Volume Profile boxes
+        // Lưu Volume Profile boxes
         if (response.data.indicators && response.data.indicators.vp_boxes) {
             setVpBoxes(response.data.indicators.vp_boxes);
         }
@@ -1699,10 +1699,10 @@ useEffect(() => {
         }
         console.error("Error fetching data:", err);
         if (!isPolling) {
-            setError(`KhÃ´ng thá»ƒ táº£i dá»¯ liá»‡u ${symbol}. HÃ£y kiá»ƒm tra MT5 vÃ  Backend (CÃ³ thá»ƒ mÃ£ khÃ´ng tá»“n táº¡i trÃªn sÃ n).`);
+            setError(`Không thể tải dữ liệu ${symbol}. Hãy kiểm tra MT5 và Backend (Có thể mã không tồn tại trên sàn).`);
         }
         
-        // XÃ³a dá»¯ liá»‡u cÅ© trÃªn biá»ƒu Ä‘á»“ Ä‘á»ƒ trÃ¡nh nháº§m láº«n
+        // Xóa dữ liệu cũ trên biểu đồ để tránh nhầm lẫn
         if (!isPolling && candlestickSeriesRef.current) {
             candlestickSeriesRef.current.setData([]);
             if (vwapSeriesRef.current) vwapSeriesRef.current.setData([]);
@@ -1721,10 +1721,10 @@ useEffect(() => {
         }
       } finally {
         if (isPolling) {
-            // Polling request Ã¢m tháº§m cháº¡y ngáº§m, khÃ´ng Ä‘Æ°á»£c phÃ©p Ä‘iá»u khiá»ƒn biáº¿n loading
+            // Polling request âm thầm chạy ngầm, không được phép điều khiển biến loading
             isPollingRef.current = false;
         } else if (!skipLoadingUI) {
-            // TrÃ¬ hoÃ£n viá»‡c táº¯t Loading má»™t chÃºt Ä‘á»ƒ Lightweight Charts (Canvas) ká»‹p váº½ xong 10,000 náº¿n
+            // Trì hoãn việc tắt Loading một chút để Lightweight Charts (Canvas) kịp vẽ xong 10,000 nến
             setTimeout(() => {
                 setLoading(false);
                 loadingRef.current = false;
@@ -1738,12 +1738,12 @@ useEffect(() => {
       fetchData();
       const intervalId = setInterval(() => {
         fetchData(true);
-      }, 3000); // 3 giÃ¢y cáº­p nháº­t giÃ¡ 1 láº§n
+      }, 3000); // 3 giây cập nhật giá 1 lần
       return () => clearInterval(intervalId);
     } else if (viewMode === 'backtest' && simulatedTimeRef.current) {
-      // Khi Ä‘á»•i symbol hoáº·c timeframe trong lÃºc backtest
+      // Khi đổi symbol hoặc timeframe trong lúc backtest
       fetchData(false, simulatedTimeRef.current);
-      // Táº£i láº¡i tin tá»©c cho cáº·p tiá»n má»›i
+      // Tải lại tin tức cho cặp tiền mới
       axios.get(`${API_BASE}/api/v1/news/backtest`, {
         params: { symbol, timestamp: simulatedTimeRef.current }
       }).then(response => {
@@ -1779,13 +1779,13 @@ useEffect(() => {
       
       const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
       const speed = playbackSpeedRef.current;
-      // Äá»ƒ trÃ¡nh quÃ¡ táº£i API khi speed cao, ta tá»± Ä‘á»™ng gá»™p nhiá»u náº¿n vÃ o 1 nhá»‹p (tick)
+      // Để tránh quá tải API khi speed cao, ta tự động gộp nhiều nến vào 1 nhịp (tick)
       let candlesPerTick = 1;
       let targetDelay = 1000 / speed;
       
       if (speed >= 50) {
           candlesPerTick = Math.floor(speed / 10);
-          targetDelay = 1000 / 10; // Giá»›i háº¡n max 10 tick/giÃ¢y Ä‘á»ƒ mÆ°á»£t
+          targetDelay = 1000 / 10; // Giới hạn max 10 tick/giây để mượt
       } else if (speed >= 10) {
           candlesPerTick = 2;
           targetDelay = 1000 / (speed / 2);
@@ -1793,11 +1793,11 @@ useEffect(() => {
       
       const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
       
-      // Tiáº¿n nhiá»u náº¿n cÃ¹ng lÃºc, chá»‰ gá»i API 1 láº§n á»Ÿ cuá»‘i
+      // Tiến nhiều nến cùng lúc, chỉ gọi API 1 lần ở cuối
       for (let step = 0; step < candlesPerTick; step++) {
         simulatedTimeRef.current += tfSec;
         
-        // Bá» qua Thá»© 7, Chá»§ Nháº­t Ä‘á»ƒ Backtest khÃ´ng bá»‹ "treo" (trá»« Crypto)
+        // Bỏ qua Thứ 7, Chủ Nhật để Backtest không bị "treo" (trừ Crypto)
         if (!isCrypto) {
             const d = new Date(simulatedTimeRef.current * 1000);
             const day = d.getUTCDay();
@@ -1825,11 +1825,11 @@ useEffect(() => {
         }
       }
       
-      // Cáº­p nháº­t thá»i gian giáº£ láº­p 1 láº§n duy nháº¥t sau khi tiáº¿n xong
+      // Cập nhật thời gian giả lập 1 lần duy nhất sau khi tiến xong
       window.currentSimulatedTime = simulatedTimeRef.current;
       window.dispatchEvent(new Event('simulatedTimeChanged'));
       
-      // PhÃ¡t hiá»‡n qua tuáº§n má»›i -> táº£i tin tá»©c tuáº§n má»›i
+      // Phát hiện qua tuần mới -> tải tin tức tuần mới
       const currentMonday = getWeekMonday(simulatedTimeRef.current);
       if (currentMonday !== backtestWeekRef.current) {
         backtestWeekRef.current = currentMonday;
@@ -1862,7 +1862,7 @@ useEffect(() => {
         }
       }
       
-      // LuÃ´n dÃ¹ng polling (safeUpdate) cho mÆ°á»£t vÃ¬ candlesPerTick = 1
+      // Luôn dùng polling (safeUpdate) cho mượt vì candlesPerTick = 1
       await fetchData(true, simulatedTimeRef.current);
       
       if (isPlayingRef.current && viewMode === 'backtest') {
@@ -1881,7 +1881,7 @@ useEffect(() => {
 
   const handleLoadBacktest = async () => {
     if (!backtestDate) {
-      alert("Vui lÃ²ng chá»n ngÃ y giá» Backtest!");
+      alert("Vui lòng chọn ngày giờ Backtest!");
       return;
     }
     const targetTimestamp = Math.floor(new Date(backtestDate).getTime() / 1000);
@@ -1894,7 +1894,7 @@ useEffect(() => {
     newsDataRef.current = []; // Clear stale news data so futureTimes aligns properly before new news arrives
     fetchData(false, targetTimestamp);
     
-    // Táº£i tin tá»©c lá»‹ch sá»­ cho backtest
+    // Tải tin tức lịch sử cho backtest
     try {
       const response = await axios.get(`${API_BASE}/api/v1/news/backtest`, {
         params: { symbol, timestamp: targetTimestamp }
@@ -1925,21 +1925,21 @@ useEffect(() => {
         {viewMode === 'backtest' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px', padding: '10px 15px', background: 'rgba(0, 0, 0, 0.2)', borderBottom: '1px solid var(--border-color)', zIndex: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Chá»n Äiá»ƒm Báº¯t Äáº§u:</label>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Chọn Điểm Bắt Đầu:</label>
               <input 
                 type="datetime-local" 
                 value={backtestDate}
                 onChange={(e) => setBacktestDate(e.target.value)}
                 style={{ padding: '6px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '4px' }}
               />
-              <button onClick={handleLoadBacktest} className="primary" style={{ padding: '6px 12px' }}>Táº£i Dá»¯ Liá»‡u</button>
+              <button onClick={handleLoadBacktest} className="primary" style={{ padding: '6px 12px' }}>Tải Dữ Liệu</button>
             </div>
             
             <div style={{ width: '1px', height: '24px', background: 'var(--border-color)' }}></div>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button onClick={togglePlay} style={{ padding: '6px 16px', background: isPlaying ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)', color: isPlaying ? '#ef4444' : '#10b981', border: 'none', fontWeight: 'bold' }}>
-                {isPlaying ? 'â¸ Dá»«ng' : 'â–¶ PhÃ¡t'}
+                {isPlaying ? '⏸ Dừng' : '▶ Phát'}
               </button>
               
               <select 
@@ -1949,7 +1949,7 @@ useEffect(() => {
               >
                 <option value={0.25}>0.25x</option>
                 <option value={0.5}>0.5x</option>
-                <option value={1}>1x (1 náº¿n/s)</option>
+                <option value={1}>1x (1 nến/s)</option>
                 <option value={2}>2x</option>
                 <option value={5}>5x</option>
                 <option value={10}>10x</option>
@@ -1960,7 +1960,7 @@ useEffect(() => {
             </div>
             
             <div style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Thá»i gian giáº£ láº­p: {simulatedTimeRef.current ? new Date(simulatedTimeRef.current * 1000).toLocaleString() : 'ChÆ°a táº£i'}
+              Thời gian giả lập: {simulatedTimeRef.current ? new Date(simulatedTimeRef.current * 1000).toLocaleString() : 'Chưa tải'}
             </div>
           </div>
         )}
@@ -1972,8 +1972,8 @@ useEffect(() => {
             border: '1px solid rgba(255,255,255,0.1)'
           }}>
             <div className="spinner" style={{ marginBottom: '15px' }}></div>
-            <div style={{ color: '#60a5fa', fontSize: '1.2rem', fontWeight: 'bold' }}>Äang táº£i dá»¯ liá»‡u {symbol}...</div>
-            <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '5px', marginBottom: '15px' }}>Vui lÃ²ng Ä‘á»£i trong giÃ¢y lÃ¡t</div>
+            <div style={{ color: '#60a5fa', fontSize: '1.2rem', fontWeight: 'bold' }}>Đang tải dữ liệu {symbol}...</div>
+            <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '5px', marginBottom: '15px' }}>Vui lòng đợi trong giây lát</div>
             <button 
               onClick={() => {
                 if (abortControllerRef.current) {
@@ -1981,14 +1981,14 @@ useEffect(() => {
                 }
                 setLoading(false);
                 loadingRef.current = false;
-                setError("NgÆ°á»i dÃ¹ng Ä‘Ã£ há»§y táº£i dá»¯ liá»‡u. (Báº¥m chá»n mÃ£ hoáº·c khung thá»i gian khÃ¡c Ä‘á»ƒ táº£i láº¡i)");
+                setError("Người dùng đã hủy tải dữ liệu. (Bấm chọn mã hoặc khung thời gian khác để tải lại)");
               }}
               style={{
                 background: '#ef4444', color: 'white', border: 'none', padding: '8px 16px',
                 borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold'
               }}
             >
-              Há»§y TÃ¡c Vá»¥
+              Hủy Tác Vụ
             </button>
           </div>
         )}
@@ -2068,25 +2068,25 @@ useEffect(() => {
           <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '8px', minWidth: '400px', maxWidth: '600px', border: '1px solid var(--border-color)', color: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
               <h2 style={{ margin: '0 0 15px 0', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-                Tin tá»©c lÃºc {new Date((selectedNewsGroup[0].originalTime || selectedNewsGroup[0].time) * 1000).toLocaleTimeString([], {timeZone: 'UTC', hour: '2-digit', minute:'2-digit'})} ngÃ y {new Date((selectedNewsGroup[0].originalTime || selectedNewsGroup[0].time) * 1000).toLocaleDateString('vi-VN', {timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric'})}
+                Tin tức lúc {new Date((selectedNewsGroup[0].originalTime || selectedNewsGroup[0].time) * 1000).toLocaleTimeString([], {timeZone: 'UTC', hour: '2-digit', minute:'2-digit'})} ngày {new Date((selectedNewsGroup[0].originalTime || selectedNewsGroup[0].time) * 1000).toLocaleDateString('vi-VN', {timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric'})}
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '60vh', overflowY: 'auto' }}>
                 {selectedNewsGroup.map((ev, idx) => (
                   <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '4px', borderLeft: `4px solid ${ev.impact === 'High' ? '#f23645' : ev.impact === 'Medium' ? '#ff9800' : '#787b86'}` }}>
                     <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '5px' }}>{ev.country} - {ev.title}</div>
                     <div style={{ display: 'flex', gap: '15px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                      <div><strong>Táº§m quan trá»ng:</strong> {ev.impact}</div>
+                      <div><strong>Tầm quan trọng:</strong> {ev.impact}</div>
                     </div>
                     <div style={{ display: 'flex', gap: '15px', fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '5px' }}>
-                      <div><strong>Dá»± bÃ¡o:</strong> {ev.forecast || '-'}</div>
-                      <div><strong>Thá»±c táº¿:</strong> {ev.actual || '-'}</div>
-                      <div><strong>Ká»³ trÆ°á»›c:</strong> {ev.previous || '-'}</div>
+                      <div><strong>Dự báo:</strong> {ev.forecast || '-'}</div>
+                      <div><strong>Thực tế:</strong> {ev.actual || '-'}</div>
+                      <div><strong>Kỳ trước:</strong> {ev.previous || '-'}</div>
                     </div>
                   </div>
                 ))}
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-                <button onClick={() => setSelectedNewsGroup(null)} style={{ padding: '8px 16px', background: 'var(--accent-color)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>ÄÃ³ng</button>
+                <button onClick={() => setSelectedNewsGroup(null)} style={{ padding: '8px 16px', background: 'var(--accent-color)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Đóng</button>
               </div>
             </div>
           </div>
@@ -2113,7 +2113,7 @@ useEffect(() => {
                 closeContextMenu();
               }}
             >
-              ðŸ“‹ Sao chÃ©p giÃ¡ ({contextMenu.price.toFixed(5)})
+              📋 Sao chép giá ({contextMenu.price.toFixed(5)})
             </div>
             <div 
               className="context-menu-item"
@@ -2126,7 +2126,7 @@ useEffect(() => {
                 closeContextMenu();
               }}
             >
-              â° ThÃªm cáº£nh bÃ¡o giÃ¡...
+              ⏰ Thêm cảnh báo giá...
             </div>
             <div 
               className="context-menu-item"
@@ -2139,14 +2139,14 @@ useEffect(() => {
                 closeContextMenu();
               }}
             >
-              ðŸŒŠ ThÃªm cáº£nh bÃ¡o % Mom Flip...
+              🌊 Thêm cảnh báo % Mom Flip...
             </div>
             
             <div 
               className="context-menu-item"
               onClick={() => handleAddDrawnLine(contextMenu.price)}
             >
-              âž– Káº» Ä‘Æ°á»ng ngang...
+              ➖ Kẻ đường ngang...
             </div>
             {drawnLines.filter(l => l.symbol === symbol).length > 0 && (
                 <div 
@@ -2154,7 +2154,7 @@ useEffect(() => {
                   style={{ color: '#ef4444' }}
                   onClick={() => handleRemoveNearestDrawnLine(contextMenu.price)}
                 >
-                  âŒ XÃ³a Ä‘Æ°á»ng ngang gáº§n nháº¥t
+                  ❌ Xóa đường ngang gần nhất
                 </div>
             )}
             
@@ -2165,7 +2165,7 @@ useEffect(() => {
                 closeContextMenu();
               }}
             >
-              ðŸ“ˆ ThÃªm RR Mua (Long)
+              📈 Thêm RR Mua (Long)
             </div>
             <div 
               className="context-menu-item"
@@ -2174,7 +2174,7 @@ useEffect(() => {
                 closeContextMenu();
               }}
             >
-              ðŸ“‰ ThÃªm RR BÃ¡n (Short)
+              📉 Thêm RR Bán (Short)
             </div>
           </div>
         )}
@@ -2193,17 +2193,17 @@ useEffect(() => {
               display: 'flex', flexDirection: 'column', gap: '15px'
             }}>
               <h3 style={{ margin: 0, color: 'white' }}>
-                {customAlertModal.type === 'mom' ? 'ThÃªm cáº£nh bÃ¡o % Mom Flip' : 'ThÃªm cáº£nh bÃ¡o giÃ¡'}
+                {customAlertModal.type === 'mom' ? 'Thêm cảnh báo % Mom Flip' : 'Thêm cảnh báo giá'}
               </h3>
               
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' }}>Cáº·p giao dá»‹ch</label>
+                <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' }}>Cặp giao dịch</label>
                 <div style={{ color: '#eab308', fontWeight: 'bold', fontSize: '1.1rem' }}>{customAlertModal.symbol}</div>
               </div>
               
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' }}>
-                  {customAlertModal.type === 'mom' ? 'Má»©c % Mom Flip' : 'Má»©c giÃ¡'}
+                  {customAlertModal.type === 'mom' ? 'Mức % Mom Flip' : 'Mức giá'}
                 </label>
                 <input 
                   type="number" 
@@ -2214,10 +2214,10 @@ useEffect(() => {
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' }}>Ghi chÃº (TÃ¹y chá»n)</label>
+                <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' }}>Ghi chú (Tùy chọn)</label>
                 <input 
                   type="text" 
-                  placeholder="Nháº­p ghi chÃº..."
+                  placeholder="Nhập ghi chú..."
                   value={alertNoteInput}
                   onChange={(e) => setAlertNoteInput(e.target.value)}
                   autoFocus
@@ -2241,7 +2241,7 @@ useEffect(() => {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                <button onClick={() => { setCustomAlertModal(null); setAlertNoteInput(''); }}>Há»§y</button>
+                <button onClick={() => { setCustomAlertModal(null); setAlertNoteInput(''); }}>Hủy</button>
                 <button className="primary" onClick={() => {
                   if (handleAddAlert) {
                     handleAddAlert({
@@ -2254,7 +2254,7 @@ useEffect(() => {
                   }
                   setCustomAlertModal(null);
                   setAlertNoteInput('');
-                }}>LÆ°u Cáº£nh BÃ¡o</button>
+                }}>Lưu Cảnh Báo</button>
               </div>
             </div>
           </div>
@@ -2276,7 +2276,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
   const [matrixVolDays, setMatrixVolDays] = useState(initialMatrixVolDays || Number(localStorage.getItem('currencyMatrixVolDays')) || 30);
   const [matrixType, setMatrixType] = useState((localStorage.getItem('matrixType') === 'currency' ? 'fx' : localStorage.getItem('matrixType')) || 'fx');
 
-  // Tá»± Ä‘á»™ng Ä‘á»•i nhÃ³m tÃ i sáº£n theo symbol Ä‘ang xem
+  // Tự động đổi nhóm tài sản theo symbol đang xem
   useEffect(() => {
     if (symbol) {
       const autoType = getMatrixTypeForSymbol(symbol);
@@ -2310,7 +2310,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     if (force && onSaveMatrixSettings) {
       onSaveMatrixSettings(matrixHours, matrixVolDays);
     }
-    // KhÃ´ng dÃ¹ng cache náº¿u Ä‘ang á»Ÿ cháº¿ Ä‘á»™ backtest
+    // Không dùng cache nếu đang ở chế độ backtest
     if (!force && !simulatedTime) {
       const cached = localStorage.getItem(`matrixCache_${matrixType}`);
       const cachedTime = localStorage.getItem(`matrixCacheTime_${matrixType}`);
@@ -2368,7 +2368,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
   useEffect(() => {
     fetchMatrix(false);
     
-    // Tá»± Ä‘á»™ng lÃ m má»›i Ma tráº­n má»—i 15 phÃºt
+    // Tự động làm mới Ma trận mỗi 15 phút
     const intervalId = setInterval(() => {
       fetchMatrix(true);
     }, 5 * 60 * 1000);
@@ -2381,7 +2381,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       return (
         <div style={{ padding: '50px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'white' }}>
           <div style={{ fontSize: '1.2rem', marginBottom: '15px', color: '#60a5fa', fontWeight: 'bold' }}>
-            Äang tÃ­nh toÃ¡n ma tráº­n... {progress}%
+            Đang tính toán ma trận... {progress}%
           </div>
           <div style={{ width: '300px', height: '10px', background: '#374151', borderRadius: '5px', overflow: 'hidden' }}>
             <div style={{ width: `${progress}%`, height: '100%', background: '#3b82f6', transition: 'width 0.3s ease' }}></div>
@@ -2403,7 +2403,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           backdropFilter: 'blur(4px)', borderRadius: '12px'
         }}>
           <div style={{ fontSize: '1.2rem', marginBottom: '15px', color: '#60a5fa', fontWeight: 'bold' }}>
-            Äang tÃ­nh toÃ¡n láº¡i ma tráº­n... {progress}%
+            Đang tính toán lại ma trận... {progress}%
           </div>
           <div style={{ width: '300px', height: '10px', background: '#374151', borderRadius: '5px', overflow: 'hidden' }}>
             <div style={{ width: `${progress}%`, height: '100%', background: '#3b82f6', transition: 'width 0.3s ease' }}></div>
@@ -2411,7 +2411,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         </div>
       )}
 
-      {/* Header Ä‘iá»u khiá»ƒn */}
+      {/* Header điều khiển */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '15px', background: 'var(--bg-panel)', padding: '15px 20px', borderRadius: '12px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: '10px', marginRight: '15px', borderRight: '1px solid #4b5563', paddingRight: '15px' }}>
           {['fx', 'us_stocks', 'commodities', 'crypto', 'usd_assets'].map(type => (
@@ -2429,7 +2429,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                 fontSize: '0.9rem'
               }}
             >
-              {type === 'fx' ? 'Forex' : type === 'us_stocks' ? 'Cá»• phiáº¿u Má»¹' : type === 'commodities' ? 'HÃ ng hÃ³a' : type === 'crypto' ? 'Crypto' : 'USD vs Assets'}
+              {type === 'fx' ? 'Forex' : type === 'us_stocks' ? 'Cổ phiếu Mỹ' : type === 'commodities' ? 'Hàng hóa' : type === 'crypto' ? 'Crypto' : 'USD vs Assets'}
             </button>
           ))}
         </div>
@@ -2438,7 +2438,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           {/* matrix mode toggle removed as both are shown */}
         </div>
         
-        <label>Ngáº¯n háº¡n (Giá»):</label>
+        <label>Ngắn hạn (Giờ):</label>
         <input 
           type="number" 
           value={matrixHours} 
@@ -2446,7 +2446,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '70px' }}
         />
         
-        <label style={{ marginLeft: '10px' }}>DÃ i háº¡n (Giá»):</label>
+        <label style={{ marginLeft: '10px' }}>Dài hạn (Giờ):</label>
         <input 
           type="number" 
           value={matrixHoursLong} 
@@ -2454,7 +2454,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '70px' }}
         />
         
-        <label style={{ marginLeft: '10px' }}>Volume (NgÃ y):</label>
+        <label style={{ marginLeft: '10px' }}>Volume (Ngày):</label>
         <input 
           type="number" 
           value={matrixVolDays} 
@@ -2465,10 +2465,10 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           onClick={() => fetchMatrix(true)}
           style={{ padding: '5px 15px', borderRadius: '5px', background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
         >
-          ðŸ”„ TÃ­nh láº¡i / LÃ m má»›i
+          🔄 Tính lại / Làm mới
         </button>
         <span style={{ fontSize: '12px', color: '#9ca3af', marginLeft: 'auto' }}>
-          *Dá»¯ liá»‡u tá»± Ä‘á»™ng lÆ°u Ä‘á»‡m (cache) trong 1 phÃºt Ä‘á»ƒ trÃ¡nh káº¹t API.
+          *Dữ liệu tự động lưu đệm (cache) trong 1 phút để tránh kẹt API.
         </span>
       </div>
 
@@ -2479,7 +2479,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '16px 0', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                  <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Háº¡ng</th>
+                  <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hạng</th>
                   <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Cur</th>
                   <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Score</th>
                   <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>% Mom</th>
@@ -2539,18 +2539,18 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
 
         return (
           <div style={{ display: 'flex', gap: '40px', marginBottom: '40px', flexWrap: 'wrap' }}>
-            {/* Báº£ng xáº¿p háº¡ng Ä‘á»“ng tiá»n Flow vs Trend */}
-            {renderRankingTable("ðŸŒŠ Money Flow (Momentum)", matrixData, matrixDataLong)}
-            {renderRankingTable("ðŸ“ˆ Price Trend (C-VWMA)", matrixDataTrend, matrixDataTrendLong)}
+            {/* Bảng xếp hạng đồng tiền Flow vs Trend */}
+            {renderRankingTable("🌊 Money Flow (Momentum)", matrixData, matrixDataLong)}
+            {renderRankingTable("📈 Price Trend (C-VWMA)", matrixDataTrend, matrixDataTrendLong)}
 
-            {/* Dá»¯ liá»‡u chi tiáº¿t cÃ¡c cáº·p */}
+            {/* Dữ liệu chi tiết các cặp */}
             <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', maxHeight: '550px', overflowY: 'auto' }}>
-              <h2 style={{ marginBottom: '20px', color: '#a78bfa' }}>Chi tiáº¿t Thay Ä‘á»•i VWMA (15 Cáº·p)</h2>
+              <h2 style={{ marginBottom: '20px', color: '#a78bfa' }}>Chi tiết Thay đổi VWMA (15 Cặp)</h2>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Cáº·p tiá»n</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Î” VWMA (%)</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Cặp tiền</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Δ VWMA (%)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2577,10 +2577,10 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         );
       })()}
       
-      {/* Ma tráº­n TÆ°Æ¡ng quan */}
+      {/* Ma trận Tương quan */}
       {matrixData.corr_matrix && matrixData.corr_matrix.length > 0 && (
         <div style={{ marginTop: '40px', background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', overflowX: 'auto' }}>
-          <h2 style={{ marginBottom: '20px', color: '#f472b6' }}>Ma tráº­n TÆ°Æ¡ng quan (Correlation Matrix)</h2>
+          <h2 style={{ marginBottom: '20px', color: '#f472b6' }}>Ma trận Tương quan (Correlation Matrix)</h2>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.9rem' }}>
             <thead>
               <tr>
@@ -2657,34 +2657,34 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
         onClick={(e) => e.stopPropagation()}
         style={{ background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', width: '400px', color: 'var(--text-primary)', boxShadow: '0 4px 20px rgba(0,0,0,0.5)', maxHeight: '90vh', overflowY: 'auto' }}
       >
-        <h2 style={{ marginBottom: '20px', color: 'var(--accent-color)' }}>âš™ï¸ Indicator Settings</h2>
+        <h2 style={{ marginBottom: '20px', color: 'var(--accent-color)' }}>⚙️ Indicator Settings</h2>
 
         <details style={styleGroup} open>
-          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#60a5fa' }}>D-VP (Volume Profile Äá»™ng)</summary>
+          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#60a5fa' }}>D-VP (Volume Profile Động)</summary>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Cháº¿ Ä‘á»™ chia lÆ°á»›i</label>
+            <label style={styleLabel}>Chế độ chia lưới</label>
             <select value={local.gridMode} onChange={e => handleChange('gridMode', e.target.value)} style={styleInput}>
-              <option value="auto">Tá»± Ä‘á»™ng (Chia theo sá»‘ Ã´)</option>
-              <option value="fixed">Cá»‘ Ä‘á»‹nh (Theo sá»‘ Pip)</option>
+              <option value="auto">Tự động (Chia theo số ô)</option>
+              <option value="fixed">Cố định (Theo số Pip)</option>
             </select>
           </div>
           {local.gridMode === 'auto' ? (
             <div style={{ marginTop: '10px' }}>
-              <label style={styleLabel}>Sá»‘ lÆ°á»£ng Ã´ (Auto Mode)</label>
+              <label style={styleLabel}>Số lượng ô (Auto Mode)</label>
               <input type="number" value={local.rowCount} onChange={e => handleChange('rowCount', Number(e.target.value))} style={styleInput} />
             </div>
           ) : (
             <div style={{ marginTop: '10px' }}>
-              <label style={styleLabel}>Sá»‘ Pip má»—i Ã´ (Fixed Mode)</label>
+              <label style={styleLabel}>Số Pip mỗi ô (Fixed Mode)</label>
               <input type="number" step="0.25" value={local.fixedPips} onChange={e => handleChange('fixedPips', Number(e.target.value))} style={styleInput} />
             </div>
           )}
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Sá»‘ giá» Timeout Ä‘á»ƒ Reset</label>
+            <label style={styleLabel}>Số giờ Timeout để Reset</label>
             <input type="number" value={local.timeoutHours} onChange={(e) => handleChange('timeoutHours', parseFloat(e.target.value))} style={styleInput} step="0.1" />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Chu ká»³ tÃ­nh D-VP (Sá»‘ ngÃ y giá»›i háº¡n váº½ DVP)</label>
+            <label style={styleLabel}>Chu kỳ tính D-VP (Số ngày giới hạn vẽ DVP)</label>
             <input type="number" value={local.dvpLookbackDays !== undefined ? local.dvpLookbackDays : 5} onChange={(e) => handleChange('dvpLookbackDays', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} step="1" />
           </div>
           <div style={{ marginTop: '10px' }}>
@@ -2692,192 +2692,192 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
             <input type="number" value={local.mfTargetPct !== undefined ? local.mfTargetPct : 50} onChange={e => handleChange('mfTargetPct', Number(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Chu ká»³ tÃ­nh Target Volume (Náº¿n)</label>
+            <label style={styleLabel}>Chu kỳ tính Target Volume (Nến)</label>
             <input type="number" value={local.mfTimeoutCandles !== undefined ? local.mfTimeoutCandles : 120} onChange={e => handleChange('mfTimeoutCandles', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Top Level 1 (MÃ u Äá») %</label>
+            <label style={styleLabel}>Top Level 1 (Màu Đỏ) %</label>
             <input type="number" value={local.pct1} onChange={e => handleChange('pct1', Number(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Top Level 2 (MÃ u TÃ­m) %</label>
+            <label style={styleLabel}>Top Level 2 (Màu Tím) %</label>
             <input type="number" value={local.pct2} onChange={e => handleChange('pct2', Number(e.target.value))} style={styleInput} />
           </div>
         </details>
 
         <details style={styleGroup}>
-          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#34d399' }}>Chá»‰ bÃ¡o VWAP & SD</summary>
+          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#34d399' }}>Chỉ báo VWAP & SD</summary>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Chu ká»³ VWAP (vwapLength)</label>
+            <label style={styleLabel}>Chu kỳ VWAP (vwapLength)</label>
             <input type="number" value={local.vwapLength} onChange={e => handleChange('vwapLength', Number(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Há»‡ sá»‘ Band (vwapMult)</label>
+            <label style={styleLabel}>Hệ số Band (vwapMult)</label>
             <input type="number" step="0.1" value={local.vwapMult} onChange={e => handleChange('vwapMult', Number(e.target.value))} style={styleInput} />
           </div>
         </details>
 
         <details style={styleGroup}>
-          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#f59e0b' }}>Chá»‰ bÃ¡o Äá»™ng lÆ°á»£ng LÃµi (Momentum)</summary>
+          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#f59e0b' }}>Chỉ báo Động lượng Lõi (Momentum)</summary>
           <div style={{ marginTop: '10px' }}>
 </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Chu ká»³ Ma tráº­n chung (Giá»)</label>
-            <input type="number" value={local.matrixLookbackHours} onChange={e => handleChange('matrixLookbackHours', Number(e.target.value))} style={styleInput} title="Nháº­p sá»‘ giá» Ä‘á»ƒ tÃ­nh toÃ¡n phÃ¢n phá»‘i cho cáº£ Äá»™ng LÆ°á»£ng vÃ  Khá»‘i LÆ°á»£ng" />
+            <label style={styleLabel}>Chu kỳ Ma trận chung (Giờ)</label>
+            <input type="number" value={local.matrixLookbackHours} onChange={e => handleChange('matrixLookbackHours', Number(e.target.value))} style={styleInput} title="Nhập số giờ để tính toán phân phối cho cả Động Lượng và Khối Lượng" />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>XÃ¡c suáº¥t Cao (momPct1)</label>
+            <label style={styleLabel}>Xác suất Cao (momPct1)</label>
             <input type="number" value={local.momPct1} onChange={e => handleChange('momPct1', Number(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>XÃ¡c suáº¥t Vá»«a (momPct2)</label>
+            <label style={styleLabel}>Xác suất Vừa (momPct2)</label>
             <input type="number" value={local.momPct2} onChange={e => handleChange('momPct2', Number(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>XÃ¡c suáº¥t Trung vá»‹ (momPct3)</label>
+            <label style={styleLabel}>Xác suất Trung vị (momPct3)</label>
             <input type="number" value={local.momPct3} onChange={e => handleChange('momPct3', Number(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel} title="Sá»‘ náº¿n dÃ¹ng Ä‘á»ƒ tÃ­nh trung bÃ¬nh Äá»™ lá»›n Momentum. So sÃ¡nh momentum hiá»‡n táº¡i vá»›i trung bÃ¬nh N náº¿n trÆ°á»›c Ä‘á»ƒ Ä‘o má»©c tÄƒng/giáº£m tÆ°Æ¡ng Ä‘á»‘i.">Chu ká»³ SMA Moment cho Flip (Náº¿n)</label>
+            <label style={styleLabel} title="Số nến dùng để tính trung bình Độ lớn Momentum. So sánh momentum hiện tại với trung bình N nến trước để đo mức tăng/giảm tương đối.">Chu kỳ SMA Moment cho Flip (Nến)</label>
             <input type="number" value={local.smaMomLength} onChange={e => handleChange('smaMomLength', Number(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #334155' }}>
-            <label style={styleLabel}>Má»©c lá»c Ä‘á»™ng lÆ°á»£ng cho Flip (%)</label>
-            <input type="number" value={local.momFlipFilterPct} onChange={e => handleChange('momFlipFilterPct', Number(e.target.value))} style={styleInput} title="Chá»‰ láº¥y nhá»¯ng náº¿n cÃ³ Momentum lá»›n hÆ¡n má»©c nÃ y Ä‘á»ƒ phÃ¢n phá»‘i Flip" />
+            <label style={styleLabel}>Mức lọc động lượng cho Flip (%)</label>
+            <input type="number" value={local.momFlipFilterPct} onChange={e => handleChange('momFlipFilterPct', Number(e.target.value))} style={styleInput} title="Chỉ lấy những nến có Momentum lớn hơn mức này để phân phối Flip" />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Má»©c lá»c khá»‘i lÆ°á»£ng cho Flip (%)</label>
-            <input type="number" value={local.momFlipVolFilterPct !== undefined ? local.momFlipVolFilterPct : 50.0} onChange={e => handleChange('momFlipVolFilterPct', Number(e.target.value))} style={styleInput} title="Chá»‰ láº¥y nhá»¯ng náº¿n cÃ³ Volume lá»›n hÆ¡n má»©c nÃ y trong nhÃ³m Ä‘Ã£ lá»c Mom" />
+            <label style={styleLabel}>Mức lọc khối lượng cho Flip (%)</label>
+            <input type="number" value={local.momFlipVolFilterPct !== undefined ? local.momFlipVolFilterPct : 50.0} onChange={e => handleChange('momFlipVolFilterPct', Number(e.target.value))} style={styleInput} title="Chỉ lấy những nến có Volume lớn hơn mức này trong nhóm đã lọc Mom" />
           </div>
         </details>
 
 
         <details style={styleGroup}>
-          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#a78bfa' }}>Chá»‰ bÃ¡o Khá»‘i lÆ°á»£ng (Volume)</summary>
+          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#a78bfa' }}>Chỉ báo Khối lượng (Volume)</summary>
             <div style={{ marginTop: '10px' }}>
-              <label style={styleLabel}>Cháº¿ Ä‘á»™ hiá»ƒn thá»‹</label>
+              <label style={styleLabel}>Chế độ hiển thị</label>
               <select value={local.volMode} onChange={e => handleChange('volMode', e.target.value)} style={styleInput}>
-                <option value="normal">Normal (PhÃ¢n phá»‘i Ma tráº­n)</option>
-                <option value="rvol">RVol (So sÃ¡nh cÃ¹ng giá»)</option>
-                <option value="mean_vol">Trung bÃ¬nh Vol (Matrix 500H)</option>
+                <option value="normal">Normal (Phân phối Ma trận)</option>
+                <option value="rvol">RVol (So sánh cùng giờ)</option>
+                <option value="mean_vol">Trung bình Vol (Matrix 500H)</option>
               </select>
             </div>
             
             {local.volMode === 'rvol' && (
               <div style={{ marginTop: '10px' }}>
-                <label style={styleLabel}>Chu ká»³ RVol (Sá»‘ NgÃ y)</label>
-                <input type="number" value={local.rvolLookbackDays !== undefined ? local.rvolLookbackDays : 10} onChange={e => handleChange('rvolLookbackDays', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} title="Sá»‘ ngÃ y dÃ¹ng Ä‘á»ƒ tÃ­nh trung bÃ¬nh khá»‘i lÆ°á»£ng cá»§a chÃ­nh giá» nÃ y" />
+                <label style={styleLabel}>Chu kỳ RVol (Số Ngày)</label>
+                <input type="number" value={local.rvolLookbackDays !== undefined ? local.rvolLookbackDays : 10} onChange={e => handleChange('rvolLookbackDays', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} title="Số ngày dùng để tính trung bình khối lượng của chính giờ này" />
               </div>
             )}
 
             <div style={{ marginTop: '10px' }}>
-              <label style={styleLabel}>Cá»­a sá»• tÃ­nh Äá»‰nh/ÄÃ¡y (NgÃ y)</label>
-              <input type="number" value={local.peakVolLookbackDays} onChange={e => handleChange('peakVolLookbackDays', Number(e.target.value))} style={styleInput} title="Sá»‘ ngÃ y nhÃ¬n láº¡i Ä‘á»ƒ thá»‘ng kÃª giá» bÃ¹ng ná»• Volume" />
+              <label style={styleLabel}>Cửa sổ tính Đỉnh/Đáy (Ngày)</label>
+              <input type="number" value={local.peakVolLookbackDays} onChange={e => handleChange('peakVolLookbackDays', Number(e.target.value))} style={styleInput} title="Số ngày nhìn lại để thống kê giờ bùng nổ Volume" />
             </div>
 
             <div style={{ marginTop: '10px' }}>
-              <label style={styleLabel}>Chu ká»³ MA Volume (PhÃºt)</label>
+              <label style={styleLabel}>Chu kỳ MA Volume (Phút)</label>
               <input type="number" value={local.maVolLength !== undefined ? local.maVolLength : 120} onChange={e => handleChange('maVolLength', e.target.value === '' ? '' : parseInt(e.target.value))} style={styleInput} />
             </div>
             <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
               <div style={{ flex: 1 }}>
-                <label style={styleLabel}>XÃ¡c suáº¥t TÃ­m (volPct1)</label>
+                <label style={styleLabel}>Xác suất Tím (volPct1)</label>
                 <input type="number" value={local.volPct1} onChange={e => handleChange('volPct1', Number(e.target.value))} style={styleInput} />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={styleLabel}>XÃ¡c suáº¥t Äá» (volPct2)</label>
+                <label style={styleLabel}>Xác suất Đỏ (volPct2)</label>
                 <input type="number" value={local.volPct2} onChange={e => handleChange('volPct2', Number(e.target.value))} style={styleInput} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
               <div style={{ flex: 1 }}>
-                <label style={styleLabel}>XÃ¡c suáº¥t Cam (volPct3)</label>
+                <label style={styleLabel}>Xác suất Cam (volPct3)</label>
                 <input type="number" value={local.volPct3} onChange={e => handleChange('volPct3', Number(e.target.value))} style={styleInput} />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={styleLabel}>XÃ¡c suáº¥t Xanh (volPct4)</label>
+                <label style={styleLabel}>Xác suất Xanh (volPct4)</label>
                 <input type="number" value={local.volPct4} onChange={e => handleChange('volPct4', Number(e.target.value))} style={styleInput} />
               </div>
             </div>
         </details>
 
         <details style={styleGroup}>
-          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#60a5fa' }}>ðŸ•’ Khung Giá» & Hiá»ƒn Thá»‹ Thá»i Gian</summary>
+          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#60a5fa' }}>🕒 Khung Giờ & Hiển Thị Thời Gian</summary>
           <div style={{ marginTop: '10px', paddingBottom: '10px', borderBottom: '1px solid #334155', marginBottom: '10px' }}>
-            <label style={styleLabel}>Äá»™ lá»‡ch thá»i gian (Giá»)</label>
-            <input type="number" step="0.5" value={local.timeShiftHours} onChange={e => handleChange('timeShiftHours', Number(e.target.value))} style={styleInput} title="Nháº­p sá»‘ giá» bá»‹ lá»‡ch (vd: 3 hoáº·c -3) Ä‘á»ƒ tinh chá»‰nh thá»§ cÃ´ng khá»›p vá»›i giá» cá»§a báº¡n" />
-            <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>* Náº¿u trá»¥c thá»i gian Ä‘i trÆ°á»›c 3 tiáº¿ng so vá»›i thá»±c táº¿, nháº­p -3 Ä‘á»ƒ lÃ¹i láº¡i.</span>
+            <label style={styleLabel}>Độ lệch thời gian (Giờ)</label>
+            <input type="number" step="0.5" value={local.timeShiftHours} onChange={e => handleChange('timeShiftHours', Number(e.target.value))} style={styleInput} title="Nhập số giờ bị lệch (vd: 3 hoặc -3) để tinh chỉnh thủ công khớp với giờ của bạn" />
+            <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>* Nếu trục thời gian đi trước 3 tiếng so với thực tế, nhập -3 để lùi lại.</span>
           </div>
           <div style={{ marginTop: '10px', paddingBottom: '10px', borderBottom: '1px solid #334155', marginBottom: '10px' }}>
-            <label style={styleLabel}>MÃºi giá» cá»§a SÃ n (Broker Timezone)</label>
+            <label style={styleLabel}>Múi giờ của Sàn (Broker Timezone)</label>
             <select value={local.brokerTimezone || 'Europe/Athens'} onChange={e => handleChange('brokerTimezone', e.target.value)} style={styleInput}>
-              <option value="Europe/Athens">ÄÃ´ng Ã‚u (EET/EEST - Chuáº©n Forex)</option>
-              <option value="UTC">Giá» Quá»‘c Táº¿ (UTC - ThÆ°á»ng dÃ¹ng Crypto)</option>
-              <option value="America/New_York">Giá» New York (EST/EDT)</option>
-              <option value="Europe/London">Giá» London (GMT/BST)</option>
-              <option value="Asia/Tokyo">Giá» Tokyo (JST)</option>
-              <option value="Asia/Ho_Chi_Minh">Giá» Viá»‡t Nam (ICT)</option>
+              <option value="Europe/Athens">Đông Âu (EET/EEST - Chuẩn Forex)</option>
+              <option value="UTC">Giờ Quốc Tế (UTC - Thường dùng Crypto)</option>
+              <option value="America/New_York">Giờ New York (EST/EDT)</option>
+              <option value="Europe/London">Giờ London (GMT/BST)</option>
+              <option value="Asia/Tokyo">Giờ Tokyo (JST)</option>
+              <option value="Asia/Ho_Chi_Minh">Giờ Việt Nam (ICT)</option>
             </select>
-            <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>* DÃ¹ng Ä‘á»ƒ tÃ­nh toÃ¡n chÃ­nh xÃ¡c dá»¯ liá»‡u lá»‹ch sá»­ MT5 khi Backtest</span>
+            <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>* Dùng để tính toán chính xác dữ liệu lịch sử MT5 khi Backtest</span>
           </div>
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
             <label style={{ ...styleLabel, display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
               <input type="checkbox" checked={local.autoDst} onChange={e => handleChange('autoDst', e.target.checked)} style={{ marginRight: '8px', cursor: 'pointer' }} />
-              Tá»± Ä‘á»™ng Ä‘iá»u chá»‰nh DST (MÃ¹a HÃ¨/ÄÃ´ng)
+              Tự động điều chỉnh DST (Mùa Hè/Đông)
             </label>
           </div>
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
             <div style={{ flex: 1 }}>
-              <label style={styleLabel}>PhiÃªn Ã (Má»Ÿ - Tokyo)</label>
+              <label style={styleLabel}>Phiên Á (Mở - Tokyo)</label>
               <input type="time" value={local.asiaStart} onChange={e => handleChange('asiaStart', e.target.value)} style={styleInput} />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={styleLabel}>PhiÃªn Ã (ÄÃ³ng - Tokyo)</label>
+              <label style={styleLabel}>Phiên Á (Đóng - Tokyo)</label>
               <input type="time" value={local.asiaEnd} onChange={e => handleChange('asiaEnd', e.target.value)} style={styleInput} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
             <div style={{ flex: 1 }}>
-              <label style={styleLabel}>PhiÃªn Ã‚u (Má»Ÿ - London)</label>
+              <label style={styleLabel}>Phiên Âu (Mở - London)</label>
               <input type="time" value={local.euroStart} onChange={e => handleChange('euroStart', e.target.value)} style={styleInput} />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={styleLabel}>PhiÃªn Ã‚u (ÄÃ³ng - London)</label>
+              <label style={styleLabel}>Phiên Âu (Đóng - London)</label>
               <input type="time" value={local.euroEnd} onChange={e => handleChange('euroEnd', e.target.value)} style={styleInput} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
             <div style={{ flex: 1 }}>
-              <label style={styleLabel}>PhiÃªn Má»¹ (Má»Ÿ - NY)</label>
+              <label style={styleLabel}>Phiên Mỹ (Mở - NY)</label>
               <input type="time" value={local.usStart} onChange={e => handleChange('usStart', e.target.value)} style={styleInput} />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={styleLabel}>PhiÃªn Má»¹ (ÄÃ³ng - NY)</label>
+              <label style={styleLabel}>Phiên Mỹ (Đóng - NY)</label>
               <input type="time" value={local.usEnd} onChange={e => handleChange('usEnd', e.target.value)} style={styleInput} />
             </div>
           </div>
         </details>
 
         <details style={styleGroup}>
-          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#ef4444' }}>ðŸ“§ Cáº¥u hÃ¬nh Gá»­i Email Cáº£nh BÃ¡o</summary>
+          <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#ef4444' }}>📧 Cấu hình Gửi Email Cảnh Báo</summary>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Email Gá»­i Äi (TÃ i khoáº£n Gmail)</label>
-            <input type="email" value={local.emailSender || ''} onChange={e => handleChange('emailSender', e.target.value)} style={styleInput} placeholder="vÃ­ dá»¥: abc@gmail.com" />
+            <label style={styleLabel}>Email Gửi Đi (Tài khoản Gmail)</label>
+            <input type="email" value={local.emailSender || ''} onChange={e => handleChange('emailSender', e.target.value)} style={styleInput} placeholder="ví dụ: abc@gmail.com" />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Máº­t Kháº©u á»¨ng Dá»¥ng (App Password)</label>
-            <input type="password" value={local.emailPassword || ''} onChange={e => handleChange('emailPassword', e.target.value)} style={styleInput} placeholder="16 chá»¯ cÃ¡i do Google cáº¥p" />
-            <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>VÃ o CÃ i Ä‘áº·t tÃ i khoáº£n Google cá»§a báº¡n &gt; Báº£o máº­t &gt; Báº­t XÃ¡c minh 2 bÆ°á»›c &gt; Táº¡o Máº­t kháº©u á»©ng dá»¥ng. MÃ£ nÃ y chá»‰ lÆ°u trá»¯ táº¡i mÃ¡y cá»§a báº¡n.</span>
+            <label style={styleLabel}>Mật Khẩu Ứng Dụng (App Password)</label>
+            <input type="password" value={local.emailPassword || ''} onChange={e => handleChange('emailPassword', e.target.value)} style={styleInput} placeholder="16 chữ cái do Google cấp" />
+            <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>Vào Cài đặt tài khoản Google của bạn &gt; Bảo mật &gt; Bật Xác minh 2 bước &gt; Tạo Mật khẩu ứng dụng. Mã này chỉ lưu trữ tại máy của bạn.</span>
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Email Nháº­n ThÃ´ng BÃ¡o</label>
-            <input type="email" value={local.emailReceiver || ''} onChange={e => handleChange('emailReceiver', e.target.value)} style={styleInput} placeholder="TÃªn email Ä‘á»ƒ nháº­n thÃ´ng bÃ¡o (cÃ³ thá»ƒ giá»‘ng bÃªn trÃªn)" />
+            <label style={styleLabel}>Email Nhận Thông Báo</label>
+            <input type="email" value={local.emailReceiver || ''} onChange={e => handleChange('emailReceiver', e.target.value)} style={styleInput} placeholder="Tên email để nhận thông báo (có thể giống bên trên)" />
           </div>
         </details>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-          <button onClick={onClose} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'white' }}>Há»§y</button>
-          <button onClick={handleSave} style={{ padding: '8px 16px', background: 'var(--accent-color)', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>LÆ°u thay Ä‘á»•i</button>
+          <button onClick={onClose} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'white' }}>Hủy</button>
+          <button onClick={handleSave} style={{ padding: '8px 16px', background: 'var(--accent-color)', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Lưu thay đổi</button>
         </div>
       </div>
     </div>
@@ -2922,7 +2922,7 @@ const CatalystTab = ({ configs }) => {
     }
   };
 
-  if (loading) return <div style={{ padding: '20px', color: 'white' }}>Äang táº£i dá»¯ liá»‡u Catalyst...</div>;
+  if (loading) return <div style={{ padding: '20px', color: 'white' }}>Đang tải dữ liệu Catalyst...</div>;
 
   const grouped = news.reduce((acc, curr) => {
     const d = new Date(curr.time * 1000);
@@ -2947,7 +2947,7 @@ const CatalystTab = ({ configs }) => {
   return (
     <div style={{ padding: '20px', color: 'white', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <h2 style={{ color: 'var(--accent-color)', margin: 0 }}>ðŸ“… Báº£ng Tin Tá»©c & Catalyst Tuáº§n</h2>
+        <h2 style={{ color: 'var(--accent-color)', margin: 0 }}>📅 Bảng Tin Tức & Catalyst Tuần</h2>
         <button
           onClick={handleRefresh}
           disabled={refreshing}
@@ -2965,8 +2965,8 @@ const CatalystTab = ({ configs }) => {
             transition: 'all 0.2s ease'
           }}
         >
-          <span style={{ display: 'inline-block', animation: refreshing ? 'spin 1s linear infinite' : 'none' }}>ðŸ”„</span>
-          {refreshing ? 'Äang cáº­p nháº­t...' : 'Cáº­p nháº­t tin tá»©c'}
+          <span style={{ display: 'inline-block', animation: refreshing ? 'spin 1s linear infinite' : 'none' }}>🔄</span>
+          {refreshing ? 'Đang cập nhật...' : 'Cập nhật tin tức'}
         </button>
       </div>
       {Object.keys(grouped).map(day => (
@@ -2975,14 +2975,14 @@ const CatalystTab = ({ configs }) => {
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Giá»</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Quá»‘c gia</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>TÃ¡c Ä‘á»™ng</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Tin tá»©c</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>TrÆ°á»›c Ä‘Ã³</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Dá»± bÃ¡o</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Thá»±c táº¿</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>ÄÃ¡nh giÃ¡</th>
+                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Giờ</th>
+                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Quốc gia</th>
+                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Tác động</th>
+                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Tin tức</th>
+                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Trước đó</th>
+                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Dự báo</th>
+                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Thực tế</th>
+                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Đánh giá</th>
               </tr>
             </thead>
             <tbody>
@@ -2996,7 +2996,7 @@ const CatalystTab = ({ configs }) => {
                   <td style={{ padding: '12px 5px', color: '#94a3b8' }}>{item.forecast || '-'}</td>
                   <td style={{ padding: '12px 5px', fontWeight: 'bold' }}>{item.actual || '-'}</td>
                   <td style={{ padding: '12px 5px', fontWeight: 'bold', color: getEvalColor(item.evaluation) }}>
-                    {item.evaluation === 'Positive' ? 'TÃ­ch cá»±c' : (item.evaluation === 'Negative' ? 'TiÃªu cá»±c' : (item.evaluation === 'Neutral' ? 'Trung tÃ­nh' : '-'))}
+                    {item.evaluation === 'Positive' ? 'Tích cực' : (item.evaluation === 'Negative' ? 'Tiêu cực' : (item.evaluation === 'Neutral' ? 'Trung tính' : '-'))}
                   </td>
                 </tr>
               ))}
@@ -3008,7 +3008,7 @@ const CatalystTab = ({ configs }) => {
   );
 };
 
-// Helper: tá»± Ä‘á»™ng xÃ¡c Ä‘á»‹nh loáº¡i matrix dá»±a trÃªn symbol Ä‘ang xem
+// Helper: tự động xác định loại matrix dựa trên symbol đang xem
 const getMatrixTypeForSymbol = (sym) => {
   if (!sym) return 'fx';
   const s = sym.toUpperCase();
@@ -3018,12 +3018,12 @@ const getMatrixTypeForSymbol = (sym) => {
   if (s.includes('GOLD') || s.includes('XAU') || s.includes('SILVER') || s.includes('XAG') || s.includes('OIL') || s.includes('BRENT') || s.includes('WTI') || s.includes('NATGAS') || s.includes('COPPER') || s.includes('PLATINUM') || s.includes('PALLADIUM')) return 'commodities';
   // US Stocks / Indices  
   if (s.includes('NASDAQ') || s.includes('US500') || s.includes('US30') || s.includes('US100') || s.includes('SPX') || s.includes('DJI') || s.includes('NDX') || s === 'NAS100' || s.includes('AAPL') || s.includes('TSLA') || s.includes('MSFT') || s.includes('AMZN') || s.includes('GOOG') || s.includes('META') || s.includes('NVDA') || s.includes('DAX') || s.includes('FTSE') || s.includes('JP225') || s.includes('NIKKEI')) return 'us_stocks';
-  // Forex (default) - cÃ¡c cáº·p tiá»n tá»‡
+  // Forex (default) - các cặp tiền tệ
   return 'fx';
 };
 
 const DEFAULT_SYMBOLS = {
-  "15 Cáº·p tiá»n tá»‡ chÃ­nh": [
+  "15 Cặp tiền tệ chính": [
     {name: "EURUSD", description: "Euro vs US Dollar"},
     {name: "GBPUSD", description: "Great Britain Pound vs US Dollar"},
     {name: "AUDUSD", description: "Australian Dollar vs US Dollar"},
@@ -3040,17 +3040,17 @@ const DEFAULT_SYMBOLS = {
     {name: "AUDJPY", description: "Australian Dollar vs Japanese Yen"},
     {name: "NZDJPY", description: "New Zealand Dollar vs Japanese Yen"}
   ],
-  "HÃ ng hoÃ¡ & Kim loáº¡i": [
-    {name: "GOLD.i#", description: "VÃ ng (Gold)"},
-    {name: "SILVER.i#", description: "Báº¡c (Silver)"},
-    {name: "OILCash#", description: "Dáº§u thÃ´ (WTI Oil)"}
+  "Hàng hoá & Kim loại": [
+    {name: "GOLD.i#", description: "Vàng (Gold)"},
+    {name: "SILVER.i#", description: "Bạc (Silver)"},
+    {name: "OILCash#", description: "Dầu thô (WTI Oil)"}
   ],
-  "Tiá»n Ä‘iá»‡n tá»­": [
+  "Tiền điện tử": [
     {name: "BTCUSD", description: "Bitcoin vs US Dollar"},
     {name: "ETHUSD", description: "Ethereum vs US Dollar"},
     {name: "SOLUSD", description: "Solana vs US Dollar"}
   ],
-  "Chá»‰ sá»‘ chá»©ng khoÃ¡n": [
+  "Chỉ số chứng khoán": [
     {name: "Nasdaq", description: "Nasdaq 100"},
     {name: "US500Cash#", description: "S&P 500"},
     {name: "US30Cash#", description: "Dow Jones 30"},
@@ -3087,7 +3087,7 @@ function App() {
                 id: Date.now() + Math.random(),
                 symbol: a.symbol,
                 price: a.price,
-                direction: "KÃ­ch hoáº¡t!",
+                direction: "Kích hoạt!",
                 note: a.note
              });
          }
@@ -3097,7 +3097,7 @@ function App() {
          setToasts(prev => [...prev, ...newToasts]);
       }
     } catch (e) {
-      console.error("Lá»—i fetch alerts:", e);
+      console.error("Lỗi fetch alerts:", e);
     }
   };
 
@@ -3161,7 +3161,7 @@ function App() {
   }, [symbol]);
 
   const [timeframe, setTimeframe] = useState('H1');
-  const [viewMode, setViewMode] = useState('chart'); // 'chart' hoáº·c 'matrix'
+  const [viewMode, setViewMode] = useState('chart'); // 'chart' hoặc 'matrix'
   const [chartType, setChartType] = useState(localStorage.getItem('chartType') || 'candles');
   const [chartTheme, setChartTheme] = useState(localStorage.getItem('chartTheme') || 'dark');
   const [showSdBands, setShowSdBands] = useState(localStorage.getItem('showSdBands') !== 'false');
@@ -3284,7 +3284,7 @@ function App() {
       .catch(err => console.error("Could not load configs from backend", err));
   }, []);
 
-  // KÃ­ch hoáº¡t láº¡i resize khi áº©n/hiá»‡n thanh cÃ´ng cá»¥ Ä‘á»ƒ chart tá»± giÃ£n cÃ¡ch
+  // Kích hoạt lại resize khi ẩn/hiện thanh công cụ để chart tự giãn cách
   useEffect(() => {
     const timer = setTimeout(() => {
       window.dispatchEvent(new Event('resize'));
@@ -3300,12 +3300,12 @@ function App() {
         {toasts.map(t => (
           <div key={t.id} className="toast">
             <div className="toast-header">
-              <span>ðŸ”” {t.symbol}</span>
-              <button className="toast-close" onClick={() => setToasts(toasts.filter(x => x.id !== t.id))}>âœ•</button>
+              <span>🔔 {t.symbol}</span>
+              <button className="toast-close" onClick={() => setToasts(toasts.filter(x => x.id !== t.id))}>✕</button>
             </div>
             <div className="toast-body">
-              <div>GiÃ¡: <strong>{t.price}</strong></div>
-              <div style={{ color: t.direction.includes('LÃªn') ? '#22c55e' : '#ef4444' }}>{t.direction}</div>
+              <div>Giá: <strong>{t.price}</strong></div>
+              <div style={{ color: t.direction.includes('Lên') ? '#22c55e' : '#ef4444' }}>{t.direction}</div>
               {t.note && <div style={{ fontStyle: 'italic', marginTop: '4px', color: '#94a3b8' }}>"{t.note}"</div>}
             </div>
           </div>
@@ -3353,10 +3353,10 @@ function App() {
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Cáº·p tiá»n tá»‡ (Symbol)</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Cặp tiền tệ (Symbol)</label>
             <input
               type="text"
-              placeholder="TÃ¬m kiáº¿m mÃ£ hoáº·c tÃªn tÃ i sáº£n..."
+              placeholder="Tìm kiếm mã hoặc tên tài sản..."
               value={searchSymbol}
               onChange={(e) => setSearchSymbol(e.target.value)}
               onKeyDown={(e) => {
@@ -3366,10 +3366,10 @@ function App() {
                   
                   let matchedSymbol = null;
                   
-                  if ("thá»‹ trÆ°á»ng chung fx gi global_index".includes(searchStr)) matchedSymbol = "GLOBAL_INDEX";
+                  if ("thị trường chung fx gi global_index".includes(searchStr)) matchedSymbol = "GLOBAL_INDEX";
                   else if ("us stocks us_stocks_gi".includes(searchStr)) matchedSymbol = "US_STOCKS_GI";
-                  else if ("hÃ ng hÃ³a commodities commodities_gi".includes(searchStr)) matchedSymbol = "COMMODITIES_GI";
-                  else if ("tiá»n Ä‘iá»‡n tá»­ crypto crypto_gi".includes(searchStr)) matchedSymbol = "CRYPTO_GI";
+                  else if ("hàng hóa commodities commodities_gi".includes(searchStr)) matchedSymbol = "COMMODITIES_GI";
+                  else if ("tiền điện tử crypto crypto_gi".includes(searchStr)) matchedSymbol = "CRYPTO_GI";
                   
                   if (!matchedSymbol && availableSymbols) {
                     for (const group of Object.keys(availableSymbols)) {
@@ -3394,11 +3394,11 @@ function App() {
               style={{ width: '100%', marginBottom: '8px', padding: '8px', borderRadius: '4px', border: '1px solid #374151', background: '#1f2937', color: '#fff', fontSize: '0.85rem' }}
             />
             <select value={symbol} onChange={(e) => setSymbol(e.target.value)} style={{ width: '100%' }}>
-              <optgroup label="Chá»‰ sá»‘ Tá»•ng há»£p">
-                <option value="GLOBAL_INDEX">Thá»‹ trÆ°á»ng chung (FX GI)</option>
-                <option value="US_STOCKS_GI">Chá»‰ sá»‘ Cá»• phiáº¿u Má»¹ (US Stocks GI)</option>
-                <option value="COMMODITIES_GI">Chá»‰ sá»‘ HÃ ng hÃ³a (Commodities GI)</option>
-                <option value="CRYPTO_GI">Chá»‰ sá»‘ Tiá»n Ä‘iá»‡n tá»­ (Crypto GI)</option>
+              <optgroup label="Chỉ số Tổng hợp">
+                <option value="GLOBAL_INDEX">Thị trường chung (FX GI)</option>
+                <option value="US_STOCKS_GI">Chỉ số Cổ phiếu Mỹ (US Stocks GI)</option>
+                <option value="COMMODITIES_GI">Chỉ số Hàng hóa (Commodities GI)</option>
+                <option value="CRYPTO_GI">Chỉ số Tiền điện tử (Crypto GI)</option>
               </optgroup>
               {availableSymbols ? (
                 Object.keys(availableSymbols).map(group => {
@@ -3417,7 +3417,7 @@ function App() {
                   );
                 })
               ) : (
-                <optgroup label="Äang táº£i danh sÃ¡ch...">
+                <optgroup label="Đang tải danh sách...">
                   <option value="EURUSD">EURUSD</option>
                 </optgroup>
               )}
@@ -3425,7 +3425,7 @@ function App() {
           </div>
           
           <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Khung thá»i gian (Timeframe)</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Khung thời gian (Timeframe)</label>
             <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)} style={{ width: '100%' }}>
               <option value="M1">1 Minute</option>
               <option value="M3">3 Minutes</option>
@@ -3440,68 +3440,68 @@ function App() {
           </div>
           
           <div style={{ marginTop: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Loáº¡i biá»ƒu Ä‘á»“ (Chart Type)</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Loại biểu đồ (Chart Type)</label>
             <select value={chartType} onChange={(e) => {
               setChartType(e.target.value);
               localStorage.setItem('chartType', e.target.value);
             }} style={{ width: '100%' }}>
-              <option value="candles">Náº¿n (Candlestick)</option>
-              <option value="line">ÄÆ°á»ng (Line - Close)</option>
+              <option value="candles">Nến (Candlestick)</option>
+              <option value="line">Đường (Line - Close)</option>
               <option value="hlc">HLC (High - Low - Close)</option>
               <option value="money_flow">Money Flow</option>
             </select>
           </div>
           
           <div style={{ marginTop: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>MÃ u ná»n biá»ƒu Ä‘á»“ (Theme)</label>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Màu nền biểu đồ (Theme)</label>
             <select value={chartTheme} onChange={(e) => {
               setChartTheme(e.target.value);
               localStorage.setItem('chartTheme', e.target.value);
             }} style={{ width: '100%' }}>
-              <option value="dark">Tá»‘i (Máº·c Ä‘á»‹nh)</option>
-              <option value="sunset">HoÃ ng HÃ´n (Sunset)</option>
-              <option value="night">ThÃ nh phá»‘ (Night)</option>
+              <option value="dark">Tối (Mặc định)</option>
+              <option value="sunset">Hoàng Hôn (Sunset)</option>
+              <option value="night">Thành phố (Night)</option>
             </select>
           </div>
           
 
           
           <div style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
-            <h3 style={{ fontSize: '0.9rem', marginBottom: '10px', color: 'var(--text-secondary)' }}>TÃ­nh nÄƒng</h3>
+            <h3 style={{ fontSize: '0.9rem', marginBottom: '10px', color: 'var(--text-secondary)' }}>Tính năng</h3>
             <button 
               onClick={() => setViewMode('chart')}
               style={{ width: '100%', marginBottom: '10px', textAlign: 'left', background: viewMode === 'chart' ? 'rgba(59, 130, 246, 0.2)' : '' }}
             >
-              ðŸ“ˆ Biá»ƒu Ä‘á»“ Chart
+              📈 Biểu đồ Chart
             </button>
             <button 
               onClick={() => setViewMode('matrix')}
               style={{ width: '100%', marginBottom: '10px', textAlign: 'left', background: viewMode === 'matrix' ? 'rgba(59, 130, 246, 0.2)' : '' }}
             >
-              âš¡ Currency Matrix
+              ⚡ Currency Matrix
             </button>
             <button 
               onClick={() => setViewMode('backtest')}
               style={{ width: '100%', marginBottom: '10px', textAlign: 'left', background: viewMode === 'backtest' ? 'rgba(59, 130, 246, 0.2)' : '' }}
             >
-              âª Backtest Mode
+              ⏪ Backtest Mode
             </button>
             <button 
               onClick={() => setViewMode('catalyst')}
               style={{ width: '100%', marginBottom: '10px', textAlign: 'left', background: viewMode === 'catalyst' ? 'rgba(59, 130, 246, 0.2)' : '' }}
             >
-              ðŸ“… Lá»‹ch Catalyst
+              📅 Lịch Catalyst
             </button>
             <button 
               onClick={() => setViewMode('strategy')}
               style={{ width: '100%', marginBottom: '10px', textAlign: 'left', background: viewMode === 'strategy' ? 'rgba(59, 130, 246, 0.2)' : '' }}
             >
-              ðŸ›  Strategy Builder
+              🛠 Strategy Builder
             </button>
-            <button onClick={() => setShowSettings(true)} style={{ width: '100%', textAlign: 'left' }}>âš™ï¸ Indicator Settings</button>
+            <button onClick={() => setShowSettings(true)} style={{ width: '100%', textAlign: 'left' }}>⚙️ Indicator Settings</button>
           </div>
           <div style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
-            <h3 style={{ fontSize: '0.9rem', marginBottom: '10px', color: 'var(--text-secondary)' }}>â° Cáº£nh bÃ¡o GiÃ¡ (Alerts)</h3>
+            <h3 style={{ fontSize: '0.9rem', marginBottom: '10px', color: 'var(--text-secondary)' }}>⏰ Cảnh báo Giá (Alerts)</h3>
             
             <div style={{ display: 'flex', gap: '5px', marginBottom: '5px' }}>
               <select 
@@ -3530,12 +3530,12 @@ function App() {
                 onChange={e => setNewAlertType(e.target.value)}
                 style={{ padding: '6px', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'white', maxWidth: '75px', fontSize: '0.8rem' }}
               >
-                <option value="price">GiÃ¡</option>
+                <option value="price">Giá</option>
                 <option value="mom">% Mom Flip</option>
               </select>
               <input 
                 type="number" 
-                placeholder={newAlertType === 'price' ? "GiÃ¡" : "% Mom Flip"} 
+                placeholder={newAlertType === 'price' ? "Giá" : "% Mom Flip"} 
                 value={newAlertPrice}
                 onChange={e => setNewAlertPrice(e.target.value)}
                 style={{ flex: 1, padding: '6px', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'white', minWidth: 0 }}
@@ -3544,13 +3544,13 @@ function App() {
             <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
               <input 
                 type="text" 
-                placeholder="Ghi chÃº (TÃ¹y chá»n)" 
+                placeholder="Ghi chú (Tùy chọn)" 
                 value={newAlertNote}
                 onChange={e => setNewAlertNote(e.target.value)}
                 style={{ flex: 1, padding: '6px', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'white' }}
               />
               <label style={{ display: 'flex', alignItems: 'center', fontSize: '0.8rem', color: '#94a3b8', gap: '4px' }}>
-                <input type="checkbox" checked={newAlertBarCloseOnly} onChange={e => setNewAlertBarCloseOnly(e.target.checked)} /> ÄÃ³ng náº¿n
+                <input type="checkbox" checked={newAlertBarCloseOnly} onChange={e => setNewAlertBarCloseOnly(e.target.checked)} /> Đóng nến
               </label>
               <button 
                 className="primary" 
@@ -3576,10 +3576,10 @@ function App() {
                     </div>
                     {a.note && <span style={{ color: '#94a3b8', fontSize: '0.75rem', marginTop: '2px', fontStyle: 'italic' }}>{a.note}</span>}
                   </div>
-                  <button onClick={() => handleDeleteAlert(a.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0 5px' }}>âœ•</button>
+                  <button onClick={() => handleDeleteAlert(a.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0 5px' }}>✕</button>
                 </div>
               ))}
-              {alerts.length === 0 && <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic' }}>ChÆ°a cÃ³ cáº£nh bÃ¡o nÃ o</div>}
+              {alerts.length === 0 && <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic' }}>Chưa có cảnh báo nào</div>}
             </div>
           </div>
 
@@ -3596,9 +3596,9 @@ function App() {
               style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '1.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               title="Toggle Sidebar"
             >
-              â˜°
+              ☰
             </button>
-            {viewMode === 'chart' ? `${symbol} â€¢ ${timeframe}` : viewMode === 'backtest' ? `${symbol} â€¢ ${timeframe} (Backtest Mode)` : viewMode === 'catalyst' ? 'Lá»‹ch Tin tá»©c Catalyst' : viewMode === 'strategy' ? 'Strategy Builder' : 'Currency Strength Matrix'}
+            {viewMode === 'chart' ? `${symbol} • ${timeframe}` : viewMode === 'backtest' ? `${symbol} • ${timeframe} (Backtest Mode)` : viewMode === 'catalyst' ? 'Lịch Tin tức Catalyst' : viewMode === 'strategy' ? 'Strategy Builder' : 'Currency Strength Matrix'}
           </div>
           <div className="toolbar">
             
@@ -3631,7 +3631,6 @@ function App() {
 }
 
 export default App;
-
 
 
 
