@@ -154,42 +154,52 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
 ### 7. Hệ thống Xếp hạng Tiền tệ (Matrix)
 *(Hỗ trợ đồng thời 2 chế độ: Sức mạnh Dòng tiền và Xu hướng Giá)*
 ```python
+        # TÌM V-BLOCK (V_TARGET) DÙNG CHUNG CHO CẢ HAI CHẾ ĐỘ
+        lookback_candles = int(vol_days * 24 * candles_per_hour)
+        target_pct = config.get('mfTargetPct', 75) / 100.0
+        rolling_vol_N = df['vol_rolling']
+        V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(target_pct).fillna(1.0).values, 1.0)
+        
+        cum_vol = df['value'].cumsum().values
+        cum_vwap_vol = df['vwap_vol'].cumsum().values
+        
+        n = len(df)
+        i_arr = np.arange(n)
+        
+        target_current = cum_vol - V_series
+        j_current = np.searchsorted(cum_vol, target_current, side='right')
+        j_cur_m1 = np.where(j_current > 0, j_current - 1, 0)
+        has_j_cur = j_current > 0
+        
+        vol_cur = cum_vol - np.where(has_j_cur, cum_vol[j_cur_m1], 0)
+        N_candles = np.maximum(i_arr - j_current + 1, 1.0)
+
         if matrix_mode == "money_flow":
             # VF-Momentum Logic
-            lookback_candles = int(vol_days * 24 * candles_per_hour)
-            target_pct = config.get('mfTargetPct', 75) / 100.0
-            rolling_vol_N = df['vol_rolling']
-            V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(target_pct).fillna(1.0).values, 1.0)
-            
-            cum_vol = df['value'].cumsum().values
             hlc3_pre = df['hlc3'].shift(1).fillna(df['hlc3'])
             df['hlc3_diff_pct'] = np.where(hlc3_pre > 0, (df['hlc3'] - hlc3_pre) / hlc3_pre * 100, 0.0)
             df['candle_mom'] = df['hlc3_diff_pct'] * df['value']
             cum_candle_mom = df['candle_mom'].cumsum().values
             
-            n = len(df)
-            i_arr = np.arange(n)
-            
-            target_current = cum_vol - V_series
-            j_current = np.searchsorted(cum_vol, target_current, side='right')
-            j_cur_m1 = np.where(j_current > 0, j_current - 1, 0)
-            has_j_cur = j_current > 0
-            
-            vol_cur = cum_vol - np.where(has_j_cur, cum_vol[j_cur_m1], 0)
             net_mom_cur = cum_candle_mom - np.where(has_j_cur, cum_candle_mom[j_cur_m1], 0)
             
-            N_candles = np.maximum(i_arr - j_current + 1, 1.0)
-            
-            # Scale lại bằng chính window_size (thuần túy theo khung thời gian người dùng cấu hình)
+            # Scale lại bằng chính window_size (chuẩn hoá)
             df['diff_pct'] = np.where(vol_cur > 0, (net_mom_cur / V_series) * window_size, 0.0)
         else:
-            # TREND MODE (C-VWMA vs HLC3 cũ)
-            vwap_vol = (df['hlc3'] * df['value']).rolling(window=window_size, min_periods=1).sum()
-            c_vwap = np.where(df['vol_rolling'] > 0, vwap_vol / df['vol_rolling'], df['hlc3'])
+            # TREND MODE (True C-VWMA Velocity dựa trên V-block)
+            vwap_vol_cur = cum_vwap_vol - np.where(has_j_cur, cum_vwap_vol[j_cur_m1], 0)
+            c_vwap = np.where(vol_cur > 0, vwap_vol_cur / vol_cur, df['hlc3'])
             
-            hlc3_old = df['hlc3'].shift(window_size).fillna(df['hlc3'])
-            # Tính phần trăm thay đổi để chuẩn hóa các cặp tiền có tỷ giá khác nhau
-            df['diff_pct'] = np.where(hlc3_old > 0, (c_vwap - hlc3_old) / hlc3_old * 100.0, 0.0)
+            hlc3_values = df['hlc3'].values
+            # Lấy HLC3 của cây nến liền trước khi bắt đầu V-block
+            hlc3_old = hlc3_values[j_cur_m1]
+            
+            # Quãng đường: Tính phần trăm thay đổi
+            distance_pct = np.where(hlc3_old > 0, (c_vwap - hlc3_old) / hlc3_old * 100.0, 0.0)
+            
+            # Vận tốc: Quãng đường chia cho thời gian (số nến của V-block)
+            # Nhân window_size để scale số lên mức dễ nhìn (tương đương với Money Flow)
+            df['diff_pct'] = (distance_pct / N_candles) * window_size
         
         if len(df) > window_size:
             if matrix_mode == "money_flow":
