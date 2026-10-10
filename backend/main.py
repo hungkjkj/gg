@@ -10,7 +10,7 @@ import numpy as np
 from typing import List, Optional
 import concurrent.futures
 
-# Nhập các hàm từ service MT5
+# Nháº­p cÃ¡c hÃ m tá»« service MT5
 import mt5_service
 from mt5_service import initialize_mt5, get_historical_data, shutdown_mt5, get_tick, _get_real_symbol
 
@@ -25,7 +25,7 @@ async def add_cache_control_header(request, call_next):
     response.headers["Expires"] = "0"
     return response
 
-# Cấu hình CORS để Frontend (React) có thể gọi API
+# Cáº¥u hÃ¬nh CORS Ä‘á»ƒ Frontend (React) cÃ³ thá»ƒ gá»i API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,17 +39,17 @@ import asyncio
 
 @app.on_event("startup")
 def startup_event():
-    # Khởi tạo kết nối MT5 khi server chạy
+    # Khá»Ÿi táº¡o káº¿t ná»‘i MT5 khi server cháº¡y
     if not initialize_mt5():
         print("WARNING: Could not initialize MT5 on startup.")
     
-    # Khởi động trình quét cảnh báo ngầm
+    # Khá»Ÿi Ä‘á»™ng trÃ¬nh quÃ©t cáº£nh bÃ¡o ngáº§m
     asyncio.create_task(alert_service.alert_worker())
     asyncio.create_task(strategy_worker())
 
 @app.on_event("shutdown")
 def shutdown_event():
-    # Đóng kết nối khi tắt server
+    # ÄÃ³ng káº¿t ná»‘i khi táº¯t server
     shutdown_mt5()
 
 import smtplib
@@ -137,36 +137,36 @@ import news_service
 @app.get("/api/v1/catalyst")
 def get_catalyst():
     """
-    Lấy toàn bộ tin tức kinh tế trong tuần cho tab Catalyst.
+    Láº¥y toÃ n bá»™ tin tá»©c kinh táº¿ trong tuáº§n cho tab Catalyst.
     """
     try:
         events = news_service.get_weekly_news()
         return events
     except Exception as e:
-        print("Lỗi lấy news catalyst:", str(e))
+        print("Lá»—i láº¥y news catalyst:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/catalyst/refresh")
 def refresh_catalyst():
     """
-    Xoá cache và cào lại toàn bộ tin tức từ ForexFactory.
-    Dùng khi người dùng muốn cập nhật thủ công.
+    XoÃ¡ cache vÃ  cÃ o láº¡i toÃ n bá»™ tin tá»©c tá»« ForexFactory.
+    DÃ¹ng khi ngÆ°á»i dÃ¹ng muá»‘n cáº­p nháº­t thá»§ cÃ´ng.
     """
     try:
-        # Reset toàn bộ cache: xóa checked flag, xóa last_fetch
+        # Reset toÃ n bá»™ cache: xÃ³a checked flag, xÃ³a last_fetch
         news_service.NEWS_CACHE["data"] = []
         news_service.NEWS_CACHE["last_fetch"] = 0
         events = news_service.get_weekly_news()
         return {"status": "success", "count": len(events)}
     except Exception as e:
-        print("Lỗi refresh catalyst:", str(e))
+        print("Lá»—i refresh catalyst:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/v1/news")
 def get_news(symbol: str):
     """
-    Lấy tin tức kinh tế từ Forex Factory liên quan đến cặp tiền.
+    Láº¥y tin tá»©c kinh táº¿ tá»« Forex Factory liÃªn quan Ä‘áº¿n cáº·p tiá»n.
     """
     import time
     try:
@@ -177,7 +177,7 @@ def get_news(symbol: str):
 
 @app.get("/api/v1/symbols")
 def get_all_symbols():
-    """Lấy toàn bộ danh sách tài sản (symbols) từ MT5"""
+    """Láº¥y toÃ n bá»™ danh sÃ¡ch tÃ i sáº£n (symbols) tá»« MT5"""
     try:
         symbols = mt5_service.get_all_symbols()
         return {"status": "success", "data": symbols}
@@ -187,14 +187,14 @@ def get_all_symbols():
 @app.get("/api/v1/news/backtest")
 def get_backtest_news(symbol: str, timestamp: int):
     """
-    Lấy tin tức lịch sử cho chế độ Backtest.
-    Trả về tin tức của tuần chứa timestamp đã cho, lọc theo cặp tiền.
+    Láº¥y tin tá»©c lá»‹ch sá»­ cho cháº¿ Ä‘á»™ Backtest.
+    Tráº£ vá» tin tá»©c cá»§a tuáº§n chá»©a timestamp Ä‘Ã£ cho, lá»c theo cáº·p tiá»n.
     """
     import time as time_mod
     try:
         all_events = news_service.get_backtest_news(timestamp)
         
-        # Lọc theo cặp tiền
+        # Lá»c theo cáº·p tiá»n
         currencies = news_service.extract_currencies(symbol)
             
         filtered = []
@@ -212,7 +212,7 @@ def get_backtest_news(symbol: str, timestamp: int):
 
 @app.get("/api/v1/ticks")
 def get_ticks(symbols: str):
-    """Lấy giá hiện tại của một danh sách symbols (phân tách bằng dấu phẩy)"""
+    """Láº¥y giÃ¡ hiá»‡n táº¡i cá»§a má»™t danh sÃ¡ch symbols (phÃ¢n tÃ¡ch báº±ng dáº¥u pháº©y)"""
     sym_list = [s.strip() for s in symbols.split(',') if s.strip()]
     if not sym_list:
         return {"status": "success", "data": {}}
@@ -246,14 +246,14 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
               usStart: str = "18:30", usEnd: str = "23:00",
               brokerTimezone: str = "Europe/Athens"):
     """
-    Lấy dữ liệu OHLCV từ MT5 và tính toán Chỉ báo Nâng cao (D-VP & Momentum).
+    Láº¥y dá»¯ liá»‡u OHLCV tá»« MT5 vÃ  tÃ­nh toÃ¡n Chá»‰ bÃ¡o NÃ¢ng cao (D-VP & Momentum).
     """    
     df = get_historical_data(symbol, timeframe, count, end_time, brokerTimezone)
     
     if df is None or df.empty:
         raise HTTPException(status_code=404, detail=f"No data found for {symbol} on {timeframe}")
         
-    # Chuẩn hoá giờ MT5 (giả định EET/EEST) về UTC 0 chuẩn
+    # Chuáº©n hoÃ¡ giá» MT5 (giáº£ Ä‘á»‹nh EET/EEST) vá» UTC 0 chuáº©n
     broker_naive = pd.to_datetime(df['time'], unit='s')
     try:
         broker_aware = broker_naive.dt.tz_localize(brokerTimezone, nonexistent='shift_forward', ambiguous='NaT')
@@ -261,7 +261,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         # Fallback to UTC if timezone is invalid
         broker_aware = broker_naive.dt.tz_localize('UTC')
     utc_aware = broker_aware.dt.tz_convert('UTC')
-    df['broker_time'] = df['time'] # Lưu lại để fetch M1 nếu cần
+    df['broker_time'] = df['time'] # LÆ°u láº¡i Ä‘á»ƒ fetch M1 náº¿u cáº§n
     df['time'] = (utc_aware - pd.Timestamp("1970-01-01", tz="UTC")) // pd.Timedelta('1s')
     df = df.dropna(subset=['time']).copy()
     df['time'] = df['time'].astype(int)
@@ -339,7 +339,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     lookback_candles = max(1, int((matrixLookbackHours * 3600) / tf_seconds))
     
     # --- New VF-Momentum Logic directly on current timeframe ---
-    # 1. Tính V = percentile mfTargetPct của tổng volume N nến (mom_window) trong cửa sổ chung
+    # 1. TÃ­nh V = percentile mfTargetPct cá»§a tá»•ng volume N náº¿n (mom_window) trong cá»­a sá»• chung
     target_vol_candles = max(1, int(mfTimeoutCandles))
     rolling_vol_N = df['value'].rolling(window=target_vol_candles, min_periods=1).sum()
     V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(mfTargetPct / 100.0).fillna(1.0).values, 1.0)
@@ -347,7 +347,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     cum_vol = df['value'].cumsum().values
     
     # --- New User-defined Momentum Formula ---
-    # Động lượng tức thời của từng nến (quy về % thay vì giá tuyệt đối): ((hlc3 - hlc3_pre) / hlc3_pre) * 100 * vol
+    # Äá»™ng lÆ°á»£ng tá»©c thá»i cá»§a tá»«ng náº¿n (quy vá» % thay vÃ¬ giÃ¡ tuyá»‡t Ä‘á»‘i): ((hlc3 - hlc3_pre) / hlc3_pre) * 100 * vol
     hlc3_pre = df['hlc3'].shift(1).fillna(df['hlc3'])
     df['hlc3_diff_pct'] = np.where(hlc3_pre > 0, (df['hlc3'] - hlc3_pre) / hlc3_pre * 100, 0.0)
     df['candle_mom'] = df['hlc3_diff_pct'] * df['value']
@@ -356,7 +356,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     n = len(df)
     i_arr = np.arange(n)
     
-    # V-block hiện tại
+    # V-block hiá»‡n táº¡i
     target_current = cum_vol - V_series
     j_current = np.searchsorted(cum_vol, target_current, side='right')
     j_cur_m1 = np.where(j_current > 0, j_current - 1, 0)
@@ -365,47 +365,47 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     vol_cur = cum_vol - np.where(has_j_cur, cum_vol[j_cur_m1], 0)
     net_mom_cur = cum_candle_mom - np.where(has_j_cur, cum_candle_mom[j_cur_m1], 0)
     
-    # N = số lượng nến trong V-block
+    # N = sá»‘ lÆ°á»£ng náº¿n trong V-block
     N_candles = np.maximum(i_arr - j_current + 1, 1.0)
     
-    # Trung bình cộng động lượng trong V-block (net_mom_cur / V_series) đã tương đương với (Displacement / N)
-    # Không nhân thêm mom_window, giữ nguyên giá trị nguyên bản
+    # Trung bÃ¬nh cá»™ng Ä‘á»™ng lÆ°á»£ng trong V-block (net_mom_cur / V_series) Ä‘Ã£ tÆ°Æ¡ng Ä‘Æ°Æ¡ng vá»›i (Displacement / N)
+    # KhÃ´ng nhÃ¢n thÃªm mom_window, giá»¯ nguyÃªn giÃ¡ trá»‹ nguyÃªn báº£n
     df['mom_raw_raw'] = np.where(vol_cur > 0, net_mom_cur / V_series, 0.0)
     df['abs_mom_raw'] = df['mom_raw_raw'].abs()
     
-    # Tính median động lượng trong chu kỳ N giờ
+    # TÃ­nh median Ä‘á»™ng lÆ°á»£ng trong chu ká»³ N giá»
     rolling_median_mom = df['abs_mom_raw'].rolling(window=lookback_candles, min_periods=1).median().replace(0, np.nan).fillna(1e-9)
     
     # --- Momentum Flip ---
-    # SMA Moment: trung bình cộng độ lớn momentum của N nến gần nhất (không tính nến hiện tại)
+    # SMA Moment: trung bÃ¬nh cá»™ng Ä‘á»™ lá»›n momentum cá»§a N náº¿n gáº§n nháº¥t (khÃ´ng tÃ­nh náº¿n hiá»‡n táº¡i)
     sma_mom_window = max(1, smaMomLength)
     sma_mom = df['abs_mom_raw'].shift(1).rolling(window=sma_mom_window, min_periods=1).mean().replace(0, np.nan).fillna(1e-9)
-    # hệ số flip = động lượng hiện tại / SMA moment (so sánh với trung bình N nến thay vì chỉ 1 nến trước)
+    # há»‡ sá»‘ flip = Ä‘á»™ng lÆ°á»£ng hiá»‡n táº¡i / SMA moment (so sÃ¡nh vá»›i trung bÃ¬nh N náº¿n thay vÃ¬ chá»‰ 1 náº¿n trÆ°á»›c)
     flip_ratio = df['abs_mom_raw'] / sma_mom
-    # Theo chuẩn của bạn: Flip Metric chỉ đơn giản là gia tốc bứt phá so với sự ỳ ạch gần nhất
+    # Theo chuáº©n cá»§a báº¡n: Flip Metric chá»‰ Ä‘Æ¡n giáº£n lÃ  gia tá»‘c bá»©t phÃ¡ so vá»›i sá»± á»³ áº¡ch gáº§n nháº¥t
     mom_flip_metric = flip_ratio
     
-    # --- Khối lượng trung bình của V-block ---
+    # --- Khá»‘i lÆ°á»£ng trung bÃ¬nh cá»§a V-block ---
     df['vblock_avg_vol'] = vol_cur / np.maximum(i_arr - j_current + 1, 1.0)
     
-    # 1. Tính ngưỡng lọc flip dựa trên phần trăm mom người dùng chọn
+    # 1. TÃ­nh ngÆ°á»¡ng lá»c flip dá»±a trÃªn pháº§n trÄƒm mom ngÆ°á»i dÃ¹ng chá»n
     filter_threshold = df['abs_mom_raw'].rolling(window=lookback_candles, min_periods=1).quantile(momFlipFilterPct / 100.0)
     mom_valid_mask = df['abs_mom_raw'] >= filter_threshold
     
-    # 2. Tạo Series volume chỉ chứa những nến thoả mãn mom (Dùng khối lượng trung bình của V-block)
+    # 2. Táº¡o Series volume chá»‰ chá»©a nhá»¯ng náº¿n thoáº£ mÃ£n mom (DÃ¹ng khá»‘i lÆ°á»£ng trung bÃ¬nh cá»§a V-block)
     vol_valid = df['vblock_avg_vol'].where(mom_valid_mask, np.nan)
     
-    # 3. Tính ngưỡng lọc volume trên chính nhóm đã lọc mom
+    # 3. TÃ­nh ngÆ°á»¡ng lá»c volume trÃªn chÃ­nh nhÃ³m Ä‘Ã£ lá»c mom
     vol_filter_threshold = vol_valid.rolling(window=lookback_candles, min_periods=1).quantile(momFlipVolFilterPct / 100.0)
     
-    # 4. Valid mask cuối cùng là thoả mãn cả hai
+    # 4. Valid mask cuá»‘i cÃ¹ng lÃ  thoáº£ mÃ£n cáº£ hai
     valid_mask = mom_valid_mask & (df['vblock_avg_vol'] >= vol_filter_threshold)
 
     mom_flip_metric_valid = mom_flip_metric.where(valid_mask, np.nan)
     
     df['mom_flip'] = mom_flip_metric_valid.rolling(window=lookback_candles, min_periods=1).rank(pct=True, method='max') * 100.0
     
-    # Tính toán các đường xác suất Momentum (Momentum đã chuẩn hóa theo median)
+    # TÃ­nh toÃ¡n cÃ¡c Ä‘Æ°á»ng xÃ¡c suáº¥t Momentum (Momentum Ä‘Ã£ chuáº©n hÃ³a theo median)
     df['mom_raw'] = df['mom_raw_raw'] / rolling_median_mom
     df['abs_mom'] = df['abs_mom_raw'] / rolling_median_mom
     
@@ -413,11 +413,11 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['mom_lvl2'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct2 / 100.0)
     df['mom_lvl3'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct3 / 100.0)
     
-    # Tính xếp hạng phần trăm của Động lượng (có dấu: -100% đến 100%)
+    # TÃ­nh xáº¿p háº¡ng pháº§n trÄƒm cá»§a Äá»™ng lÆ°á»£ng (cÃ³ dáº¥u: -100% Ä‘áº¿n 100%)
     df['mom_percent_rank'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).rank(pct=True, method='max') * 100.0 * np.sign(df['mom_raw_raw'])
 
     
-    # --- Tính toán Normalized Volume ---
+    # --- TÃ­nh toÃ¡n Normalized Volume ---
     df['vol_median'] = df['value'].rolling(window=lookback_candles, min_periods=1).median()
     df['norm_vol'] = np.where(df['vol_median'] > 0, df['value'] / df['vol_median'], 0)
     df['ma_vol'] = pd.Series(df['norm_vol']).rolling(window=ma_vol_window, min_periods=1).mean()
@@ -432,14 +432,14 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['vol_lvl3'] = np.where(df['vol_median'] > 0, df['vol_lvl3_raw'] / df['vol_median'], 0)
     df['vol_lvl4'] = np.where(df['vol_median'] > 0, df['vol_lvl4_raw'] / df['vol_median'], 0)
     
-    # --- Tính toán RVol (Relative Volume theo cùng khung giờ & cùng thứ trong tuần) ---
+    # --- TÃ­nh toÃ¡n RVol (Relative Volume theo cÃ¹ng khung giá» & cÃ¹ng thá»© trong tuáº§n) ---
     df['broker_dt'] = pd.to_datetime(df['broker_time'], unit='s')
     df['time_of_day'] = df['broker_dt'].dt.time
     df['day_of_week'] = df['broker_dt'].dt.dayofweek
     df['rvol_mean'] = df.groupby(['day_of_week', 'time_of_day'])['value'].transform(lambda x: x.rolling(window=rvolLookbackDays, min_periods=1).mean())
     df['rvol'] = np.where(df['rvol_mean'] > 0, df['value'] / df['rvol_mean'], 0)
     
-    # --- Tính toán Mean MA Vol (Trung bình của ma_vol cùng giờ & cùng thứ trong chu kỳ matrixLookbackHours) ---
+    # --- TÃ­nh toÃ¡n Mean MA Vol (Trung bÃ¬nh cá»§a ma_vol cÃ¹ng giá» & cÃ¹ng thá»© trong chu ká»³ matrixLookbackHours) ---
     mean_vol_lookback_days = max(1, int(matrixLookbackHours / 24.0))
     df['mean_ma_vol'] = df.groupby(['day_of_week', 'time_of_day'])['ma_vol'].transform(lambda x: x.rolling(window=mean_vol_lookback_days, min_periods=1).mean())
     df['mean_vol_lvl1'] = df['mean_ma_vol'].rolling(window=lookback_candles, min_periods=1).quantile(volPct1 / 100.0)
@@ -476,7 +476,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
             has_m1 = m1_rates is not None and len(m1_rates) > 0
             if has_m1:
                 df_m1 = pd.DataFrame(m1_rates)
-                # Chuẩn hoá M1 time về UTC
+                # Chuáº©n hoÃ¡ M1 time vá» UTC
                 m1_broker_naive = pd.to_datetime(df_m1['time'], unit='s')
                 try:
                     m1_broker_aware = m1_broker_naive.dt.tz_localize(brokerTimezone, nonexistent='shift_forward', ambiguous='NaT')
@@ -493,7 +493,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     if not is_macro_tf:
         df['time'] = df['time'] + (timeShiftHours * 3600)
     
-    # --- Tính toán Background Sessions (Á, Âu, Mỹ) ---
+    # --- TÃ­nh toÃ¡n Background Sessions (Ã, Ã‚u, Má»¹) ---
     # true_utc_series is the actual UTC time of the candle
     if not is_macro_tf:
         true_utc_series = pd.to_datetime(df['time'] - (timeShiftHours * 3600), unit='s', utc=True)
@@ -544,7 +544,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df.loc[in_euro, 'session_color'] = 'rgba(139, 0, 139, 0.18)' # Dark Purple
     df.loc[in_us, 'session_color'] = 'rgba(0, 0, 139, 0.18)' # Dark Blue
     
-    # --- Thống kê Đỉnh/Đáy Vol theo Phase ---
+    # --- Thá»‘ng kÃª Äá»‰nh/ÄÃ¡y Vol theo Phase ---
     try:
         df_hm = user_local_series.dt.strftime('%H:%M')
         df_date = user_local_series.dt.date
@@ -607,7 +607,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                 
             bin_size = fixedPips * pip_size
             
-            # Ngăn chặn việc bin_size quá nhỏ (gây lag nếu số lượng hộp > 1000)
+            # NgÄƒn cháº·n viá»‡c bin_size quÃ¡ nhá» (gÃ¢y lag náº¿u sá»‘ lÆ°á»£ng há»™p > 1000)
             recent_min = df['low'].min()
             recent_max = df['high'].max()
             if recent_max - recent_min > 0 and bin_size > 0:
@@ -620,15 +620,15 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
             recent_max = recent_df['high'].max()
             bin_size = (recent_max - recent_min) / max(1, rowCount)
             
-        # BẢO VỆ CHỐNG TRÀN VÒNG LẶP D-VP DO QUÁ NHIỀU BINS
+        # Báº¢O Vá»† CHá»NG TRÃ€N VÃ’NG Láº¶P D-VP DO QUÃ NHIá»€U BINS
         global_min = df['low'].min()
         global_max = df['high'].max()
         if global_max - global_min > 0 and bin_size > 0:
-            pass # Bỏ giới hạn số lượng hộp VP vì giao diện đã được vá lỗi hiệu năng đồ hoạ
+            pass # Bá» giá»›i háº¡n sá»‘ lÆ°á»£ng há»™p VP vÃ¬ giao diá»‡n Ä‘Ã£ Ä‘Æ°á»£c vÃ¡ lá»—i hiá»‡u nÄƒng Ä‘á»“ hoáº¡
 
         if bin_size <= 0:
             bin_size = 0.0001
-        # Dùng lại tf_seconds đã tính ở trên (dòng 250) để tránh ghi đè và thiếu M30
+        # DÃ¹ng láº¡i tf_seconds Ä‘Ã£ tÃ­nh á»Ÿ trÃªn (dÃ²ng 250) Ä‘á»ƒ trÃ¡nh ghi Ä‘Ã¨ vÃ  thiáº¿u M30
         timeout_sec = max(timeoutHours * 3600, tf_seconds * 3)
         
         # --- Calculate D-VP Cutoff Time ---
@@ -640,7 +640,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
             
         # --- Fetch M1 data for Precise D-VP ---
         if has_m1:
-            # Chỉ shift M1 time trên TF thường, macro TF (D1/W1/MN1) không shift
+            # Chá»‰ shift M1 time trÃªn TF thÆ°á»ng, macro TF (D1/W1/MN1) khÃ´ng shift
             if not is_macro_tf:
                 df_m1['time'] = df_m1['time'] + (timeShiftHours * 3600)
             df_m1_filtered = df_m1[df_m1['time'] >= dvp_cutoff_time]
@@ -788,7 +788,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     existing_cols = [c for c in cols_to_keep if c in df.columns]
     df = df[existing_cols]
         
-    # Chuyển Dataframe sang dictionary (Thay thế NaN, Inf bằng None để JSON tương thích)
+    # Chuyá»ƒn Dataframe sang dictionary (Thay tháº¿ NaN, Inf báº±ng None Ä‘á»ƒ JSON tÆ°Æ¡ng thÃ­ch)
     for col in df.columns:
         if pd.api.types.is_numeric_dtype(df[col]):
             df[col] = df[col].replace([np.inf, -np.inf], np.nan)
@@ -880,7 +880,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
 
         df['vol_rolling'] = df['value'].rolling(window=window_size, min_periods=1).sum()
 
-        # TÌM V-BLOCK (V_TARGET) DÙNG CHUNG CHO CẢ HAI CHẾ ĐỘ
+        # TÃŒM V-BLOCK (V_TARGET) DÃ™NG CHUNG CHO Cáº¢ HAI CHáº¾ Äá»˜
         lookback_candles = int(vol_days * 24 * candles_per_hour)
         target_pct = config.get('mfTargetPct', 75) / 100.0
         rolling_vol_N = df['vol_rolling']
@@ -909,30 +909,28 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
             
             net_mom_cur = cum_candle_mom - np.where(has_j_cur, cum_candle_mom[j_cur_m1], 0)
             
-            # Scale lại bằng chính window_size (chuẩn hoá)
+            # Scale láº¡i báº±ng chÃ­nh window_size (chuáº©n hoÃ¡)
             df['diff_pct'] = np.where(vol_cur > 0, (net_mom_cur / V_series) * window_size, 0.0)
         else:
-            # TREND MODE (True C-VWMA Velocity dựa trên V-block)
+            # TREND MODE (True C-VWMA Velocity dá»±a trÃªn V-block)
             vwap_vol_cur = cum_vwap_vol - np.where(has_j_cur, cum_vwap_vol[j_cur_m1], 0)
             c_vwap = np.where(vol_cur > 0, vwap_vol_cur / vol_cur, df['hlc3'])
             
             hlc3_values = df['hlc3'].values
-            # Lấy HLC3 của cây nến liền trước khi bắt đầu V-block
+            # Láº¥y HLC3 cá»§a cÃ¢y náº¿n liá»n trÆ°á»›c khi báº¯t Ä‘áº§u V-block
             hlc3_old = hlc3_values[j_cur_m1]
             
-            # Quãng đường: Tính phần trăm thay đổi
+            # QuÃ£ng Ä‘Æ°á»ng: TÃ­nh pháº§n trÄƒm thay Ä‘á»•i
             distance_pct = np.where(hlc3_old > 0, (c_vwap - hlc3_old) / hlc3_old * 100.0, 0.0)
             
-            # Vận tốc: Quãng đường chia cho thời gian (số nến của V-block)
-            # Nhân window_size để scale số lên mức dễ nhìn (tương đương với Money Flow)
+            # Váº­n tá»‘c: QuÃ£ng Ä‘Æ°á»ng chia cho thá»i gian (sá»‘ náº¿n cá»§a V-block)
+            # NhÃ¢n window_size Ä‘á»ƒ scale sá»‘ lÃªn má»©c dá»… nhÃ¬n (tÆ°Æ¡ng Ä‘Æ°Æ¡ng vá»›i Money Flow)
             df['diff_pct'] = (distance_pct / N_candles) * window_size
         
         
         if len(df) > window_size:
             if matrix_mode == "money_flow":
-                # Tính diff_pct cho TOÀN BỘ cây nến (C-VWMA vs HLC3 cách window_size nến)
-                
-                # Score = TRUNG BÌNH toàn bộ cửa sổ (không phải 1 nến cuối)
+                # Đối với dòng tiền, lấy trung bình cửa sổ để giảm nhiễu cục bộ và ổn định tín hiệu
                 window_diff = df['diff_pct'].iloc[-window_size:]
                 diff_pct_current = window_diff.mean()
             else:
@@ -1006,7 +1004,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
             })
             log_returns_list.append(log_ret)
 
-    # Xếp hạng currencies và tính Vol Percentile & Mom Percentile
+    # Xáº¿p háº¡ng currencies vÃ  tÃ­nh Vol Percentile & Mom Percentile
     ranked_currencies = []
     for c in currencies:
         vol_arr = vol_hist[c]
@@ -1015,11 +1013,11 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         vol_percentile = 0.0
         mom_percentile = 0.0
         if len(vol_arr) > 0 and len(scores_arr) > 0:
-            # Tính Vol Percentile — trung bình cửa sổ
+            # TÃ­nh Vol Percentile â€” trung bÃ¬nh cá»­a sá»•
             ws_vol = min(window_size, len(vol_arr))
             current_vol = np.mean(vol_arr[-ws_vol:]) if ws_vol > 0 else vol_arr[-1]
             
-            # So sánh vol trung bình cửa sổ với rolling mean lịch sử
+            # So sÃ¡nh vol trung bÃ¬nh cá»­a sá»• vá»›i rolling mean lá»‹ch sá»­
             if len(vol_arr) >= ws_vol:
                 vol_rolling_means = pd.Series(vol_arr).rolling(ws_vol, min_periods=max(1, ws_vol//2)).mean().dropna().values
             else:
@@ -1027,7 +1025,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
             percentile = np.mean(vol_rolling_means < current_vol) * 100
             vol_percentile = round(percentile, 2)
             
-            # Tính Mom Percentile (Nhân điểm sức mạnh với RVOL — trung bình cửa sổ)
+            # TÃ­nh Mom Percentile (NhÃ¢n Ä‘iá»ƒm sá»©c máº¡nh vá»›i RVOL â€” trung bÃ¬nh cá»­a sá»•)
             scores_np = np.array(scores_arr)
             vol_np = np.array(vol_arr)
             
@@ -1035,11 +1033,11 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
             rvol = vol_np / mean_vol if mean_vol > 0 else np.ones_like(vol_np)
             weighted_scores = scores_np * rvol
             
-            # Lấy trung bình cửa sổ thay vì 1 nến cuối
+            # Láº¥y trung bÃ¬nh cá»­a sá»• thay vÃ¬ 1 náº¿n cuá»‘i
             ws = min(window_size, len(weighted_scores))
             current_weighted = np.mean(weighted_scores[-ws:]) if ws > 0 else weighted_scores[-1]
             
-            # Tính phân phối theo cửa sổ trượt (rolling mean) thay vì từng nến
+            # TÃ­nh phÃ¢n phá»‘i theo cá»­a sá»• trÆ°á»£t (rolling mean) thay vÃ¬ tá»«ng náº¿n
             if len(weighted_scores) >= ws:
                 rolling_means = pd.Series(weighted_scores).rolling(ws, min_periods=max(1, ws//2)).mean().dropna().values
             else:
@@ -1063,7 +1061,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         
     ranked_currencies = sorted(ranked_currencies, key=lambda x: (x["mom_percentile"], x["score"]), reverse=True)
     
-    # Tính ma trận tương quan (Correlation Matrix) CHUẨN INSTITUTIONAL (H1 Log Returns)
+    # TÃ­nh ma tráº­n tÆ°Æ¡ng quan (Correlation Matrix) CHUáº¨N INSTITUTIONAL (H1 Log Returns)
     corr_matrix = []
     if len(currencies) > 1 and len(log_returns_list) > 0:
         df_returns = pd.concat(log_returns_list, axis=1).ffill().dropna()
@@ -1116,10 +1114,10 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
 # Serve Frontend SPA
 FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
 if os.path.exists(FRONTEND_DIST):
-    # Phục vụ thư mục assets (CSS, JS)
+    # Phá»¥c vá»¥ thÆ° má»¥c assets (CSS, JS)
     app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
 
-    # Phục vụ index.html cho các route còn lại
+    # Phá»¥c vá»¥ index.html cho cÃ¡c route cÃ²n láº¡i
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
         if full_path.startswith("api/"):
@@ -1249,7 +1247,7 @@ async def strategy_worker():
                             strat["current_step_index"] += 1
                             if strat["current_step_index"] >= len(steps):
                                 strat["status"] = "completed"
-                                alert_service.send_email(strat['symbol'], c_close, f"Chiến lược '{strat.get('name', 'Strategy Builder')}' đã hoàn thành tất cả các bước ({len(steps)} bước) tại giá {c_close}!", "HOÀN THÀNH", "strategy")
+                                alert_service.send_email(strat['symbol'], c_close, f"Chiáº¿n lÆ°á»£c '{strat.get('name', 'Strategy Builder')}' Ä‘Ã£ hoÃ n thÃ nh táº¥t cáº£ cÃ¡c bÆ°á»›c ({len(steps)} bÆ°á»›c) táº¡i giÃ¡ {c_close}!", "HOÃ€N THÃ€NH", "strategy")
                             alert_service.update_strategy(strat['id'], strat)
                             
                 except Exception as e:
@@ -1263,3 +1261,4 @@ async def strategy_worker():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

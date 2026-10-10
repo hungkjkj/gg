@@ -203,7 +203,7 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
         
         if len(df) > window_size:
             if matrix_mode == "money_flow":
-                # Đối với dòng tiền, lấy trung bình để giảm nhiễu cục bộ
+                # Đối với dòng tiền, lấy trung bình cửa sổ để giảm nhiễu cục bộ và ổn định tín hiệu
                 window_diff = df['diff_pct'].iloc[-window_size:]
                 diff_pct_current = window_diff.mean()
             else:
