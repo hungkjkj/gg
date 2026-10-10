@@ -36,23 +36,24 @@ const customTickMarkFormatter = (time, tickMarkType) => {
     return `${dayStr} ${hh}:${mm}`;
 };
 
-const generateFutureTimeline = (cTime, tfSec, count, isCrypto = false) => {
+const generateFutureTimeline = (cTime, tfSec, count, isCrypto = false, timeShiftHours = 0) => {
     const futureTimes = [];
     let t = cTime + tfSec;
     for (let i = 0; i < count; i++) {
-        const date = new Date(t * 1000);
+        const brokerT = t - (timeShiftHours * 3600);
+        const date = new Date(brokerT * 1000);
         const day = date.getUTCDay();
         const h = date.getUTCHours();
         
         let skip = false;
         if (!isCrypto) {
-            if (day === 5 && h >= 21) {
-                skip = true;
-            } else if (day === 6) {
-                skip = true;
-            } else if (day === 0 && h < 21) {
-                skip = true;
-            }
+            // MT5 broker time normally closes Friday 24:00 (which is Saturday 00:00) 
+            // and opens Monday 00:00 (which is Sunday 24:00). 
+            // To be safe against 23:59 vs 00:00 issues, skip day 6 (Saturday) and day 0 (Sunday).
+            // But some brokers close slightly earlier, so we use the strict Broker Time 
+            // weekend skip: Saturday and Sunday entirely.
+            // Wait, if MT5 time ends Friday 23:59:59 Broker Time, day is 5.
+            if (day === 6 || day === 0) skip = true;
         }
         
         if (!skip) {
@@ -286,7 +287,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       if (requiredBars < 150) requiredBars = 150;
       
       const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
-      const futureTimes = generateFutureTimeline(currentTime, tfSec, requiredBars, isCrypto);
+      const futureTimes = generateFutureTimeline(currentTime, tfSec, requiredBars, isCrypto, configs.timeShiftHours || 0);
 
       
       const allTimesMap = new Map();
@@ -1312,7 +1313,7 @@ useEffect(() => {
             rawData.forEach(d => rawMap.set(d.time, d));
             
             const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
-            const futureTimes = generateFutureTimeline(cTime, tfSec, 1500, isCrypto);
+            const futureTimes = generateFutureTimeline(cTime, tfSec, 1500, isCrypto, configs.timeShiftHours || 0);
             
             futureTimes.forEach(ft => {
                 const pastTime = ft.time - (7 * 86400); // 1 week ago
@@ -1538,7 +1539,7 @@ useEffect(() => {
                 cTime = cTime - (cTime % tfSec);
                 
                 const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
-                const futureTimes = generateFutureTimeline(cTime, tfSec, 1500, isCrypto);
+                const futureTimes = generateFutureTimeline(cTime, tfSec, 1500, isCrypto, configs.timeShiftHours || 0);
                 
                 const allTimesMap = new Map();
                 formattedData.forEach(d => allTimesMap.set(d.time, { time: d.time, value: 0 }));
@@ -1823,7 +1824,8 @@ useEffect(() => {
         
         // Bỏ qua Thứ 7, Chủ Nhật để Backtest không bị "treo" (trừ Crypto)
         if (!isCrypto) {
-            const d = new Date(simulatedTimeRef.current * 1000);
+            const brokerT = simulatedTimeRef.current - ((configs.timeShiftHours || 0) * 3600);
+            const d = new Date(brokerT * 1000);
             const day = d.getUTCDay();
             const h = d.getUTCHours();
             const m = d.getUTCMinutes();
@@ -1832,15 +1834,13 @@ useEffect(() => {
             let skip = false;
             let jumpHours = 0;
             
-            if (day === 5 && h >= 22) {
+            // Broker time closes Friday 23:59:59 (Saturday 00:00) and opens Monday 00:00 (Sunday 24:00)
+            if (day === 6) { // Saturday
                 skip = true;
-                jumpHours = 24 - h + 24 + 21;
-            } else if (day === 6) {
+                jumpHours = 24 - h + 24; // Jump rest of Saturday + whole Sunday -> Monday 00:00
+            } else if (day === 0) { // Sunday
                 skip = true;
-                jumpHours = 24 - h + 21;
-            } else if (day === 0 && h < 21) {
-                skip = true;
-                jumpHours = 21 - h;
+                jumpHours = 24 - h; // Jump rest of Sunday -> Monday 00:00
             }
             
             if (skip) {
