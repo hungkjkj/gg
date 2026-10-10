@@ -226,3 +226,10 @@ Toàn b? h? th?ng giao di?n du?c thi?t k? theo c?m h?ng t? h? di?u hành **J.A.R.V
 2. **Glassmorphism & Glowing:** Các b?ng di?u khi?n và bong bóng ch?c nang du?c thi?t k? d?ng kính m? (backdrop-filter) k?t h?p v?i hi?u ?ng d? bóng vi?n sáng (Box-shadow glowing). Các nút b?m ph?n ?ng l?i (scale + sáng lên) khi hover.
 3. **Nút tuong tác Arc Reactor (AssistiveTouch):** Nút g?i ch?c nang m? r?ng du?c thi?t k? d?ng lõi h? quang liên t?c t?a ra các l?p sóng nang lu?ng.
 4. **J.A.R.V.I.S Trading Log (S? Nh?t Ký):** H? th?ng ghi chép du?c tích h?p th?ng vào giao di?n du?i d?ng B?ng tru?t (Slide-in Panel). D? li?u du?c qu?n lý tr?c ti?p b?ng LocalStorage c?a trình duy?t, cung c?p t?c d? ph?n h?i t?c th?i (Zero-latency) mà v?n d?m b?o tính b?n v?ng c?a d? li?u qua các l?n kh?i d?ng l?i.
+
+
+## Update: Trading Journal & Volume Chart Fix
+- Added an interactive Journal System (TradingLogPanel.jsx) allowing users to write logs and notes per symbol.
+- Styled the TradingLogPanel using glassmorphism and animated sliding panel to match the Ironman suit UI theme.
+- Fixed a major bug where olumeChart failed to render during backtest playback because its isPolling update logic was structurally isolated inside a dead else block.
+- Removed obsolete test files to clean up the workspace.

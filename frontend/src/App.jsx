@@ -1524,6 +1524,18 @@ useEffect(() => {
             }
             if (mom50DnRef.current) m50Dn.forEach(d => safeUpdate(mom50DnRef.current, d));
             
+            if (normVolSeriesRef.current) {
+              normVolData.forEach(d => safeUpdate(normVolSeriesRef.current, d));
+              maVolData.forEach(d => safeUpdate(maVolSeriesRef.current, d));
+              v85.forEach(d => safeUpdate(vol85Ref.current, d));
+              v75.forEach(d => safeUpdate(vol75Ref.current, d));
+              v50.forEach(d => safeUpdate(vol50Ref.current, d));
+              v15.forEach(d => safeUpdate(vol15Ref.current, d));
+            }
+            if (projectedVolSeriesRef.current) {
+              projectedVolSeriesRef.current.setData([]);
+            }
+            
             if (formattedData.length > 0) {
               lastUpdateTimeRef.current = Math.max(lastUpdateTimeRef.current, formattedData[formattedData.length - 1].time);
             }
@@ -1625,25 +1637,15 @@ useEffect(() => {
             if (mom50DnRef.current) mom50DnRef.current.setData(m50Dn.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             
             if (normVolSeriesRef.current) {
-              if (isPolling) {
-                  normVolData.forEach(d => safeUpdate(normVolSeriesRef.current, d));
-                  maVolData.forEach(d => safeUpdate(maVolSeriesRef.current, d));
-                  v85.forEach(d => safeUpdate(vol85Ref.current, d));
-                  v75.forEach(d => safeUpdate(vol75Ref.current, d));
-                  v50.forEach(d => safeUpdate(vol50Ref.current, d));
-                  v15.forEach(d => safeUpdate(vol15Ref.current, d));
-              } else {
-                  normVolSeriesRef.current.setData(normVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-                  maVolSeriesRef.current.setData(maVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-                  vol85Ref.current.setData(v85.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-                  vol75Ref.current.setData(v75.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-                  vol50Ref.current.setData(v50.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-                  vol15Ref.current.setData(v15.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-              }
+                normVolSeriesRef.current.setData(normVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                maVolSeriesRef.current.setData(maVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                vol85Ref.current.setData(v85.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                vol75Ref.current.setData(v75.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                vol50Ref.current.setData(v50.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                vol15Ref.current.setData(v15.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             }
             if (projectedVolSeriesRef.current) {
-                if (!isPolling) projectedVolSeriesRef.current.setData(projectedNormVol.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-                else projectedVolSeriesRef.current.setData([]);
+                projectedVolSeriesRef.current.setData(projectedNormVol.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             }
             
             if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 200);
