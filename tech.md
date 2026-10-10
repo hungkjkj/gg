@@ -152,32 +152,49 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
 ```
 
 ### 7. Hệ thống Xếp hạng Tiền tệ (Matrix)
-*(Tuyệt đối không còn sự xuất hiện của ATR và norm_length)*
+*(Hỗ trợ đồng thời 2 chế độ: Sức mạnh Dòng tiền và Xu hướng Giá)*
 ```python
-        # VF-Momentum Logic
-        lookback_candles = int(vol_days * 24 * candles_per_hour)
-        target_pct = config.get('mfTargetPct', 75) / 100.0
-        rolling_vol_N = df['value'].rolling(window=window_size, min_periods=1).sum()
-        V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(target_pct).fillna(1.0).values, 1.0)
+        if matrix_mode == "money_flow":
+            # VF-Momentum Logic
+            lookback_candles = int(vol_days * 24 * candles_per_hour)
+            target_pct = config.get('mfTargetPct', 75) / 100.0
+            rolling_vol_N = df['vol_rolling']
+            V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(target_pct).fillna(1.0).values, 1.0)
+            
+            cum_vol = df['value'].cumsum().values
+            hlc3_pre = df['hlc3'].shift(1).fillna(df['hlc3'])
+            df['hlc3_diff_pct'] = np.where(hlc3_pre > 0, (df['hlc3'] - hlc3_pre) / hlc3_pre * 100, 0.0)
+            df['candle_mom'] = df['hlc3_diff_pct'] * df['value']
+            cum_candle_mom = df['candle_mom'].cumsum().values
+            
+            n = len(df)
+            i_arr = np.arange(n)
+            
+            target_current = cum_vol - V_series
+            j_current = np.searchsorted(cum_vol, target_current, side='right')
+            j_cur_m1 = np.where(j_current > 0, j_current - 1, 0)
+            has_j_cur = j_current > 0
+            
+            vol_cur = cum_vol - np.where(has_j_cur, cum_vol[j_cur_m1], 0)
+            net_mom_cur = cum_candle_mom - np.where(has_j_cur, cum_candle_mom[j_cur_m1], 0)
+            
+            N_candles = np.maximum(i_arr - j_current + 1, 1.0)
+            
+            # Scale lại bằng chính window_size (thuần túy theo khung thời gian người dùng cấu hình)
+            df['diff_pct'] = np.where(vol_cur > 0, (net_mom_cur / V_series) * window_size, 0.0)
+        else:
+            # TREND MODE (C-VWMA vs HLC3 cũ)
+            vwap_vol = (df['hlc3'] * df['value']).rolling(window=window_size, min_periods=1).sum()
+            c_vwap = np.where(df['vol_rolling'] > 0, vwap_vol / df['vol_rolling'], df['hlc3'])
+            
+            hlc3_old = df['hlc3'].shift(window_size).fillna(df['hlc3'])
+            # Tính phần trăm thay đổi để chuẩn hóa các cặp tiền có tỷ giá khác nhau
+            df['diff_pct'] = np.where(hlc3_old > 0, (c_vwap - hlc3_old) / hlc3_old * 100.0, 0.0)
         
-        cum_vol = df['value'].cumsum().values
-        df['hlc3_diff'] = df['hlc3'] - df['hlc3'].shift(1).fillna(df['hlc3'])
-        df['candle_mom'] = df['hlc3_diff'] * df['value']
-        cum_candle_mom = df['candle_mom'].cumsum().values
-        
-        n = len(df)
-        i_arr = np.arange(n)
-        
-        target_current = cum_vol - V_series
-        j_current = np.searchsorted(cum_vol, target_current, side='right')
-        j_cur_m1 = np.where(j_current > 0, j_current - 1, 0)
-        has_j_cur = j_current > 0
-        
-        vol_cur = cum_vol - np.where(has_j_cur, cum_vol[j_cur_m1], 0)
-        net_mom_cur = cum_candle_mom - np.where(has_j_cur, cum_candle_mom[j_cur_m1], 0)
-        
-        N_candles = np.maximum(i_arr - j_current + 1, 1.0)
-        
-        # Scale lại bằng chính window_size (thuần túy theo khung thời gian người dùng cấu hình)
-        df['diff_pct'] = np.where(vol_cur > 0, (net_mom_cur / V_series) * window_size, 0.0)
+        if len(df) > window_size:
+            # Tính diff_pct cho TOÀN BỘ cây nến (C-VWMA vs HLC3 cách window_size nến)
+            
+            # Score = TRUNG BÌNH toàn bộ cửa sổ (không phải 1 nến cuối)
+            window_diff = df['diff_pct'].iloc[-window_size:]
+            diff_pct_current = window_diff.mean()
 ```
