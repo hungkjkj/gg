@@ -436,12 +436,12 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['broker_dt'] = pd.to_datetime(df['broker_time'], unit='s')
     df['time_of_day'] = df['broker_dt'].dt.time
     df['day_of_week'] = df['broker_dt'].dt.dayofweek
-    df['rvol_mean'] = df.groupby(['day_of_week', 'time_of_day'])['value'].transform(lambda x: x.rolling(window=rvolLookbackDays, min_periods=1).mean())
+    df['rvol_mean'] = df.groupby(['day_of_week', 'time_of_day'])['value'].rolling(window=rvolLookbackDays, min_periods=1).mean().reset_index(level=[0,1], drop=True).sort_index()
     df['rvol'] = np.where(df['rvol_mean'] > 0, df['value'] / df['rvol_mean'], 0)
     
     # --- TÃ­nh toÃ¡n Mean MA Vol (Trung bÃ¬nh cá»§a ma_vol cÃ¹ng giá» & cÃ¹ng thá»© trong chu ká»³ matrixLookbackHours) ---
     mean_vol_lookback_days = max(1, int(matrixLookbackHours / 24.0))
-    df['mean_ma_vol'] = df.groupby(['day_of_week', 'time_of_day'])['ma_vol'].transform(lambda x: x.rolling(window=mean_vol_lookback_days, min_periods=1).mean())
+    df['mean_ma_vol'] = df.groupby(['day_of_week', 'time_of_day'])['ma_vol'].rolling(window=mean_vol_lookback_days, min_periods=1).mean().reset_index(level=[0,1], drop=True).sort_index()
     df['mean_vol_lvl1'] = df['mean_ma_vol'].rolling(window=lookback_candles, min_periods=1).quantile(volPct1 / 100.0)
     df['mean_vol_lvl2'] = df['mean_ma_vol'].rolling(window=lookback_candles, min_periods=1).quantile(volPct2 / 100.0)
     df['mean_vol_lvl3'] = df['mean_ma_vol'].rolling(window=lookback_candles, min_periods=1).quantile(volPct3 / 100.0)
@@ -462,8 +462,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                 for box in vp_boxes:
                     if box.get('is_active'):
                         box['end'] = current_last_time
-                        
-    if not use_cache:
+    if not use_cache and not latest_only:
         # --- Fetch M1 data BEFORE shifting df['time'] ---
         try:
             end_ts = int(df['broker_time'].max()) + 3600

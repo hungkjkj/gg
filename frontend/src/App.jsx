@@ -1283,7 +1283,7 @@ useEffect(() => {
         const m50Dn = rawData.filter(d => d.mom_lvl3 != null && !isNaN(d.mom_lvl3)).map(i => ({time: i.time, value: -i.mom_lvl3})).sort((a,b)=>a.time-b.time);
 
         let projectedNormVol = [];
-        if (configs.volMode === 'mean_vol') {
+        if (configs.volMode === 'mean_vol' && viewMode !== 'backtest') {
             const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
             let cTime = formattedData.length > 0 ? formattedData[formattedData.length - 1].time : Math.floor(Date.now() / 1000);
             cTime = cTime - (cTime % tfSec);
@@ -3255,10 +3255,18 @@ function App() {
           setBubbleMatrixDataLong(res[1].data?.ranking);
           setBubbleMatrixDataTrend(res[2].data?.ranking);
           setBubbleMatrixDataTrendLong(res[3].data?.ranking);
-          isFetching = false;
+          if (viewMode === 'backtest') {
+              setTimeout(() => { isFetching = false; }, 1000);
+          } else {
+              isFetching = false;
+          }
       }).catch(err => {
           console.error(err);
-          isFetching = false;
+          if (viewMode === 'backtest') {
+              setTimeout(() => { isFetching = false; }, 1000);
+          } else {
+              isFetching = false;
+          }
       });
     };
     
