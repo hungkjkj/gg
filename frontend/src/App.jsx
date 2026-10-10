@@ -4,6 +4,7 @@ import axios from 'axios';
 import { AssistiveTouch, MomFlipChartComponent } from './components/MomFlip';
 import StrategyBuilderTab from './components/StrategyBuilderTab';
 import RrTool from './components/RrTool';
+import TradingLogPanel from './components/TradingLogPanel';
 import './index.css';
 
 const API_BASE = window.location.port === '5173' ? `${API_BASE}` : window.location.origin;
@@ -3250,6 +3251,7 @@ function App() {
   }));
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isLogOpen, setIsLogOpen] = useState(false);
   const [availableSymbols, setAvailableSymbols] = useState(DEFAULT_SYMBOLS);
 
   useEffect(() => {
@@ -3344,7 +3346,9 @@ function App() {
 
   return (
     <div className="dashboard-container">
-      <div className="toast-container">
+      <TradingLogPanel isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} />
+
+        <div className="toast-container">
         {toasts.map(t => (
           <div key={t.id} className="toast">
             <div className="toast-header">
@@ -3649,6 +3653,7 @@ function App() {
             {viewMode === 'chart' ? `${symbol} • ${timeframe}` : viewMode === 'backtest' ? `${symbol} • ${timeframe} (Backtest Mode)` : viewMode === 'catalyst' ? 'Lịch Tin tức Catalyst' : viewMode === 'strategy' ? 'Strategy Builder' : 'Currency Strength Matrix'}
           </div>
           <div className="toolbar">
+              <button onClick={() => setIsLogOpen(true)} className="primary" style={{ boxShadow: '0 0 10px rgba(0,240,255,0.4)', border: '1px solid #00f0ff' }}>[SYS.LOG]</button>
             
           </div>
         </header>
@@ -3679,6 +3684,7 @@ function App() {
 }
 
 export default App;
+
 
 
 
