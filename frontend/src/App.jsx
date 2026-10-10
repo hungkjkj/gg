@@ -1494,15 +1494,14 @@ useEffect(() => {
         }
         bandwidthHistoryRef.current = bandwidthHistory.slice(-10); // Keep last 10
         
-                  if (candlestickSeriesRef.current && chartRef.current) {
+                            if (candlestickSeriesRef.current && chartRef.current) {
             const oldLastTime = lastUpdateTimeRef.current || 0;
-            if (isPolling) {
-              const safeUpdate = (series, d) => {
-                if (d.time >= oldLastTime) {
+            const safeUpdate = (series, d) => {
+              if (d.time >= oldLastTime) {
                 try { series.update(d); } catch (e) {}
               }
             };
-            formattedData.forEach(d => {
+            if (isPolling) {formattedData.forEach(d => {
                 safeUpdate(candlestickSeriesRef.current, d);
                 safeUpdate(lineCloseSeriesRef.current, { time: d.time, value: d.close });
                 safeUpdate(lineHighSeriesRef.current, { time: d.time, value: d.high });
