@@ -1,13 +1,15 @@
 :root {
-  --bg-dark: #000000;
-  --bg-panel: rgba(10, 10, 10, 0.85);
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --accent-color: #3b82f6;
-  --accent-hover: #2563eb;
-  --border-color: rgba(255, 255, 255, 0.08);
-  --up-color: #00e676;
-  --down-color: #ff1744;
+  --bg-dark: #020612;
+  --bg-panel: rgba(5, 12, 30, 0.85);
+  --text-primary: #e0f2fe;
+  --text-secondary: #38bdf8;
+  --accent-color: #00f0ff;
+  --accent-hover: #0ea5e9;
+  --border-color: rgba(0, 240, 255, 0.3);
+  --up-color: #00f0ff;
+  --down-color: #ff3333;
+  --glow-cyan: 0 0 10px rgba(0, 240, 255, 0.4), 0 0 20px rgba(0, 240, 255, 0.2);
+  --glow-gold: 0 0 10px rgba(255, 165, 0, 0.4);
 }
 
 * {
@@ -63,9 +65,10 @@ body {
 .logo-text {
   font-size: 1.25rem;
   font-weight: 700;
-  background: linear-gradient(to right, #60a5fa, #a78bfa);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--accent-color);
+  text-shadow: var(--glow-cyan);
+  text-transform: uppercase;
+  letter-spacing: 2px;
 }
 
 /* Main Workspace */
@@ -74,6 +77,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: radial-gradient(circle at center, #020b1f 0%, #000000 100%);
 }
 
 .header {
@@ -86,6 +90,7 @@ body {
   align-items: center;
   padding: 0 24px;
   justify-content: space-between;
+  box-shadow: 0 4px 20px rgba(0, 240, 255, 0.1);
 }
 
 .toolbar {
@@ -104,20 +109,22 @@ body {
 
 .chart-wrapper {
   flex: 1;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(2, 6, 18, 0.7);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: 4px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.05), var(--glow-cyan);
   min-height: 0;
 }
 
 .chart-wrapper.theme-dark {
-  background: rgba(15, 23, 42, 0.6) !important;
+  background: rgba(2, 6, 18, 0.7) !important;
 }
 
 .chart-wrapper.theme-sunset {
-  background: linear-gradient(180deg, #b83280 0%, #e84c6c 30%, #f67a49 60%, #faa634 100%) !important;
+  background: linear-gradient(180deg, rgba(153, 27, 27, 0.3) 0%, rgba(245, 158, 11, 0.1) 100%) !important;
+  border-color: rgba(255, 165, 0, 0.4);
+  box-shadow: inset 0 0 20px rgba(255, 165, 0, 0.05), var(--glow-gold);
 }
 
 .chart-wrapper.theme-night {
@@ -126,50 +133,58 @@ body {
 
 /* Beautiful Inputs & Buttons */
 button {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 240, 255, 0.05);
   border: 1px solid var(--border-color);
-  color: var(--text-primary);
+  color: var(--accent-color);
   padding: 8px 16px;
-  border-radius: 8px;
+  border-radius: 4px;
   font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
   cursor: pointer;
   outline: none;
   transition: all 0.2s ease;
+  box-shadow: inset 0 0 5px rgba(0, 240, 255, 0.1);
 }
 
 select {
-  background: #1e293b;
+  background: rgba(5, 12, 30, 0.8);
   border: 1px solid var(--border-color);
-  color: var(--text-primary);
+  color: var(--accent-color);
   padding: 8px 16px;
-  border-radius: 8px;
+  border-radius: 4px;
   font-size: 0.9rem;
+  font-weight: 600;
   cursor: pointer;
   outline: none;
   transition: all 0.2s ease;
 }
 
 button:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 240, 255, 0.15);
+  box-shadow: var(--glow-cyan);
+  color: #fff;
 }
 
 select:hover {
-  background: #334155;
+  background: rgba(0, 240, 255, 0.1);
 }
 
 option {
-  background-color: #ffffff;
-  color: #000000;
+  background-color: #020612;
+  color: var(--accent-color);
 }
 
 button.primary {
-  background: var(--accent-color);
+  background: rgba(0, 240, 255, 0.2);
   border-color: var(--accent-color);
-  font-weight: 500;
+  color: #fff;
+  box-shadow: var(--glow-cyan);
 }
 
 button.primary:hover {
-  background: var(--accent-hover);
+  background: rgba(0, 240, 255, 0.4);
 }
 
 /* Scrollbars */

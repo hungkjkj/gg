@@ -600,11 +600,11 @@ useEffect(() => {
     alertsSeriesRef.current = alertsSeries;
 
     const candlestickSeries = chart.addCandlestickSeries({
-      upColor: '#00e676',
-      downColor: '#ff1744',
+      upColor: '#00f0ff',
+      downColor: '#ff3333',
       borderVisible: false,
-      wickUpColor: '#00e676',
-      wickDownColor: '#ff1744',
+      wickUpColor: '#00f0ff',
+      wickDownColor: '#ff3333',
       priceLineVisible: false,
       priceFormat: {
         type: 'price',
@@ -620,13 +620,13 @@ useEffect(() => {
         priceFormat: { type: 'price', precision, minMove },
     });
     const lineHighSeries = chart.addLineSeries({
-        color: '#00e676',
+        color: '#00f0ff',
         lineWidth: 2,
         visible: false,
         priceFormat: { type: 'price', precision, minMove },
     });
     const lineLowSeries = chart.addLineSeries({
-        color: '#ff1744',
+        color: '#ff3333',
         lineWidth: 2,
         visible: false,
         priceFormat: { type: 'price', precision, minMove },
@@ -962,10 +962,10 @@ useEffect(() => {
     if (candlestickSeriesRef.current) {
       const isSunset = chartTheme === 'sunset';
       candlestickSeriesRef.current.applyOptions({
-        upColor: isSunset ? '#ffffff' : '#00e676',
-        downColor: isSunset ? '#1f2937' : '#ff1744',
-        wickUpColor: isSunset ? '#ffffff' : '#00e676',
-        wickDownColor: isSunset ? '#1f2937' : '#ff1744',
+        upColor: isSunset ? '#ffffff' : '#00f0ff',
+        downColor: isSunset ? '#1f2937' : '#ff3333',
+        wickUpColor: isSunset ? '#ffffff' : '#00f0ff',
+        wickDownColor: isSunset ? '#1f2937' : '#ff3333',
       });
     }
   }, [chartTheme]);
@@ -1295,7 +1295,7 @@ useEffect(() => {
             return {
               time: item.time,
               value: item.mom_raw,
-              color: item.mom_raw >= 0 ? (isSunsetMom ? '#ffffff' : '#00e676') : (isSunsetMom ? '#1f2937' : '#ff1744')
+              color: item.mom_raw >= 0 ? (isSunsetMom ? '#ffffff' : '#00f0ff') : (isSunsetMom ? '#1f2937' : '#ff3333')
             };
           }).sort((a,b)=>a.time-b.time);
           
@@ -1322,16 +1322,16 @@ useEffect(() => {
                 const pastTime = ft.time - (7 * 86400); // 1 week ago
                 const pastRaw = rawMap.get(pastTime);
                 if (pastRaw && pastRaw.mean_ma_vol != null && !isNaN(pastRaw.mean_ma_vol)) {
-                    let color = 'rgba(156, 39, 176, 0.4)'; // Purple semi-transparent
+                    let color = 'rgba(0, 240, 255, 0.1)'; // Purple semi-transparent
                     const value = pastRaw.mean_ma_vol;
                     const lvl1 = pastRaw.mean_vol_lvl1;
                     const lvl2 = pastRaw.mean_vol_lvl2;
                     const lvl3 = pastRaw.mean_vol_lvl3;
                     const lvl4 = pastRaw.mean_vol_lvl4;
-                    if (value <= lvl4) color = 'rgba(0, 51, 255, 0.4)';
-                    else if (value <= lvl3) color = 'rgba(255, 140, 0, 0.4)';
-                    else if (value <= lvl2) color = 'rgba(255, 255, 0, 0.4)';
-                    else if (value <= lvl1) color = 'rgba(255, 23, 68, 0.4)';
+                    if (value <= lvl4) color = 'rgba(0, 240, 255, 0.5)';
+                    else if (value <= lvl3) color = 'rgba(255, 165, 0, 0.5)';
+                    else if (value <= lvl2) color = 'rgba(255, 69, 0, 0.5)';
+                    else if (value <= lvl1) color = 'rgba(255, 0, 0, 0.6)';
                     
                     projectedNormVol.push({ time: ft.time, value: value, color });
                 }
@@ -1352,7 +1352,7 @@ useEffect(() => {
             if (value < 0.5) color = '#0033ff'; 
             else if (value < 1.0) color = '#ff8c00'; 
             else if (value < 2.0) color = '#ffff00'; 
-            else color = '#ff1744'; 
+            else color = '#ff3333'; 
           } else {
             const lvl1 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl1 : i.vol_lvl1;
             const lvl2 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl2 : i.vol_lvl2;
@@ -1362,7 +1362,7 @@ useEffect(() => {
             if (value <= lvl4) color = '#0033ff'; // Blue
             else if (value <= lvl3) color = '#ff8c00'; // Orange
             else if (value <= lvl2) color = '#ffff00'; // Yellow
-            else if (value <= lvl1) color = '#ff1744'; // Red
+            else if (value <= lvl1) color = '#ff3333'; // Red
           }
           return { time: i.time, value: value, color };
         }).sort((a,b)=>a.time-b.time);
@@ -1998,8 +1998,8 @@ useEffect(() => {
           <div style={{ 
             position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', 
             zIndex: 100, background: 'rgba(0, 0, 0, 0.85)', padding: '25px 50px', borderRadius: '12px',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.8)',
-            border: '1px solid rgba(255,255,255,0.1)'
+            display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 0 30px rgba(0,240,255,0.3)',
+            border: '1px solid rgba(0,240,255,0.5)'
           }}>
             <div className="spinner" style={{ marginBottom: '15px' }}></div>
             <div style={{ color: '#60a5fa', fontSize: '1.2rem', fontWeight: 'bold' }}>Đang tải dữ liệu {symbol}...</div>
