@@ -192,9 +192,11 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
             df['diff_pct'] = np.where(hlc3_old > 0, (c_vwap - hlc3_old) / hlc3_old * 100.0, 0.0)
         
         if len(df) > window_size:
-            # Tính diff_pct cho TOÀN BỘ cây nến (C-VWMA vs HLC3 cách window_size nến)
-            
-            # Score = TRUNG BÌNH toàn bộ cửa sổ (không phải 1 nến cuối)
-            window_diff = df['diff_pct'].iloc[-window_size:]
-            diff_pct_current = window_diff.mean()
+            if matrix_mode == "money_flow":
+                # Đối với dòng tiền, lấy trung bình để giảm nhiễu cục bộ
+                window_diff = df['diff_pct'].iloc[-window_size:]
+                diff_pct_current = window_diff.mean()
+            else:
+                # C-VWMA đã rất mượt (không bị nhiễu bởi 1 cây nến), lấy trực tiếp % của nến hiện tại để không bị trễ (lag)
+                diff_pct_current = df['diff_pct'].iloc[-1]
 ```

@@ -919,11 +919,15 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         
         
         if len(df) > window_size:
-            # Tính diff_pct cho TOÀN BỘ cây nến (C-VWMA vs HLC3 cách window_size nến)
-            
-            # Score = TRUNG BÌNH toàn bộ cửa sổ (không phải 1 nến cuối)
-            window_diff = df['diff_pct'].iloc[-window_size:]
-            diff_pct_current = window_diff.mean()
+            if matrix_mode == "money_flow":
+                # Tính diff_pct cho TOÀN BỘ cây nến (C-VWMA vs HLC3 cách window_size nến)
+                
+                # Score = TRUNG BÌNH toàn bộ cửa sổ (không phải 1 nến cuối)
+                window_diff = df['diff_pct'].iloc[-window_size:]
+                diff_pct_current = window_diff.mean()
+            else:
+                # C-VWMA đã mượt sẵn, lấy trực tiếp nến cuối để tránh bị trễ tín hiệu
+                diff_pct_current = df['diff_pct'].iloc[-1]
             
             if pd.isna(diff_pct_current):
                 return None
