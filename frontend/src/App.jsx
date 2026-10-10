@@ -36,13 +36,26 @@ const customTickMarkFormatter = (time, tickMarkType) => {
     return `${dayStr} ${hh}:${mm}`;
 };
 
-const generateFutureTimeline = (cTime, tfSec, count) => {
+const generateFutureTimeline = (cTime, tfSec, count, isCrypto = false) => {
     const futureTimes = [];
     let t = cTime + tfSec;
     for (let i = 0; i < count; i++) {
         const date = new Date(t * 1000);
         const day = date.getUTCDay();
-        if (day !== 0 && day !== 6) {
+        const h = date.getUTCHours();
+        
+        let skip = false;
+        if (!isCrypto) {
+            if (day === 5 && h >= 21) {
+                skip = true;
+            } else if (day === 6) {
+                skip = true;
+            } else if (day === 0 && h < 21) {
+                skip = true;
+            }
+        }
+        
+        if (!skip) {
             futureTimes.push({ time: t, value: 0 });
         } else {
             i--; // Skip weekends
@@ -272,7 +285,8 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       let requiredBars = Math.ceil((maxFutureTime - currentTime) / tfSec);
       if (requiredBars < 150) requiredBars = 150;
       
-      const futureTimes = generateFutureTimeline(currentTime, tfSec, requiredBars);
+      const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
+      const futureTimes = generateFutureTimeline(currentTime, tfSec, requiredBars, isCrypto);
 
       
       const allTimesMap = new Map();
@@ -1297,7 +1311,8 @@ useEffect(() => {
             const rawMap = new Map();
             rawData.forEach(d => rawMap.set(d.time, d));
             
-            const futureTimes = generateFutureTimeline(cTime, tfSec, 1500);
+            const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
+            const futureTimes = generateFutureTimeline(cTime, tfSec, 1500, isCrypto);
             
             futureTimes.forEach(ft => {
                 const pastTime = ft.time - (7 * 86400); // 1 week ago
@@ -1522,7 +1537,8 @@ useEffect(() => {
                 let cTime = formattedData.length > 0 ? formattedData[formattedData.length - 1].time : Math.floor(Date.now() / 1000);
                 cTime = cTime - (cTime % tfSec);
                 
-                const futureTimes = generateFutureTimeline(cTime, tfSec, 1500);
+                const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
+                const futureTimes = generateFutureTimeline(cTime, tfSec, 1500, isCrypto);
                 
                 const allTimesMap = new Map();
                 formattedData.forEach(d => allTimesMap.set(d.time, { time: d.time, value: 0 }));
