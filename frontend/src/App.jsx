@@ -47,13 +47,16 @@ const generateFutureTimeline = (cTime, tfSec, count, isCrypto = false, timeShift
         
         let skip = false;
         if (!isCrypto) {
-            // MT5 broker time normally closes Friday 24:00 (which is Saturday 00:00) 
-            // and opens Monday 00:00 (which is Sunday 24:00). 
-            // To be safe against 23:59 vs 00:00 issues, skip day 6 (Saturday) and day 0 (Sunday).
-            // But some brokers close slightly earlier, so we use the strict Broker Time 
-            // weekend skip: Saturday and Sunday entirely.
-            // Wait, if MT5 time ends Friday 23:59:59 Broker Time, day is 5.
-            if (day === 6 || day === 0) skip = true;
+            // MT5 returns timestamps in UTC (Unix timestamp).
+            // Forex market usually closes around Friday 21:00 or 22:00 UTC
+            // and opens around Sunday 21:00 or 22:00 UTC.
+            if (day === 5 && h >= 22) {
+                skip = true;
+            } else if (day === 6) {
+                skip = true;
+            } else if (day === 0 && h < 21) {
+                skip = true;
+            }
         }
         
         if (!skip) {
@@ -1834,13 +1837,16 @@ useEffect(() => {
             let skip = false;
             let jumpHours = 0;
             
-            // Broker time closes Friday 23:59:59 (Saturday 00:00) and opens Monday 00:00 (Sunday 24:00)
-            if (day === 6) { // Saturday
+            // MT5 timestamps are UTC. Market closes Friday ~22:00 UTC, opens Sunday ~21:00 UTC.
+            if (day === 5 && h >= 22) {
                 skip = true;
-                jumpHours = 24 - h + 24; // Jump rest of Saturday + whole Sunday -> Monday 00:00
-            } else if (day === 0) { // Sunday
+                jumpHours = 24 - h + 24 + 21; // Jump rest of Friday + Saturday + Sunday until 21:00
+            } else if (day === 6) { // Saturday
                 skip = true;
-                jumpHours = 24 - h; // Jump rest of Sunday -> Monday 00:00
+                jumpHours = 24 - h + 21; // Jump rest of Saturday + Sunday until 21:00
+            } else if (day === 0 && h < 21) { // Sunday before 21:00
+                skip = true;
+                jumpHours = 21 - h; // Jump rest of Sunday until 21:00
             }
             
             if (skip) {
