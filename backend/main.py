@@ -452,6 +452,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     current_time_val = time.time()
     
     use_cache = False
+    has_m1 = False
     if end_time == 0 and latest_only and cache_key in _VP_BOXES_CACHE:
         cache_entry = _VP_BOXES_CACHE[cache_key]
         if current_time_val - cache_entry['time'] < 60:
