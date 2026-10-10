@@ -1641,8 +1641,9 @@ useEffect(() => {
                   vol15Ref.current.setData(v15.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
               }
             }
-            if (projectedVolSeriesRef.current && !isPolling) {
-                projectedVolSeriesRef.current.setData(projectedNormVol.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            if (projectedVolSeriesRef.current) {
+                if (!isPolling) projectedVolSeriesRef.current.setData(projectedNormVol.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                else projectedVolSeriesRef.current.setData([]);
             }
             
             if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 200);
@@ -1709,9 +1710,7 @@ useEffect(() => {
         }
         
         // Lưu Volume Profile boxes
-        if (response.data.indicators && response.data.indicators.vp_boxes) {
-            setVpBoxes(response.data.indicators.vp_boxes);
-        }
+        if (response.data.indicators && response.data.indicators.vp_boxes && response.data.indicators.vp_boxes.length > 0) { setVpBoxes(response.data.indicators.vp_boxes); } else if (isPolling) { setVpBoxes([]); }
         
         if (response.data.indicators && response.data.indicators.vol_stats) {
             setVolStats(response.data.indicators.vol_stats);
@@ -3684,6 +3683,9 @@ function App() {
 }
 
 export default App;
+
+
+
 
 
 
