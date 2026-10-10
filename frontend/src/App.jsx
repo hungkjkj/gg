@@ -2257,13 +2257,14 @@ useEffect(() => {
 const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, initialMatrixVolDays, onSaveMatrixSettings, symbol }) => {
   const [matrixData, setMatrixData] = useState(null);
   const [matrixDataLong, setMatrixDataLong] = useState(null);
+  const [matrixDataTrend, setMatrixDataTrend] = useState(null);
+  const [matrixDataTrendLong, setMatrixDataTrendLong] = useState(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [matrixHours, setMatrixHours] = useState(initialMatrixHours || Number(localStorage.getItem('currencyMatrixHours')) || 24);
   const [matrixHoursLong, setMatrixHoursLong] = useState(Number(localStorage.getItem('currencyMatrixHoursLong')) || 89);
   const [matrixVolDays, setMatrixVolDays] = useState(initialMatrixVolDays || Number(localStorage.getItem('currencyMatrixVolDays')) || 30);
   const [matrixType, setMatrixType] = useState((localStorage.getItem('matrixType') === 'currency' ? 'fx' : localStorage.getItem('matrixType')) || 'fx');
-  const [matrixMode, setMatrixMode] = useState(localStorage.getItem('matrixMode') || 'money_flow');
 
   // Tự động đổi nhóm tài sản theo symbol đang xem
   useEffect(() => {
@@ -2301,17 +2302,19 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     }
     // Không dùng cache nếu đang ở chế độ backtest
     if (!force && !simulatedTime) {
-      const cached = localStorage.getItem(`matrixCache_${matrixType}_${matrixMode}`);
-      const cachedTime = localStorage.getItem(`matrixCacheTime_${matrixType}_${matrixMode}`);
-      const cachedHours = localStorage.getItem(`matrixCacheHours_${matrixType}_${matrixMode}`);
-      const cachedHoursLong = localStorage.getItem(`matrixCacheHoursLong_${matrixType}_${matrixMode}`);
-      const cachedVolDays = localStorage.getItem(`matrixCacheVolDays_${matrixType}_${matrixMode}`);
+      const cached = localStorage.getItem(`matrixCache_${matrixType}`);
+      const cachedTime = localStorage.getItem(`matrixCacheTime_${matrixType}`);
+      const cachedHours = localStorage.getItem(`matrixCacheHours_${matrixType}`);
+      const cachedHoursLong = localStorage.getItem(`matrixCacheHoursLong_${matrixType}`);
+      const cachedVolDays = localStorage.getItem(`matrixCacheVolDays_${matrixType}`);
       if (cached && cachedTime && cachedHours == matrixHours && cachedHoursLong == matrixHoursLong && cachedVolDays == matrixVolDays) {
         const age = Date.now() - parseInt(cachedTime);
         if (age < 60 * 1000) {
           const parsed = JSON.parse(cached);
           setMatrixData(parsed.short);
           setMatrixDataLong(parsed.long);
+          setMatrixDataTrend(parsed.trendShort);
+          setMatrixDataTrendLong(parsed.trendLong);
           return;
         }
       }
@@ -2319,23 +2322,27 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     
     setLoading(true);
     try {
-      const responseShort = await axios.get(`${API_BASE}/api/v1/matrix`, {
-        params: { n_hours: matrixHours, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone, matrix_mode: matrixMode }
-      });
-      setMatrixData(responseShort.data);
-      
-      const responseLong = await axios.get(`${API_BASE}/api/v1/matrix`, {
-        params: { n_hours: matrixHoursLong, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone, matrix_mode: matrixMode }
-      });
-      setMatrixDataLong(responseLong.data);
+      const [resFlowShort, resFlowLong, resTrendShort, resTrendLong] = await Promise.all([
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { n_hours: matrixHours, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone, matrix_mode: 'money_flow' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { n_hours: matrixHoursLong, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone, matrix_mode: 'money_flow' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { n_hours: matrixHours, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone, matrix_mode: 'trend' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { n_hours: matrixHoursLong, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone, matrix_mode: 'trend' } })
+      ]);
+      setMatrixData(resFlowShort.data);
+      setMatrixDataLong(resFlowLong.data);
+      setMatrixDataTrend(resTrendShort.data);
+      setMatrixDataTrendLong(resTrendLong.data);
       
       if (!simulatedTime) {
-          const combo = { short: responseShort.data, long: responseLong.data };
-          localStorage.setItem(`matrixCache_${matrixType}_${matrixMode}`, JSON.stringify(combo));
-          localStorage.setItem(`matrixCacheTime_${matrixType}_${matrixMode}`, Date.now().toString());
-          localStorage.setItem(`matrixCacheHours_${matrixType}_${matrixMode}`, matrixHours.toString());
-          localStorage.setItem(`matrixCacheHoursLong_${matrixType}_${matrixMode}`, matrixHoursLong.toString());
-          localStorage.setItem(`matrixCacheVolDays_${matrixType}_${matrixMode}`, matrixVolDays.toString());
+          const combo = { 
+            short: resFlowShort.data, long: resFlowLong.data,
+            trendShort: resTrendShort.data, trendLong: resTrendLong.data 
+          };
+          localStorage.setItem(`matrixCache_${matrixType}`, JSON.stringify(combo));
+          localStorage.setItem(`matrixCacheTime_${matrixType}`, Date.now().toString());
+          localStorage.setItem(`matrixCacheHours_${matrixType}`, matrixHours.toString());
+          localStorage.setItem(`matrixCacheHoursLong_${matrixType}`, matrixHoursLong.toString());
+          localStorage.setItem(`matrixCacheVolDays_${matrixType}`, matrixVolDays.toString());
       }
       localStorage.setItem('currencyMatrixHours', matrixHours.toString());
       localStorage.setItem('currencyMatrixHoursLong', matrixHoursLong.toString());
@@ -2357,7 +2364,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     }, 5 * 60 * 1000);
     
     return () => clearInterval(intervalId);
-  }, [matrixType, matrixMode]);
+  }, [matrixType]);
 
   if (!matrixData) {
     if (loading) {
@@ -2418,27 +2425,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         </div>
         
         <div style={{ display: 'flex', gap: '10px', marginRight: '15px', borderRight: '1px solid #4b5563', paddingRight: '15px' }}>
-          <select
-            value={matrixMode}
-            onChange={(e) => {
-              setMatrixMode(e.target.value);
-              localStorage.setItem('matrixMode', e.target.value);
-            }}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '6px',
-              border: '1px solid #3b82f6',
-              background: '#1e293b',
-              color: 'white',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '0.9rem',
-              outline: 'none'
-            }}
-          >
-            <option value="money_flow">🌊 Money Flow (Momentum)</option>
-            <option value="trend">📈 Price Trend (C-VWMA)</option>
-          </select>
+          {/* matrix mode toggle removed as both are shown */}
         </div>
         
         <label>Ngắn hạn (Giờ):</label>
@@ -2475,71 +2462,76 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         </span>
       </div>
 
-      {(matrixData && matrixDataLong) && (() => {
-        return (
-          <div style={{ display: 'flex', gap: '40px', marginBottom: '40px' }}>
-            {/* Bảng xếp hạng đồng tiền */}
-            <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px' }}>
-              <h2 style={{ marginBottom: '20px', color: '#60a5fa' }}>Xếp hạng Sức mạnh Tiền tệ ({matrixHoursLong}H / {matrixHours}H)</h2>
-              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '16px 0', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hạng</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Đồng tiền</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Điểm sức mạnh (Score)</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>% Mom</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Khối lượng (Top %)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {matrixDataLong.ranking.map((item, index) => {
-                    const shortItem = matrixData.ranking ? matrixData.ranking.find(x => x.currency === item.currency) : null;
-                    let volColor = 'var(--text-primary)';
-                    if (item.vol_percentile >= 75) volColor = '#4ade80';
-                    else if (item.vol_percentile <= 20) volColor = '#f87171';
-                    
-                    let momColor = 'var(--text-primary)';
-                    if (item.mom_percentile >= 50) momColor = '#4ade80';
-                    else if (item.mom_percentile <= -50) momColor = '#f87171';
+      {(matrixData && matrixDataLong && matrixDataTrend && matrixDataTrendLong) && (() => {
+        const renderRankingTable = (title, shortData, longData) => (
+          <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', minWidth: '400px' }}>
+            <h2 style={{ marginBottom: '20px', color: '#60a5fa' }}>{title} ({matrixHoursLong}H / {matrixHours}H)</h2>
+            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '16px 0', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hạng</th>
+                  <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Cur</th>
+                  <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Score</th>
+                  <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>% Mom</th>
+                  <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Vol %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {longData.ranking.map((item, index) => {
+                  const shortItem = shortData.ranking ? shortData.ranking.find(x => x.currency === item.currency) : null;
+                  let volColor = 'var(--text-primary)';
+                  if (item.vol_percentile >= 75) volColor = '#4ade80';
+                  else if (item.vol_percentile <= 20) volColor = '#f87171';
+                  
+                  let momColor = 'var(--text-primary)';
+                  if (item.mom_percentile >= 50) momColor = '#4ade80';
+                  else if (item.mom_percentile <= -50) momColor = '#f87171';
 
-                    const renderVal = (val, shortVal, suffix = '', precision = 2, valType = '') => {
-                       const mainStr = (val > 0 && suffix !== '%' ? '+' : '') + (val != null ? val.toFixed(precision) : '0') + suffix;
-                       const shortStr = shortVal ? ` (${shortVal > 0 && suffix !== '%' ? '+' : ''}${shortVal != null ? shortVal.toFixed(precision) : '0'}${suffix})` : '';
-                       
-                       let shortColor = '#9ca3af';
-                       if (shortVal != null) {
-                         if (valType === 'mom') {
-                           if (shortVal >= 50) shortColor = '#4ade80';
-                           else if (shortVal <= -50) shortColor = '#f87171';
-                         } else if (valType === 'vol') {
-                           if (shortVal >= 75) shortColor = '#4ade80';
-                           else if (shortVal <= 20) shortColor = '#f87171';
-                         } else if (valType === 'score') {
-                           if (shortVal > 0) shortColor = 'var(--up-color)';
-                           else if (shortVal < 0) shortColor = 'var(--down-color)';
-                         }
+                  const renderVal = (val, shortVal, suffix = '', precision = 2, valType = '') => {
+                     const mainStr = (val > 0 && suffix !== '%' ? '+' : '') + (val != null ? val.toFixed(precision) : '0') + suffix;
+                     const shortStr = shortVal ? ` (${shortVal > 0 && suffix !== '%' ? '+' : ''}${shortVal != null ? shortVal.toFixed(precision) : '0'}${suffix})` : '';
+                     
+                     let shortColor = '#9ca3af';
+                     if (shortVal != null) {
+                       if (valType === 'mom') {
+                         if (shortVal >= 50) shortColor = '#4ade80';
+                         else if (shortVal <= -50) shortColor = '#f87171';
+                       } else if (valType === 'vol') {
+                         if (shortVal >= 75) shortColor = '#4ade80';
+                         else if (shortVal <= 20) shortColor = '#f87171';
+                       } else if (valType === 'score') {
+                         if (shortVal > 0) shortColor = 'var(--up-color)';
+                         else if (shortVal < 0) shortColor = 'var(--down-color)';
                        }
-                       return <>{mainStr} <span style={{fontSize:'12px', color:shortColor, marginLeft: '4px'}}>{shortStr}</span></>;
-                    };
-                    
-                    return (
-                    <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <td style={{ padding: '12px 0', fontWeight: 'bold' }}>#{index + 1}</td>
-                      <td style={{ padding: '12px 0' }}>{item.currency}</td>
-                      <td style={{ padding: '12px 0', color: item.score > 0 ? 'var(--up-color)' : (item.score < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
-                        {renderVal(item.score, shortItem?.score, '', 2, 'score')}
-                      </td>
-                      <td style={{ padding: '12px 0', color: momColor, fontWeight: Math.abs(item.mom_percentile || 0) >= 50 ? 'bold' : 'normal' }}>
-                        {renderVal(item.mom_percentile, shortItem?.mom_percentile, '%', 2, 'mom')}
-                      </td>
-                      <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal' }}>
-                        {renderVal(item.vol_percentile, shortItem?.vol_percentile, '%', 0, 'vol')}
-                      </td>
-                    </tr>
-                  )})}
-                </tbody>
-              </table>
-            </div>
+                     }
+                     return <>{mainStr} <span style={{fontSize:'12px', color:shortColor, marginLeft: '4px'}}>{shortStr}</span></>;
+                  };
+                  
+                  return (
+                  <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '12px 0', fontWeight: 'bold' }}>#{index + 1}</td>
+                    <td style={{ padding: '12px 0' }}>{item.currency}</td>
+                    <td style={{ padding: '12px 0', color: item.score > 0 ? 'var(--up-color)' : (item.score < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
+                      {renderVal(item.score, shortItem?.score, '', 2, 'score')}
+                    </td>
+                    <td style={{ padding: '12px 0', color: momColor, fontWeight: Math.abs(item.mom_percentile || 0) >= 50 ? 'bold' : 'normal' }}>
+                      {renderVal(item.mom_percentile, shortItem?.mom_percentile, '%', 2, 'mom')}
+                    </td>
+                    <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal' }}>
+                      {renderVal(item.vol_percentile, shortItem?.vol_percentile, '%', 0, 'vol')}
+                    </td>
+                  </tr>
+                )})}
+              </tbody>
+            </table>
+          </div>
+        );
+
+        return (
+          <div style={{ display: 'flex', gap: '40px', marginBottom: '40px', flexWrap: 'wrap' }}>
+            {/* Bảng xếp hạng đồng tiền Flow vs Trend */}
+            {renderRankingTable("🌊 Money Flow (Momentum)", matrixData, matrixDataLong)}
+            {renderRankingTable("📈 Price Trend (C-VWMA)", matrixDataTrend, matrixDataTrendLong)}
 
             {/* Dữ liệu chi tiết các cặp */}
             <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', maxHeight: '550px', overflowY: 'auto' }}>
@@ -3169,6 +3161,8 @@ function App() {
   const [showMatrixBubble, setShowMatrixBubble] = useState(localStorage.getItem('showMatrixBubble') === 'true');
   const [bubbleMatrixData, setBubbleMatrixData] = useState(null);
   const [bubbleMatrixDataLong, setBubbleMatrixDataLong] = useState(null);
+  const [bubbleMatrixDataTrend, setBubbleMatrixDataTrend] = useState(null);
+  const [bubbleMatrixDataTrendLong, setBubbleMatrixDataTrendLong] = useState(null);
 
   
   const [configs, setConfigs] = useState(() => ({
@@ -3226,24 +3220,25 @@ function App() {
       const mHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || 89;
       const mVolDays = configs.matrixVolDays || 30;
       const mType = getMatrixTypeForSymbol(symbol);
-      const mMode = localStorage.getItem('matrixMode') || 'money_flow';
-      let urlShort = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}&matrix_mode=${mMode}`;
-      let urlLong = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHoursLong}&vol_days=${mVolDays}&matrix_type=${mType}&matrix_mode=${mMode}`;
+      let urlShortFlow = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}&matrix_mode=money_flow`;
+      let urlLongFlow = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHoursLong}&vol_days=${mVolDays}&matrix_type=${mType}&matrix_mode=money_flow`;
+      let urlShortTrend = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}&matrix_mode=trend`;
+      let urlLongTrend = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHoursLong}&vol_days=${mVolDays}&matrix_type=${mType}&matrix_mode=trend`;
       
       if (viewMode === 'backtest' && window.currentSimulatedTime) {
-        urlShort += `&end_time=${window.currentSimulatedTime}`;
-        urlLong += `&end_time=${window.currentSimulatedTime}`;
+        urlShortFlow += `&end_time=${window.currentSimulatedTime}`;
+        urlLongFlow += `&end_time=${window.currentSimulatedTime}`;
+        urlShortTrend += `&end_time=${window.currentSimulatedTime}`;
+        urlLongTrend += `&end_time=${window.currentSimulatedTime}`;
       }
-      axios.get(urlShort).then(res => {
-        if (res.data && res.data.ranking) {
-          setBubbleMatrixData(res.data.ranking);
-        }
-      }).catch(err => console.error(err));
-      
-      axios.get(urlLong).then(res => {
-        if (res.data && res.data.ranking) {
-          setBubbleMatrixDataLong(res.data.ranking);
-        }
+      Promise.all([
+          axios.get(urlShortFlow), axios.get(urlLongFlow),
+          axios.get(urlShortTrend), axios.get(urlLongTrend)
+      ]).then(res => {
+          setBubbleMatrixData(res[0].data?.ranking);
+          setBubbleMatrixDataLong(res[1].data?.ranking);
+          setBubbleMatrixDataTrend(res[2].data?.ranking);
+          setBubbleMatrixDataTrendLong(res[3].data?.ranking);
       }).catch(err => console.error(err));
     };
     
@@ -3321,6 +3316,8 @@ function App() {
         setShowMatrixBubble={setShowMatrixBubble}
         bubbleMatrixData={bubbleMatrixData}
         bubbleMatrixDataLong={bubbleMatrixDataLong}
+        bubbleMatrixDataTrend={bubbleMatrixDataTrend}
+        bubbleMatrixDataTrendLong={bubbleMatrixDataTrendLong}
         volMode={configs.volMode}
         handleVolModeToggle={(checked) => setConfigs(prev => ({ ...prev, volMode: checked ? 'mean_vol' : 'normal' }))}
       />

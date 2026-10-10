@@ -824,9 +824,9 @@ def get_matrix_progress(matrix_type: str = "currency"):
     return {"progress": MATRIX_PROGRESS.get(matrix_type, 0.0)}
 
 @app.get("/api/v1/matrix")
-def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str = "fx", end_time: int = 0, brokerTimezone: str = "Europe/Athens"):
+def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str = "fx", end_time: int = 0, brokerTimezone: str = "Europe/Athens", matrix_mode: str = "money_flow"):
     import time
-    cache_key = f"{n_hours}_{vol_days}_{matrix_type}_{end_time}_{brokerTimezone}"
+    cache_key = f"{n_hours}_{vol_days}_{matrix_type}_{end_time}_{brokerTimezone}_{matrix_mode}"
     current_time = time.time()
     
     # Cache for 10 seconds to prevent concurrent overlap and UI progress reset
@@ -878,35 +878,45 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         df['hlc3'] = (df['high'] + df['low'] + df['close']) / 3
         df['vwap_vol'] = df['hlc3'] * df['tick_volume']
 
-        # VF-Momentum Logic
-        lookback_candles = int(vol_days * 24 * candles_per_hour)
-        target_pct = config.get('mfTargetPct', 75) / 100.0
-        rolling_vol_N = df['value'].rolling(window=window_size, min_periods=1).sum()
-        V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(target_pct).fillna(1.0).values, 1.0)
-        
-        cum_vol = df['value'].cumsum().values
-        hlc3_pre = df['hlc3'].shift(1).fillna(df['hlc3'])
-        df['hlc3_diff_pct'] = np.where(hlc3_pre > 0, (df['hlc3'] - hlc3_pre) / hlc3_pre * 100, 0.0)
-        df['candle_mom'] = df['hlc3_diff_pct'] * df['value']
-        cum_candle_mom = df['candle_mom'].cumsum().values
-        
-        n = len(df)
-        i_arr = np.arange(n)
-        
-        target_current = cum_vol - V_series
-        j_current = np.searchsorted(cum_vol, target_current, side='right')
-        j_cur_m1 = np.where(j_current > 0, j_current - 1, 0)
-        has_j_cur = j_current > 0
-        
-        vol_cur = cum_vol - np.where(has_j_cur, cum_vol[j_cur_m1], 0)
-        net_mom_cur = cum_candle_mom - np.where(has_j_cur, cum_candle_mom[j_cur_m1], 0)
-        
-        N_candles = np.maximum(i_arr - j_current + 1, 1.0)
-        
-        # Scale lại bằng chính window_size (thuần túy theo khung thời gian người dùng cấu hình)
-        df['diff_pct'] = np.where(vol_cur > 0, (net_mom_cur / V_series) * window_size, 0.0)
-        
         df['vol_rolling'] = df['value'].rolling(window=window_size, min_periods=1).sum()
+
+        if matrix_mode == "money_flow":
+            # VF-Momentum Logic
+            lookback_candles = int(vol_days * 24 * candles_per_hour)
+            target_pct = config.get('mfTargetPct', 75) / 100.0
+            rolling_vol_N = df['vol_rolling']
+            V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(target_pct).fillna(1.0).values, 1.0)
+            
+            cum_vol = df['value'].cumsum().values
+            hlc3_pre = df['hlc3'].shift(1).fillna(df['hlc3'])
+            df['hlc3_diff_pct'] = np.where(hlc3_pre > 0, (df['hlc3'] - hlc3_pre) / hlc3_pre * 100, 0.0)
+            df['candle_mom'] = df['hlc3_diff_pct'] * df['value']
+            cum_candle_mom = df['candle_mom'].cumsum().values
+            
+            n = len(df)
+            i_arr = np.arange(n)
+            
+            target_current = cum_vol - V_series
+            j_current = np.searchsorted(cum_vol, target_current, side='right')
+            j_cur_m1 = np.where(j_current > 0, j_current - 1, 0)
+            has_j_cur = j_current > 0
+            
+            vol_cur = cum_vol - np.where(has_j_cur, cum_vol[j_cur_m1], 0)
+            net_mom_cur = cum_candle_mom - np.where(has_j_cur, cum_candle_mom[j_cur_m1], 0)
+            
+            N_candles = np.maximum(i_arr - j_current + 1, 1.0)
+            
+            # Scale lại bằng chính window_size (thuần túy theo khung thời gian người dùng cấu hình)
+            df['diff_pct'] = np.where(vol_cur > 0, (net_mom_cur / V_series) * window_size, 0.0)
+        else:
+            # TREND MODE (C-VWMA vs HLC3 cũ)
+            vwap_vol = (df['hlc3'] * df['value']).rolling(window=window_size, min_periods=1).sum()
+            c_vwap = np.where(df['vol_rolling'] > 0, vwap_vol / df['vol_rolling'], df['hlc3'])
+            
+            hlc3_old = df['hlc3'].shift(window_size).fillna(df['hlc3'])
+            # Tính phần trăm thay đổi để chuẩn hóa các cặp tiền có tỷ giá khác nhau
+            df['diff_pct'] = np.where(hlc3_old > 0, (c_vwap - hlc3_old) / hlc3_old * 100.0, 0.0)
+        
         
         if len(df) > window_size:
             # Tính diff_pct cho TOÀN BỘ cây nến (C-VWMA vs HLC3 cách window_size nến)
