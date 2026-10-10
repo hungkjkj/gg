@@ -184,10 +184,10 @@ export const AssistiveTouch = ({
         onClick={toggleOpen}
         onMouseEnter={(e) => { if (!isDragging) e.currentTarget.style.transform = 'scale(1.1)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-        style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%)', boxShadow: '0 8px 32px rgba(168, 85, 247, 0.4), inset 0 2px 4px rgba(255,255,255,0.4)', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: isDragging ? 'grabbing' : 'pointer', userSelect: 'none', touchAction: 'none', border: 'none', transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
+        style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'radial-gradient(circle, #ffffff 0%, #00f0ff 40%, #020612 90%)', boxShadow: '0 0 25px rgba(0, 240, 255, 0.8), inset 0 0 15px rgba(0, 240, 255, 0.8)', border: '2px solid rgba(0, 240, 255, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: isDragging ? 'grabbing' : 'pointer', userSelect: 'none', touchAction: 'none', border: 'none', transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
         title="Tính năng mở rộng"
       >
-        <span style={{ color: 'white', fontSize: '28px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}>✨</span>
+        <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#ffffff', boxShadow: '0 0 15px #fff, 0 0 25px #00f0ff, inset 0 0 10px #00f0ff', border: '2px solid #00f0ff' }}></div>
       </div>
       <style>
         {`
@@ -454,6 +454,7 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
     </div>
   );
 };
+
 
 
 
