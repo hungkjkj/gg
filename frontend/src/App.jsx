@@ -2263,6 +2263,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
   const [matrixHoursLong, setMatrixHoursLong] = useState(Number(localStorage.getItem('currencyMatrixHoursLong')) || 89);
   const [matrixVolDays, setMatrixVolDays] = useState(initialMatrixVolDays || Number(localStorage.getItem('currencyMatrixVolDays')) || 30);
   const [matrixType, setMatrixType] = useState((localStorage.getItem('matrixType') === 'currency' ? 'fx' : localStorage.getItem('matrixType')) || 'fx');
+  const [matrixMode, setMatrixMode] = useState(localStorage.getItem('matrixMode') || 'money_flow');
 
   // Tự động đổi nhóm tài sản theo symbol đang xem
   useEffect(() => {
@@ -2300,11 +2301,11 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     }
     // Không dùng cache nếu đang ở chế độ backtest
     if (!force && !simulatedTime) {
-      const cached = localStorage.getItem(`matrixCache_${matrixType}`);
-      const cachedTime = localStorage.getItem(`matrixCacheTime_${matrixType}`);
-      const cachedHours = localStorage.getItem(`matrixCacheHours_${matrixType}`);
-      const cachedHoursLong = localStorage.getItem(`matrixCacheHoursLong_${matrixType}`);
-      const cachedVolDays = localStorage.getItem(`matrixCacheVolDays_${matrixType}`);
+      const cached = localStorage.getItem(`matrixCache_${matrixType}_${matrixMode}`);
+      const cachedTime = localStorage.getItem(`matrixCacheTime_${matrixType}_${matrixMode}`);
+      const cachedHours = localStorage.getItem(`matrixCacheHours_${matrixType}_${matrixMode}`);
+      const cachedHoursLong = localStorage.getItem(`matrixCacheHoursLong_${matrixType}_${matrixMode}`);
+      const cachedVolDays = localStorage.getItem(`matrixCacheVolDays_${matrixType}_${matrixMode}`);
       if (cached && cachedTime && cachedHours == matrixHours && cachedHoursLong == matrixHoursLong && cachedVolDays == matrixVolDays) {
         const age = Date.now() - parseInt(cachedTime);
         if (age < 60 * 1000) {
@@ -2319,22 +2320,22 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     setLoading(true);
     try {
       const responseShort = await axios.get(`${API_BASE}/api/v1/matrix`, {
-        params: { n_hours: matrixHours, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone }
+        params: { n_hours: matrixHours, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone, matrix_mode: matrixMode }
       });
       setMatrixData(responseShort.data);
       
       const responseLong = await axios.get(`${API_BASE}/api/v1/matrix`, {
-        params: { n_hours: matrixHoursLong, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone }
+        params: { n_hours: matrixHoursLong, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone, matrix_mode: matrixMode }
       });
       setMatrixDataLong(responseLong.data);
       
       if (!simulatedTime) {
           const combo = { short: responseShort.data, long: responseLong.data };
-          localStorage.setItem(`matrixCache_${matrixType}`, JSON.stringify(combo));
-          localStorage.setItem(`matrixCacheTime_${matrixType}`, Date.now().toString());
-          localStorage.setItem(`matrixCacheHours_${matrixType}`, matrixHours.toString());
-          localStorage.setItem(`matrixCacheHoursLong_${matrixType}`, matrixHoursLong.toString());
-          localStorage.setItem(`matrixCacheVolDays_${matrixType}`, matrixVolDays.toString());
+          localStorage.setItem(`matrixCache_${matrixType}_${matrixMode}`, JSON.stringify(combo));
+          localStorage.setItem(`matrixCacheTime_${matrixType}_${matrixMode}`, Date.now().toString());
+          localStorage.setItem(`matrixCacheHours_${matrixType}_${matrixMode}`, matrixHours.toString());
+          localStorage.setItem(`matrixCacheHoursLong_${matrixType}_${matrixMode}`, matrixHoursLong.toString());
+          localStorage.setItem(`matrixCacheVolDays_${matrixType}_${matrixMode}`, matrixVolDays.toString());
       }
       localStorage.setItem('currencyMatrixHours', matrixHours.toString());
       localStorage.setItem('currencyMatrixHoursLong', matrixHoursLong.toString());
@@ -2356,7 +2357,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     }, 5 * 60 * 1000);
     
     return () => clearInterval(intervalId);
-  }, [matrixType]);
+  }, [matrixType, matrixMode]);
 
   if (!matrixData) {
     if (loading) {
@@ -2414,6 +2415,30 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
               {type === 'fx' ? 'Forex' : type === 'us_stocks' ? 'Cổ phiếu Mỹ' : type === 'commodities' ? 'Hàng hóa' : type === 'crypto' ? 'Crypto' : 'USD vs Assets'}
             </button>
           ))}
+        </div>
+        
+        <div style={{ display: 'flex', gap: '10px', marginRight: '15px', borderRight: '1px solid #4b5563', paddingRight: '15px' }}>
+          <select
+            value={matrixMode}
+            onChange={(e) => {
+              setMatrixMode(e.target.value);
+              localStorage.setItem('matrixMode', e.target.value);
+            }}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              border: '1px solid #3b82f6',
+              background: '#1e293b',
+              color: 'white',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: '0.9rem',
+              outline: 'none'
+            }}
+          >
+            <option value="money_flow">🌊 Money Flow (Momentum)</option>
+            <option value="trend">📈 Price Trend (C-VWMA)</option>
+          </select>
         </div>
         
         <label>Ngắn hạn (Giờ):</label>
@@ -3201,8 +3226,9 @@ function App() {
       const mHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || 89;
       const mVolDays = configs.matrixVolDays || 30;
       const mType = getMatrixTypeForSymbol(symbol);
-      let urlShort = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}`;
-      let urlLong = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHoursLong}&vol_days=${mVolDays}&matrix_type=${mType}`;
+      const mMode = localStorage.getItem('matrixMode') || 'money_flow';
+      let urlShort = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}&matrix_mode=${mMode}`;
+      let urlLong = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHoursLong}&vol_days=${mVolDays}&matrix_type=${mType}&matrix_mode=${mMode}`;
       
       if (viewMode === 'backtest' && window.currentSimulatedTime) {
         urlShort += `&end_time=${window.currentSimulatedTime}`;
