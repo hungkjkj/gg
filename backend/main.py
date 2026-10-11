@@ -914,19 +914,27 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
             # Scale láº¡i báº±ng chÃ­nh window_size (chuáº©n hoÃ¡)
             df['diff_pct'] = np.where(vol_cur > 0, (net_mom_cur / V_series) * window_size, 0.0)
         else:
-            # TREND MODE (True C-VWMA Velocity dá»±a trÃªn V-block)
-            vwap_vol_cur = cum_vwap_vol - np.where(has_j_cur, cum_vwap_vol[j_cur_m1], 0)
-            c_vwap = np.where(vol_cur > 0, vwap_vol_cur / vol_cur, df['hlc3'])
-            
-            hlc3_values = df['hlc3'].values
-            # Láº¥y HLC3 cá»§a cÃ¢y náº¿n liá»n trÆ°á»›c khi báº¯t Ä‘áº§u V-block
-            hlc3_old = hlc3_values[j_cur_m1]
-            
-            # QuÃ£ng Ä‘Æ°á»ng: TÃ­nh pháº§n trÄƒm thay Ä‘á»•i
-            distance_pct = np.where(hlc3_old > 0, (c_vwap - hlc3_old) / hlc3_old * 100.0, 0.0)
-            
-            # Váº­n tá»‘c: QuÃ£ng Ä‘Æ°á»ng chia cho thá»i gian (sá»‘ náº¿n cá»§a V-block)
-            # NhÃ¢n window_size Ä‘á»ƒ scale sá»‘ lÃªn má»©c dá»… nhÃ¬n (tÆ°Æ¡ng Ä‘Æ°Æ¡ng vá»›i Money Flow)
+            # TREND MODE: Delta VWAP giữa 2 cục tiền bằng nhau (V_half = V_series / 2)
+            V_half = V_series / 2.0
+            target_mid = np.maximum(cum_vol - V_half, 0)
+            j_mid = np.searchsorted(cum_vol, target_mid, side='right')
+            j_mid_m1 = np.where(j_mid > 0, j_mid - 1, 0)
+            has_j_mid = j_mid > 0
+
+            # Cục sau (Recent Half): Từ target_mid đến nến hiện tại
+            vol_after = cum_vol - np.where(has_j_mid, cum_vol[j_mid_m1], 0)
+            vwap_vol_after = cum_vwap_vol - np.where(has_j_mid, cum_vwap_vol[j_mid_m1], 0)
+            vwap_after = np.where(vol_after > 0, vwap_vol_after / np.maximum(vol_after, 1e-9), df['hlc3'])
+
+            # Cục trước (Earlier Half): Từ target_current đến target_mid
+            vol_before = np.where(has_j_mid, cum_vol[j_mid_m1], 0) - np.where(has_j_cur, cum_vol[j_cur_m1], 0)
+            vwap_vol_before = np.where(has_j_mid, cum_vwap_vol[j_mid_m1], 0) - np.where(has_j_cur, cum_vwap_vol[j_cur_m1], 0)
+            vwap_before = np.where(vol_before > 0, vwap_vol_before / np.maximum(vol_before, 1e-9), df['hlc3'])
+
+            # Quãng đường: % Delta dịch chuyển giá vốn giữa cục sau và cục trước
+            distance_pct = np.where(vwap_before > 0, (vwap_after - vwap_before) / vwap_before * 100.0, 0.0)
+
+            # Vận tốc: Quãng đường chia cho thời gian (số nến của cả V-block), nhân window_size chuẩn hoá
             df['diff_pct'] = (distance_pct / N_candles) * window_size
         
         

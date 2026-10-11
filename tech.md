@@ -186,19 +186,27 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
             # Scale lại bằng chính window_size (chuẩn hoá)
             df['diff_pct'] = np.where(vol_cur > 0, (net_mom_cur / V_series) * window_size, 0.0)
         else:
-            # TREND MODE (True C-VWMA Velocity dựa trên V-block)
-            vwap_vol_cur = cum_vwap_vol - np.where(has_j_cur, cum_vwap_vol[j_cur_m1], 0)
-            c_vwap = np.where(vol_cur > 0, vwap_vol_cur / vol_cur, df['hlc3'])
-            
-            hlc3_values = df['hlc3'].values
-            # Lấy HLC3 của cây nến liền trước khi bắt đầu V-block
-            hlc3_old = hlc3_values[j_cur_m1]
-            
-            # Quãng đường: Tính phần trăm thay đổi
-            distance_pct = np.where(hlc3_old > 0, (c_vwap - hlc3_old) / hlc3_old * 100.0, 0.0)
-            
-            # Vận tốc: Quãng đường chia cho thời gian (số nến của V-block)
-            # Nhân window_size để scale số lên mức dễ nhìn (tương đương với Money Flow)
+            # TREND MODE: Delta VWAP giữa 2 cục tiền bằng nhau (V_half = V_series / 2)
+            V_half = V_series / 2.0
+            target_mid = np.maximum(cum_vol - V_half, 0)
+            j_mid = np.searchsorted(cum_vol, target_mid, side='right')
+            j_mid_m1 = np.where(j_mid > 0, j_mid - 1, 0)
+            has_j_mid = j_mid > 0
+
+            # Cục sau (Recent Half): Từ target_mid đến nến hiện tại
+            vol_after = cum_vol - np.where(has_j_mid, cum_vol[j_mid_m1], 0)
+            vwap_vol_after = cum_vwap_vol - np.where(has_j_mid, cum_vwap_vol[j_mid_m1], 0)
+            vwap_after = np.where(vol_after > 0, vwap_vol_after / np.maximum(vol_after, 1e-9), df['hlc3'])
+
+            # Cục trước (Earlier Half): Từ target_current đến target_mid
+            vol_before = np.where(has_j_mid, cum_vol[j_mid_m1], 0) - np.where(has_j_cur, cum_vol[j_cur_m1], 0)
+            vwap_vol_before = np.where(has_j_mid, cum_vwap_vol[j_mid_m1], 0) - np.where(has_j_cur, cum_vwap_vol[j_cur_m1], 0)
+            vwap_before = np.where(vol_before > 0, vwap_vol_before / np.maximum(vol_before, 1e-9), df['hlc3'])
+
+            # Quãng đường: % Delta dịch chuyển giá vốn giữa cục sau và cục trước
+            distance_pct = np.where(vwap_before > 0, (vwap_after - vwap_before) / vwap_before * 100.0, 0.0)
+
+            # Vận tốc: Quãng đường chia cho thời gian (số nến của cả V-block), nhân window_size chuẩn hoá
             df['diff_pct'] = (distance_pct / N_candles) * window_size
         
         if len(df) > window_size:
@@ -220,12 +228,12 @@ Hệ thống backtest được thiết kế để chịu tải hiển thị vớ
 5. **Dual Volume Series (Giải pháp vẽ tương lai):** Để giải quyết lỗi `Value is not ascending` của Lightweight Charts khi vừa muốn vẽ dự báo Volume trong tương lai, vừa muốn cập nhật tick Volume hiện tại (ở cả Livechart và Backtest), hệ thống Volume đã được chia làm 2 Series độc lập chồng lên nhau: `normVolSeries` (thực tế - nhận lệnh update liên tục) và `projectedVolSeries` (tương lai - load 1 lần bằng setData).
 6. **Smart Timezone Alignment:** Hệ thống loại bỏ hoàn toàn sai lệch nhảy cóc nến (gaps) do cài đặt `timeShiftHours` bằng cách lột trần thời gian hiển thị về nguyên bản Unix Timestamp (UTC tuyệt đối) trước khi tính toán nhảy cóc cuối tuần. Nhờ vậy, thị trường Forex luôn đóng cửa chuẩn xác vào `22:00 Thứ Sáu (UTC)` và mở cửa vào `21:00 Chủ Nhật (UTC)`, cắt đứt chuỗi nến thừa mà không bị lệch múi giờ của người dùng. Riêng Crypto được phép vẽ liên tục.
 
-### 9. Giao di?n ngu?i d�ng (UI/UX - J.A.R.V.I.S Theme)
-To�n b? h? th?ng giao di?n du?c thi?t k? theo c?m h?ng t? h? di?u h�nh **J.A.R.V.I.S** (ho?c F.R.I.D.A.Y) c?a Iron Man, v?i c�c d?c di?m:
-1. **Color Palette:** N?n Radial Gradient s�u th?m (Deep Space), di k�m v?i c�c du?ng vi?n v� text m�u Neon Cyan (l�i h? quang Arc Reactor). N?n tang s? d?ng m�u Cyan ph�t s�ng, n?n gi?m s? d?ng m�u Red/Amber d? c?nh b�o.
-2. **Glassmorphism & Glowing:** C�c b?ng di?u khi?n v� bong b�ng ch?c nang du?c thi?t k? d?ng k�nh m? (backdrop-filter) k?t h?p v?i hi?u ?ng d? b�ng vi?n s�ng (Box-shadow glowing). C�c n�t b?m ph?n ?ng l?i (scale + s�ng l�n) khi hover.
-3. **N�t tuong t�c Arc Reactor (AssistiveTouch):** N�t g?i ch?c nang m? r?ng du?c thi?t k? d?ng l�i h? quang li�n t?c t?a ra c�c l?p s�ng nang lu?ng.
-4. **J.A.R.V.I.S Trading Log (S? Nh?t K�):** H? th?ng ghi ch�p du?c t�ch h?p th?ng v�o giao di?n du?i d?ng B?ng tru?t (Slide-in Panel). D? li?u du?c qu?n l� tr?c ti?p b?ng LocalStorage c?a tr�nh duy?t, cung c?p t?c d? ph?n h?i t?c th?i (Zero-latency) m� v?n d?m b?o t�nh b?n v?ng c?a d? li?u qua c�c l?n kh?i d?ng l?i.
+### 9. Giao di?n ngu?i d�ng (UI/UX - J.A.R.V.I.S Theme)
+To�n b? h? th?ng giao di?n du?c thi?t k? theo c?m h?ng t? h? di?u h�nh **J.A.R.V.I.S** (ho?c F.R.I.D.A.Y) c?a Iron Man, v?i c�c d?c di?m:
+1. **Color Palette:** N?n Radial Gradient s�u th?m (Deep Space), di k�m v?i c�c du?ng vi?n v� text m�u Neon Cyan (l�i h? quang Arc Reactor). N?n tang s? d?ng m�u Cyan ph�t s�ng, n?n gi?m s? d?ng m�u Red/Amber d? c?nh b�o.
+2. **Glassmorphism & Glowing:** C�c b?ng di?u khi?n v� bong b�ng ch?c nang du?c thi?t k? d?ng k�nh m? (backdrop-filter) k?t h?p v?i hi?u ?ng d? b�ng vi?n s�ng (Box-shadow glowing). C�c n�t b?m ph?n ?ng l?i (scale + s�ng l�n) khi hover.
+3. **N�t tuong t�c Arc Reactor (AssistiveTouch):** N�t g?i ch?c nang m? r?ng du?c thi?t k? d?ng l�i h? quang li�n t?c t?a ra c�c l?p s�ng nang lu?ng.
+4. **J.A.R.V.I.S Trading Log (S? Nh?t K�):** H? th?ng ghi ch�p du?c t�ch h?p th?ng v�o giao di?n du?i d?ng B?ng tru?t (Slide-in Panel). D? li?u du?c qu?n l� tr?c ti?p b?ng LocalStorage c?a tr�nh duy?t, cung c?p t?c d? ph?n h?i t?c th?i (Zero-latency) m� v?n d?m b?o t�nh b?n v?ng c?a d? li?u qua c�c l?n kh?i d?ng l?i.
 
 
 ## Update: Trading Journal & Volume Chart Fix
@@ -246,3 +254,7 @@ To�n b? h? th?ng giao di?n du?c thi?t k? theo c?m h?ng t? h? di?u h�nh **J.A.R.V
 - **Intraday/Scalping Correlation Matrix Upgrade:**
   - Upgraded Correlation Matrix calculation in `backend/main.py` from H1 (`1h`) to M30 (`30min`) Log Returns.
   - Doubled the sample observation density within the same timeframe window, making Pearson correlation coefficients much more responsive to intraday session flows and breaking news while preserving macro trend relationships without noise.
+- **Price Trend Mode 2-Equal-Blocks Delta VWAP Upgrade:**
+  - Upgraded Price Trend mode in Currency/Asset Matrix: replaced single-candle `hlc3_old` reference with a dual-block Delta VWAP mechanism ($V_{half} = V_{series} / 2$).
+  - Measures the direct Cost Basis Shift between the earlier volume half ($VWAP_1$) and the recent volume half ($VWAP_2$).
+  - Eliminated single-candle wick/spread noise while preserving exact momentum velocity distribution and scaling $((distance_pct / N_candles) * window_size)$.
