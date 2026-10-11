@@ -147,8 +147,9 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   
   const [rrTools, setRrTools] = useState([]);
 
-  const addRrTool = (type, price, logical) => {
+  const addRrTool = (type, price, logical, time) => {
     const offset = price * 0.002;
+    const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
     
     const newTool = {
       id: Date.now().toString(),
@@ -156,6 +157,9 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       entryPrice: price,
       targetPrice: type === 'long' ? price + offset*2 : price - offset*2,
       stopPrice: type === 'long' ? price - offset : price + offset,
+      time: time || null,
+      endTime: time ? time + (20 * tfSec) : null,
+      barsCount: 20,
       logical: logical || 0,
       endLogical: (logical || 0) + 20
     };
@@ -386,11 +390,16 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     
     const price = candlestickSeriesRef.current.coordinateToPrice(y);
     if (price !== null) {
+      const timeScale = chartRef.current ? chartRef.current.timeScale() : null;
+      const logical = timeScale ? timeScale.coordinateToLogical(x) : null;
+      const time = timeScale ? timeScale.coordinateToTime(x) : null;
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
         price: price,
-        symbol: symbolRef.current
+        symbol: symbolRef.current,
+        logical: logical,
+        time: time
       });
     }
   };
@@ -421,6 +430,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
         if (price !== null) {
           const timeScale = chartRef.current.timeScale();
           const logical = timeScale.coordinateToLogical(x);
+          const time = timeScale.coordinateToTime(x);
           // IMPORTANT: Need to use functional state update or just directly set it.
           // Because setContextMenu is from useState, it is always available.
           setContextMenu({
@@ -428,7 +438,8 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
             y: e.clientY,
             price: price,
             symbol: symbolRef.current,
-            logical: logical
+            logical: logical,
+            time: time
           });
           
           if (setAlerts) { // Tận dụng setAlerts hoặc toast để debug
@@ -2075,6 +2086,7 @@ useEffect(() => {
               tool={tool} 
               chart={chartRef.current} 
               series={candlestickSeriesRef.current} 
+              lastUpdateSignal={lastUpdateSignal}
               onDelete={() => deleteRrTool(tool.id)} 
               onUpdate={updateRrTool} 
             />
@@ -2193,7 +2205,7 @@ useEffect(() => {
             <div 
               className="context-menu-item"
               onClick={() => {
-                addRrTool('long', contextMenu.price, contextMenu.logical);
+                addRrTool('long', contextMenu.price, contextMenu.logical, contextMenu.time);
                 closeContextMenu();
               }}
             >
@@ -2202,7 +2214,7 @@ useEffect(() => {
             <div 
               className="context-menu-item"
               onClick={() => {
-                addRrTool('short', contextMenu.price, contextMenu.logical);
+                addRrTool('short', contextMenu.price, contextMenu.logical, contextMenu.time);
                 closeContextMenu();
               }}
             >

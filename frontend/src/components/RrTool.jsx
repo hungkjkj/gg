@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
-const RrTool = ({ tool, chart, series, onDelete, onUpdate }) => {
+const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) => {
   const containerRef = useRef(null);
   
   const [coords, setCoords] = useState({
@@ -18,8 +18,48 @@ const RrTool = ({ tool, chart, series, onDelete, onUpdate }) => {
     if (!chart || !series || !tool) return;
     try {
       const timeScale = chart.timeScale();
-      const x1 = timeScale.logicalToCoordinate(tool.logical);
-      const x2 = timeScale.logicalToCoordinate(tool.endLogical);
+      
+      let x1 = null;
+      let x2 = null;
+
+      // 1. Ưu tiên tìm tọa độ dựa trên timestamp (nến cố định không bị trôi khi reload)
+      if (tool.time) {
+        x1 = timeScale.timeToCoordinate(tool.time);
+      }
+
+      // 2. Nếu tool chưa có time (tool cũ) nhưng có logical:
+      if (x1 === null && tool.logical != null) {
+        x1 = timeScale.logicalToCoordinate(tool.logical);
+        // Tự động gán time cho tool cũ nếu tìm thấy candle tại x1
+        if (x1 !== null && !tool.time && onUpdate) {
+          const t = timeScale.coordinateToTime(x1);
+          if (t) {
+            onUpdate(tool.id, { time: t, endTime: tool.endTime || (t + (20 * 300)) });
+          }
+        }
+      }
+
+      // 3. Tìm x2 dựa trên endTime
+      if (tool.endTime) {
+        x2 = timeScale.timeToCoordinate(tool.endTime);
+      }
+
+      // 4. Nếu có x1 nhưng x2 null (ví dụ endTime nằm ở tương lai chưa có nến)
+      if (x1 !== null && x2 === null) {
+        const curLogical = timeScale.coordinateToLogical(x1);
+        const barsCount = tool.barsCount || (tool.endLogical && tool.logical ? (tool.endLogical - tool.logical) : 20);
+        if (curLogical !== null) {
+          x2 = timeScale.logicalToCoordinate(curLogical + barsCount);
+        }
+        if (x2 === null) {
+          const barSpacing = (timeScale.options && timeScale.options().barSpacing) || 6;
+          x2 = x1 + (barsCount * barSpacing);
+        }
+      }
+
+      // 5. Fallback cuối cùng nếu cả 2 vẫn null
+      if (x1 === null && tool.logical != null) x1 = timeScale.logicalToCoordinate(tool.logical);
+      if (x2 === null && tool.endLogical != null) x2 = timeScale.logicalToCoordinate(tool.endLogical);
       
       const yTarget = series.priceToCoordinate(tool.targetPrice);
       const yEntry = series.priceToCoordinate(tool.entryPrice);
@@ -40,7 +80,7 @@ const RrTool = ({ tool, chart, series, onDelete, onUpdate }) => {
     } catch (e) {
       setCoords(prev => ({ ...prev, visible: false }));
     }
-  }, [chart, series, tool]);
+  }, [chart, series, tool, onUpdate]);
 
   useEffect(() => {
     if (!chart) return;
@@ -50,15 +90,12 @@ const RrTool = ({ tool, chart, series, onDelete, onUpdate }) => {
     const timeScale = chart.timeScale();
     timeScale.subscribeVisibleLogicalRangeChange(updateCoordinates);
     timeScale.subscribeVisibleTimeRangeChange(updateCoordinates);
-    
-    // There is no direct event for price scale change in v4, but usually logic range/crosshair handles most.
-    // To be safe, we can add a rough resize observer or interval, but logical range handles pan/zoom.
 
     return () => {
       timeScale.unsubscribeVisibleLogicalRangeChange(updateCoordinates);
       timeScale.unsubscribeVisibleTimeRangeChange(updateCoordinates);
     };
-  }, [chart, updateCoordinates]);
+  }, [chart, updateCoordinates, lastUpdateSignal]);
 
   // Handle Dragging
   useEffect(() => {
