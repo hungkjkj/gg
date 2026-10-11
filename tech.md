@@ -257,3 +257,4 @@ To�n b? h? th?ng giao di?n du?c thi?t k? theo c?m h?ng t? h? di?u h�nh **J.A
   - Upgraded Price Trend mode in Currency/Asset Matrix: replaced single-candle `hlc3_old` reference with a dual-block Delta VWAP mechanism ($V_{half} = V_{series} / 2$).
   - Measures the direct Cost Basis Shift between the earlier volume half ($VWAP_1$) and the recent volume half ($VWAP_2$).
   - Eliminated single-candle wick/spread noise while measuring impulse momentum velocity by dividing by the duration of the later block $((distance_pct / N_after) * window_size)$.
+  - Aligned Price Trend score calculation with `window_diff.mean()` (consistent with Money Flow mode), ensuring Score and % Mom are 100% directionally aligned across the entire configured window.
