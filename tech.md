@@ -233,3 +233,13 @@ Toàn b? h? th?ng giao di?n du?c thi?t k? theo c?m h?ng t? h? di?u hành **J.A.R.V
 - Styled the TradingLogPanel using glassmorphism and animated sliding panel to match the Ironman suit UI theme.
 - Fixed a major bug where olumeChart failed to render during backtest playback because its isPolling update logic was structurally isolated inside a dead else block.
 - Removed obsolete test files to clean up the workspace.
+
+## Update: RR Tool Time-Anchoring & Live Polling Stabilization
+- **RR Tool Time-Anchoring (RrTool.jsx & App.jsx):**
+  - Refactored Risk-to-Reward (RR) position tracking to anchor directly to immutable candle timestamps (`tool.time`) via `timeScale.timeToCoordinate(tool.time)` instead of transient bar indices (`tool.logical`).
+  - Solved position drift/jumping to the end of the chart when data reloads (e.g. toggling Mean Vol mode, switching timeframes, or fetching extended history).
+  - Preserved box width across zoom/pan via `barsCount` (default: 20 bars) and implemented seamless backward-compatibility auto-migration for existing tools.
+  - Linked `lastUpdateSignal` to instantly re-align all RR boxes whenever fresh chart data arrives.
+- **Live vs Backtest Polling Separation:**
+  - Scoped the clearing of projected future volume (`projectedVolSeriesRef.setData([])`) and Volume Profile boxes (`setVpBoxes([])`) exclusively to backtest playback mode (`viewMode === 'backtest'`).
+  - Ensured live chart users retain projected future volume bars and active Dynamic Volume Profile boxes without disruption during periodic 3-second background polling.
