@@ -956,10 +956,10 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
             diff_array = df['diff_pct'].iloc[-diff_array_len:].fillna(0).values
             vol_array = df['vol_rolling'].iloc[-diff_array_len:].fillna(0).values
             
-            # Institutional H1 Log Returns for Correlation Matrix
+            # Intraday M30 Log Returns for Correlation Matrix
             df['datetime'] = pd.to_datetime(df['time'], unit='s')
-            df_h1 = df.set_index('datetime').resample('1h').last()
-            log_ret = np.log(df_h1['close'] / df_h1['close'].shift(1))
+            df_m30 = df.set_index('datetime').resample('30min').last()
+            log_ret = np.log(df_m30['close'] / df_m30['close'].shift(1))
             log_ret.name = pair
             
             return (pair, diff_pct_current, base_currency, quote_currency, diff_array, vol_array, log_ret)
@@ -1063,7 +1063,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         
     ranked_currencies = sorted(ranked_currencies, key=lambda x: (x["mom_percentile"], x["score"]), reverse=True)
     
-    # TÃ­nh ma tráº­n tÆ°Æ¡ng quan (Correlation Matrix) CHUáº¨N INSTITUTIONAL (H1 Log Returns)
+    # Tính ma trận tương quan (Correlation Matrix) CHUẨN INTRADAY / SCALP (M30 Log Returns)
     corr_matrix = []
     if len(currencies) > 1 and len(log_returns_list) > 0:
         df_returns = pd.concat(log_returns_list, axis=1).ffill().dropna()

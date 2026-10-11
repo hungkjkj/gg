@@ -2624,7 +2624,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       {/* Ma trận Tương quan */}
       {matrixData.corr_matrix && matrixData.corr_matrix.length > 0 && (
         <div style={{ marginTop: '40px', background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', overflowX: 'auto' }}>
-          <h2 style={{ marginBottom: '20px', color: '#f472b6' }}>Ma trận Tương quan (Correlation Matrix)</h2>
+          <h2 style={{ marginBottom: '20px', color: '#f472b6' }}>Ma trận Tương quan (M30 Log Returns)</h2>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.9rem' }}>
             <thead>
               <tr>

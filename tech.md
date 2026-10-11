@@ -243,3 +243,6 @@ Toàn b? h? th?ng giao di?n du?c thi?t k? theo c?m h?ng t? h? di?u hành **J.A.R.V
 - **Live vs Backtest Polling Separation:**
   - Scoped the clearing of projected future volume (`projectedVolSeriesRef.setData([])`) and Volume Profile boxes (`setVpBoxes([])`) exclusively to backtest playback mode (`viewMode === 'backtest'`).
   - Ensured live chart users retain projected future volume bars and active Dynamic Volume Profile boxes without disruption during periodic 3-second background polling.
+- **Intraday/Scalping Correlation Matrix Upgrade:**
+  - Upgraded Correlation Matrix calculation in `backend/main.py` from H1 (`1h`) to M30 (`30min`) Log Returns.
+  - Doubled the sample observation density within the same timeframe window, making Pearson correlation coefficients much more responsive to intraday session flows and breaking news while preserving macro trend relationships without noise.
