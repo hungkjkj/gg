@@ -1532,7 +1532,7 @@ useEffect(() => {
               v50.forEach(d => safeUpdate(vol50Ref.current, d));
               v15.forEach(d => safeUpdate(vol15Ref.current, d));
             }
-            if (projectedVolSeriesRef.current) {
+            if (projectedVolSeriesRef.current && viewMode === 'backtest') {
               projectedVolSeriesRef.current.setData([]);
             }
             
@@ -1712,7 +1712,7 @@ useEffect(() => {
         }
         
         // Lưu Volume Profile boxes
-        if (response.data.indicators && response.data.indicators.vp_boxes && response.data.indicators.vp_boxes.length > 0) { setVpBoxes(response.data.indicators.vp_boxes); } else if (isPolling) { setVpBoxes([]); }
+        if (response.data.indicators && response.data.indicators.vp_boxes && response.data.indicators.vp_boxes.length > 0) { setVpBoxes(response.data.indicators.vp_boxes); } else if (isPolling && viewMode === 'backtest') { setVpBoxes([]); }
         
         if (response.data.indicators && response.data.indicators.vol_stats) {
             setVolStats(response.data.indicators.vol_stats);
