@@ -934,8 +934,11 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
             # Quãng đường: % Delta dịch chuyển giá vốn giữa cục sau và cục trước
             distance_pct = np.where(vwap_before > 0, (vwap_after - vwap_before) / vwap_before * 100.0, 0.0)
 
-            # Vận tốc: Quãng đường chia cho thời gian (số nến của cả V-block), nhân window_size chuẩn hoá
-            df['diff_pct'] = (distance_pct / N_candles) * window_size
+            # Số nến của cục sau (thời gian bỏ ra để đẩy cục tiền thứ 2)
+            N_after = np.maximum(i_arr - j_mid + 1, 1.0)
+
+            # Vận tốc: Quãng đường chia cho thời gian của cục sau, nhân window_size chuẩn hoá
+            df['diff_pct'] = (distance_pct / N_after) * window_size
         
         
         if len(df) > window_size:

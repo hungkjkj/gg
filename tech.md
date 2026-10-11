@@ -206,8 +206,11 @@ Dưới đây là 100% mã nguồn (code) sao chép nguyên bản từ lõi `bac
             # Quãng đường: % Delta dịch chuyển giá vốn giữa cục sau và cục trước
             distance_pct = np.where(vwap_before > 0, (vwap_after - vwap_before) / vwap_before * 100.0, 0.0)
 
-            # Vận tốc: Quãng đường chia cho thời gian (số nến của cả V-block), nhân window_size chuẩn hoá
-            df['diff_pct'] = (distance_pct / N_candles) * window_size
+            # Số nến của cục sau (thời gian bỏ ra để đẩy cục tiền thứ 2)
+            N_after = np.maximum(i_arr - j_mid + 1, 1.0)
+
+            # Vận tốc: Quãng đường chia cho thời gian của cục sau, nhân window_size chuẩn hoá
+            df['diff_pct'] = (distance_pct / N_after) * window_size
         
         if len(df) > window_size:
             if matrix_mode == "money_flow":
@@ -257,4 +260,4 @@ To�n b? h? th?ng giao di?n du?c thi?t k? theo c?m h?ng t? h? di?u h�nh **J.A
 - **Price Trend Mode 2-Equal-Blocks Delta VWAP Upgrade:**
   - Upgraded Price Trend mode in Currency/Asset Matrix: replaced single-candle `hlc3_old` reference with a dual-block Delta VWAP mechanism ($V_{half} = V_{series} / 2$).
   - Measures the direct Cost Basis Shift between the earlier volume half ($VWAP_1$) and the recent volume half ($VWAP_2$).
-  - Eliminated single-candle wick/spread noise while preserving exact momentum velocity distribution and scaling $((distance_pct / N_candles) * window_size)$.
+  - Eliminated single-candle wick/spread noise while measuring impulse momentum velocity by dividing by the duration of the later block $((distance_pct / N_after) * window_size)$.
