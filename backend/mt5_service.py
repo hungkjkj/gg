@@ -1,6 +1,7 @@
 import MetaTrader5 as mt5
 import pandas as pd
 from datetime import datetime
+import threading
 
 # Cấu hình đăng nhập
 # Tạm thời vô hiệu hóa Login tự động để MT5 sử dụng tài khoản XM đang đăng nhập sẵn trên máy.
@@ -12,7 +13,8 @@ def initialize_mt5():
         print(f"MT5 Initialization Failed: {mt5.last_error()}")
         return False
     print("MT5 Initialized Successfully")
-    pre_scan_symbols()
+    # Chạy pre-scan trong background thread để không chặn khởi động server
+    threading.Thread(target=pre_scan_symbols, daemon=True).start()
     return True
 
 def pre_scan_symbols():

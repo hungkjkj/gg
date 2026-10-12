@@ -20,23 +20,39 @@ def find_free_port(start_port=8000, max_port=8100):
                 continue
     return 8000
 
-def check_server(url, timeout=10):
+def check_server(url, health_url=None, process=None, timeout=60):
     start_time = time.time()
+    last_print = 0
+    target_check = health_url or url
     while time.time() - start_time < timeout:
+        # Kiểm tra xem tiến trình backend có bị tắt/lỗi sớm không
+        if process and process.poll() is not None:
+            print(f"[LỖI] Tiến trình backend kết thúc sớm với mã thoát: {process.returncode}")
+            return False
+
         try:
-            r = requests.get(url)
+            r = requests.get(target_check, timeout=2)
             if r.status_code == 200:
+                elapsed = time.time() - start_time
+                print(f"[OK] Backend server sẵn sàng sau {elapsed:.2f} giây.")
                 return True
-        except requests.exceptions.ConnectionError:
-            time.sleep(0.5)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            pass
+
+        elapsed = time.time() - start_time
+        if elapsed - last_print >= 3.0:
+            print(f"Đang chờ backend server khởi động... ({int(elapsed)}s / {timeout}s)")
+            last_print = elapsed
+
+        time.sleep(0.5)
     return False
 
 if __name__ == '__main__':
     # Bật server chạy trên một process riêng biệt để tránh kẹt giao diện UI
-    print("Starting backend server in a separate process...")
+    print("Khởi động backend server trên tiến trình riêng...")
     backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend")
     port = find_free_port()
-    print(f"Found free port: {port}")
+    print(f"Cổng khả dụng: {port}")
     backend_process = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
         cwd=backend_dir
@@ -44,14 +60,15 @@ if __name__ == '__main__':
     
     try:
         url = f"http://127.0.0.1:{port}/?_v={int(time.time())}"
-        print("Waiting for server to start...")
+        health_url = f"http://127.0.0.1:{port}/api/v1/health"
+        print("Đang kiểm tra trạng thái khởi động backend...")
         
-        if not check_server(url):
-            print("Error: Backend server did not start in time.")
+        if not check_server(url, health_url=health_url, process=backend_process, timeout=60):
+            print("Lỗi: Backend server không khởi động kịp thời gian quy định (Timeout 60s).")
             backend_process.terminate()
             sys.exit(1)
             
-        print("Server started successfully! Launching Desktop Window...")
+        print("Backend đã hoạt động! Đang mở cửa sổ ứng dụng Desktop...")
 
         # Mở cửa sổ Desktop bằng pywebview
         webview.create_window(
@@ -66,7 +83,7 @@ if __name__ == '__main__':
         webview.start()
     finally:
         # Tự động tắt server khi app đóng lại
-        print("Closing application, terminating backend server...")
+        print("Đang đóng ứng dụng, tắt tiến trình backend...")
         backend_process.terminate()
         try:
             backend_process.wait(timeout=3)

@@ -57,6 +57,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import json
 
+@app.get("/api/v1/health")
+def health_check():
+    return {"status": "ok", "time": time.time()}
+
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "app_configs.json")
 
 @app.get("/api/v1/configs")

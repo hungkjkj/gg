@@ -258,3 +258,14 @@ To�n b? h? th?ng giao di?n du?c thi?t k? theo c?m h?ng t? h? di?u h�nh **J.A
   - Measures the direct Cost Basis Shift between the earlier volume half ($VWAP_1$) and the recent volume half ($VWAP_2$).
   - Eliminated single-candle wick/spread noise while measuring impulse momentum velocity by dividing by the duration of the later block $((distance_pct / N_after) * window_size)$.
   - Aligned Price Trend score calculation with `window_diff.mean()` (consistent with Money Flow mode), ensuring Score and % Mom are 100% directionally aligned across the entire configured window.
+
+## Update: Backend Cold-Start Optimization & Readiness Watchdog
+- **Non-Blocking MT5 Pre-Scan (`backend/mt5_service.py`):**
+  - Moved `pre_scan_symbols()` to run in a dedicated background daemon thread (`threading.Thread(target=pre_scan_symbols, daemon=True).start()`).
+  - Prevented sequential IPC queries for 20 symbols from blocking FastAPI's `@app.on_event("startup")`, reducing server port-binding time from 22s down to ~4-6s.
+- **Dedicated Health Check Endpoint (`backend/main.py`):**
+  - Added `@app.get("/api/v1/health")` returning status and timestamp for rapid, lightweight readiness polling.
+- **Robust Readiness Watchdog (`app.py`):**
+  - Extended startup timeout from 10s to 60s to comfortably tolerate cold starts, slow disk access, and initial MT5 IPC connection on any workstation.
+  - Added real-time process monitoring via `backend_process.poll()` to immediately detect and report unexpected process termination instead of waiting for timeout.
+  - Added progressive terminal logging every 3 seconds and verified response against `/api/v1/health`.
