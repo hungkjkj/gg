@@ -269,3 +269,9 @@ To�n b? h? th?ng giao di?n du?c thi?t k? theo c?m h?ng t? h? di?u h�nh **J.A
   - Extended startup timeout from 10s to 60s to comfortably tolerate cold starts, slow disk access, and initial MT5 IPC connection on any workstation.
   - Added real-time process monitoring via `backend_process.poll()` to immediately detect and report unexpected process termination instead of waiting for timeout.
   - Added progressive terminal logging every 3 seconds and verified response against `/api/v1/health`.
+
+## Update: USD Dollar Index (`USD_FX_Index#`) Integration into USD Assets
+- **Dollar Index Benchmark:**
+  - Integrated official real-time cash index `USD_FX_Index#` (XM US Dollar Index) into the `usd_assets` configuration (`backend/app_configs.json` & `backend/strategies.json`).
+  - Added `USD_FX_Index#` to MT5 startup cache pre-scan in `backend/mt5_service.py`.
+  - Enables direct cross-asset Pearson correlation analysis in the Correlation Matrix (M30 log-returns) between USD and Gold, Silver, Oil, US Equity Indices (S&P500, Nasdaq, Dow Jones), and Crypto (BTC, ETH, SOL).

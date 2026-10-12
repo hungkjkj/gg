@@ -1104,7 +1104,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
             row = {"currency": c1}
             for c2 in df_corr.columns:
                 val = df_corr.loc[c1, c2]
-                row[c2] = round(val, 2) if not pd.isna(val) else 0.0
+                row[c2] = float(round(val, 2)) if not pd.isna(val) else 0.0
             corr_matrix.append(row)
 
     MATRIX_PROGRESS[matrix_type] = 100.0

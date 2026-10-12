@@ -24,7 +24,7 @@ def pre_scan_symbols():
         "EURGBP", "EURAUD", "EURNZD", "EURJPY",
         "GBPAUD", "GBPNZD", "GBPJPY",
         "AUDNZD", "AUDJPY", "NZDJPY",
-        "XAUUSD", "XAGUSD", "BTCUSD", "ETHUSD", "SOLUSD"
+        "XAUUSD", "XAGUSD", "BTCUSD", "ETHUSD", "SOLUSD", "USD_FX_Index#"
     ]
     print("Pre-scanning symbols to build cache...")
     for sym in common_symbols:
