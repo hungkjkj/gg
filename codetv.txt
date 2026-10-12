@@ -1,5 +1,13 @@
 //@version=5
-indicator("Normalized Volume + Percentile Lines [Nâng cấp]", shorttitle="Norm Vol + RVol", format=format.volume, precision=2, overlay=false, max_lines_count=500, max_bars_back=5000)
+// =========================================================================================
+// TRADINGVIEW PINE SCRIPT V5 - BẢN SAO Ý TƯỞNG TỪ HỆ THỐNG TOOL TRADE MT5 (BACKEND PYTHON)
+// Lưu ý: File này mô phỏng lại logic chỉ báo từ hệ thống chính:
+// - ĐÃ LOẠI BỎ HOÀN TOÀN ATR, tính động lượng % thay đổi giá thuần túy
+// - Gom V-Block theo ngưỡng percentile V_target
+// - Chuẩn hoá Động lượng theo Rolling Median
+// - Tích hợp bộ lọc bứt phá Momentum Flip
+// =========================================================================================
+indicator("Normalized Volume + Percentile Lines [TOOL TRADE MT5]", shorttitle="Norm Vol + Mom", format=format.volume, precision=2, overlay=false, max_lines_count=500, max_bars_back=5000)
 
 // --- 1. Cài đặt Thông số ---
 grpSet = "Cài đặt Chung"
@@ -34,9 +42,17 @@ us_sess   = input.session("0730-1100", title="Giờ mở phiên Mỹ (New York)"
 // --- Cài đặt Động lượng & Bias ---
 grpMom = "Cài đặt Động lượng & Hiển thị"
 showMom = input.bool(true, title="Hiển thị cột Động lượng lõi", group=grpMom)
-momLength = input.int(20, title="Chu kỳ N (Động lượng)", group=grpMom)
+momLength = input.int(20, title="Chu kỳ gom V-Target (Timeout nến)", group=grpMom)
 mfTargetPct = input.int(75, title="Ngưỡng khối lượng T (Percentile %)", group=grpMom, minval=1, maxval=100)
 vol_bias = input.float(6.0, title="Độ dịch chuyển Volume lên cao (Bias)", step=1.0, group=grpMom, tooltip="Đẩy toàn bộ cột Volume bay lên trên. Hãy tăng số này nếu cột Động lượng quá cao chạm vào Volume.")
+
+// --- Cài đặt Momentum Flip ---
+grpFlip = "Cài đặt Momentum Flip (Bứt phá)"
+showFlip = input.bool(true, title="Hiển thị Tín hiệu Flip", group=grpFlip)
+smaMomLen = input.int(20, title="Chu kỳ SMA Moment", group=grpFlip)
+flipMomFilter = input.int(50, title="Ngưỡng lọc Động lượng Flip (%)", group=grpFlip, minval=1, maxval=99)
+flipVolFilter = input.int(50, title="Ngưỡng lọc Volume V-Block (%)", group=grpFlip, minval=1, maxval=99)
+
 
 // --- 3. LOGIC TÍNH TOÁN (XỬ LÝ 2 CHẾ ĐỘ VOLUME) ---
 sec_per_bar = timeframe.in_seconds(timeframe.period)
@@ -55,7 +71,7 @@ float vol_rank = 0.0
 float vol_85_raw = 0.0
 float vol_75_raw = 0.0
 float vol_15_raw = 0.0
-cho 
+
 if vol_mode == "Bình thường (Standard)"
     median_vol := ta.median(volume, safe_lookback)
     vol_rank   := ta.percentrank(volume, safe_lookback)
@@ -126,26 +142,26 @@ float ma_val = ta.sma(norm_vol, ma_len)
 color base_ma_color = ma_val > ma_val[1] ? color.new(color.green, 0) : color.new(color.red, 0) 
 color ma_color = barstate.isconfirmed ? base_ma_color : col_run
 
-// --- 7. TÍNH TOÁN ĐỘNG LƯỢNG (Chuẩn V-Block Mới) ---
-float atr_val = ta.atr(momLength)
-
-// 1. Tính ngưỡng V_series
+// --- 7. TÍNH TOÁN ĐỘNG LƯỢNG VF-MOMENTUM (Chuẩn V-Block Không dùng ATR) ---
+// Đồng bộ 100% công thức từ backend/main.py:
+// 1. Tính ngưỡng V_target = percentile mfTargetPct của tổng volume N nến
 float rolling_vol_N = math.sum(volume, momLength)
 float V_target = ta.percentile_nearest_rank(rolling_vol_N, safe_lookback, mfTargetPct)
 if V_target < 1.0
     V_target := 1.0
 
-// 2. Tính Momentum Tức Thời Từng Nến
+// 2. Tính Momentum tức thời từng nến theo % dịch chuyển giá (Loại bỏ hoàn toàn ATR):
+// ((hlc3 - hlc3_pre) / hlc3_pre) * 100 * volume
 float hlc3_pre = nz(hlc3[1], hlc3)
-float safe_atr = atr_val > 0 ? atr_val : 0.000000001
-float candle_mom = ((hlc3 - hlc3_pre) / safe_atr) * volume
+float hlc3_diff_pct = hlc3_pre > 0 ? ((hlc3 - hlc3_pre) / hlc3_pre) * 100.0 : 0.0
+float candle_mom = hlc3_diff_pct * volume
 
 // 3. Gom V-Block Hiện Tại
 float sum_vol_cur = 0.0
 float net_mom_cur = 0.0
 int bars_cur = 0
 
-while bars_cur < 1000
+while bars_cur < 1000 and (bar_index - bars_cur) >= 0
     float v = volume[bars_cur]
     float cm = candle_mom[bars_cur]
     sum_vol_cur += v
@@ -154,29 +170,53 @@ while bars_cur < 1000
         break
     bars_cur += 1
 
-// 4. Tính toán Động lượng
-// (net_mom_cur / V_target) đã là trung bình động lượng mỗi nến. 
-// Nhân với momLength để khôi phục lại Scale tổng lực chuẩn (giống hệ thống cũ)
-float mom_raw_raw = atr_val > 0 and sum_vol_cur > 0 ? (net_mom_cur / V_target) * momLength : 0.0
-float mom_raw = mom_raw_raw
-float abs_mom = math.abs(mom_raw) 
+// 4. Động lượng nguyên bản trên V-Block: net_mom_cur / V_target (không nhân momLength)
+float mom_raw_raw = sum_vol_cur > 0 ? (net_mom_cur / V_target) : 0.0
+float abs_mom_raw = math.abs(mom_raw_raw)
 
+// 5. Chuẩn hóa theo Rolling Median của Động lượng tuyệt đối
+float rolling_median_mom = ta.median(abs_mom_raw, safe_lookback)
+if rolling_median_mom <= 0
+    rolling_median_mom := 1e-9
+
+float mom_raw = mom_raw_raw / rolling_median_mom
+float abs_mom = abs_mom_raw / rolling_median_mom
+
+// 6. Tính toán các đường xác suất Percentile (15%, 50%, 75%, 85%) trên abs_mom đã chuẩn hoá
 float mom_85 = ta.percentile_nearest_rank(abs_mom, safe_lookback, 85)
 float mom_75 = ta.percentile_nearest_rank(abs_mom, safe_lookback, 75)
 float mom_50 = ta.percentile_nearest_rank(abs_mom, safe_lookback, 50)
 float mom_15 = ta.percentile_nearest_rank(abs_mom, safe_lookback, 15)
 
+// --- 7.1. Momentum Flip (Gia tốc bứt phá so với SMA Moment N nến trước + Lọc V-Block) ---
+float sma_mom = ta.sma(nz(abs_mom_raw[1], 0.0), smaMomLen)
+if sma_mom <= 0
+    sma_mom := 1e-9
+float flip_ratio = abs_mom_raw / sma_mom
+
+int N_vblock = math.max(bars_cur + 1, 1)
+float vblock_avg_vol = sum_vol_cur / N_vblock
+
+float filter_mom_th = ta.percentile_nearest_rank(abs_mom_raw, safe_lookback, flipMomFilter)
+float filter_vol_th = ta.percentile_nearest_rank(vblock_avg_vol, safe_lookback, flipVolFilter)
+
+bool is_flip_valid = (abs_mom_raw >= filter_mom_th) and (vblock_avg_vol >= filter_vol_th) and (flip_ratio >= 1.5)
+
 bool is_bull_mom = mom_raw > 0
 
-// Chuyển toàn bộ màu sang sáng rực rỡ (transparency = 0)
-color col_mom = is_bull_mom ? color.new(#00e676, 0) : color.new(#ff5252, 0)
+// Đổi màu cột Động lượng: Xanh lá/Đỏ, khi có Flip bứt phá thì phát sáng Cyan/Vàng
+color col_mom = is_bull_mom ? (is_flip_valid ? color.new(#00ffff, 0) : color.new(#00e676, 0)) : (is_flip_valid ? color.new(#ffea00, 0) : color.new(#ff5252, 0))
 
 // =====================================================================
-// --- 8. HIỂN TRỰC QUAN LÊN BIỂU ĐỒ ---
+// --- 8. HIỂN THỊ TRỰC QUAN LÊN BIỂU ĐỒ ---
 // =====================================================================
 
 plot(0, color=color.new(color.gray, 50), linewidth=1, title="Zero Line")
 plot(showMom ? mom_raw : na, title="Động lượng", color=col_mom, style=plot.style_histogram, linewidth=3)
+
+// Tín hiệu Flip (Marker hình tam giác bứt phá)
+plotshape(showFlip and is_flip_valid and is_bull_mom ? mom_raw : na, title="Bullish Flip Marker", style=shape.triangleup, location=location.absolute, color=color.new(#00ffff, 0), size=size.tiny)
+plotshape(showFlip and is_flip_valid and not is_bull_mom ? mom_raw : na, title="Bearish Flip Marker", style=shape.triangledown, location=location.absolute, color=color.new(#ffea00, 0), size=size.tiny)
 
 plot(showMom ? mom_85 : na, title="Mom 85% Up", color=color.new(color.orange, 50), style=plot.style_line, linewidth=1)
 plot(showMom ? mom_75 : na, title="Mom 75% Up", color=color.new(#e1e626, 50), style=plot.style_line, linewidth=1) 
