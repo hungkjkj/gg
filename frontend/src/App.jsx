@@ -105,6 +105,11 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const normVolSeriesRef = useRef(null);
   const projectedVolSeriesRef = useRef(null);
   const maVolSeriesRef = useRef(null);
+  const rawCandlesRef = useRef([]);
+  const configsRef = useRef(configs);
+  configsRef.current = configs;
+  const prevVolModeRef = useRef(configs.volMode);
+  const prevBackendConfigsRef = useRef(null);
   
   const [contextMenu, setContextMenu] = useState(null);
   
@@ -236,6 +241,107 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   // Keep track of playback speed for the interval
   const playbackSpeedRef = useRef(1);
   useEffect(() => { playbackSpeedRef.current = playbackSpeed; }, [playbackSpeed]);
+
+  const updateVolumeSeries = (targetMode) => {
+    if (!normVolSeriesRef.current || !rawCandlesRef.current || rawCandlesRef.current.length === 0) return;
+    const rawData = rawCandlesRef.current;
+    const mode = targetMode || configsRef.current?.volMode || 'normal';
+
+    let projectedNormVol = [];
+    if (mode === 'mean_vol') {
+      const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
+      let cTime = rawData.length > 0 ? rawData[rawData.length - 1].time : Math.floor(Date.now() / 1000);
+      cTime = cTime - (cTime % tfSec);
+
+      const rawMap = new Map();
+      rawData.forEach(d => rawMap.set(d.time, d));
+
+      const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
+      const futureTimes = generateFutureTimeline(cTime, tfSec, 1500, isCrypto, configsRef.current?.timeShiftHours || 0);
+
+      futureTimes.forEach(ft => {
+        const pastTime = ft.time - (7 * 86400); // 1 week ago
+        const pastRaw = rawMap.get(pastTime);
+        if (pastRaw && pastRaw.mean_ma_vol != null && !isNaN(pastRaw.mean_ma_vol)) {
+          let color = 'rgba(0, 240, 255, 0.1)';
+          const value = pastRaw.mean_ma_vol;
+          const lvl1 = pastRaw.mean_vol_lvl1;
+          const lvl2 = pastRaw.mean_vol_lvl2;
+          const lvl3 = pastRaw.mean_vol_lvl3;
+          const lvl4 = pastRaw.mean_vol_lvl4;
+          if (value <= lvl4) color = 'rgba(0, 240, 255, 0.5)';
+          else if (value <= lvl3) color = 'rgba(255, 165, 0, 0.5)';
+          else if (value <= lvl2) color = 'rgba(255, 69, 0, 0.5)';
+          else if (value <= lvl1) color = 'rgba(255, 0, 0, 0.6)';
+
+          projectedNormVol.push({ time: ft.time, value: value, color });
+        }
+      });
+    }
+
+    const normVolData = rawData.filter(d => {
+      if (mode === 'rvol') return d.rvol != null && !isNaN(d.rvol);
+      if (mode === 'mean_vol') return d.mean_ma_vol != null && !isNaN(d.mean_ma_vol);
+      return d.norm_vol != null && !isNaN(d.norm_vol);
+    }).map(i => {
+      let color = '#9c27b0';
+      let value = i.norm_vol;
+      if (mode === 'rvol') value = i.rvol;
+      if (mode === 'mean_vol') value = i.mean_ma_vol;
+
+      if (mode === 'rvol') {
+        if (value < 0.5) color = '#0033ff';
+        else if (value < 1.0) color = '#ff8c00';
+        else if (value < 2.0) color = '#ffff00';
+        else color = '#ff3333';
+      } else {
+        const lvl1 = mode === 'mean_vol' ? i.mean_vol_lvl1 : i.vol_lvl1;
+        const lvl2 = mode === 'mean_vol' ? i.mean_vol_lvl2 : i.vol_lvl2;
+        const lvl3 = mode === 'mean_vol' ? i.mean_vol_lvl3 : i.vol_lvl3;
+        const lvl4 = mode === 'mean_vol' ? i.mean_vol_lvl4 : i.vol_lvl4;
+
+        if (value <= lvl4) color = '#0033ff';
+        else if (value <= lvl3) color = '#ff8c00';
+        else if (value <= lvl2) color = '#ffff00';
+        else if (value <= lvl1) color = '#ff3333';
+      }
+      return { time: i.time, value: value, color };
+    }).sort((a,b)=>a.time-b.time);
+
+    const lvl1Field = mode === 'mean_vol' ? 'mean_vol_lvl1' : 'vol_lvl1';
+    const lvl2Field = mode === 'mean_vol' ? 'mean_vol_lvl2' : 'vol_lvl2';
+    const lvl3Field = mode === 'mean_vol' ? 'mean_vol_lvl3' : 'vol_lvl3';
+    const lvl4Field = mode === 'mean_vol' ? 'mean_vol_lvl4' : 'vol_lvl4';
+
+    const v85 = mode === 'rvol' ? [] : rawData.filter(d => d[lvl1Field] != null && !isNaN(d[lvl1Field])).map(i => ({time: i.time, value: i[lvl1Field]})).sort((a,b)=>a.time-b.time);
+    const v75 = mode === 'rvol' ? [] : rawData.filter(d => d[lvl2Field] != null && !isNaN(d[lvl2Field])).map(i => ({time: i.time, value: i[lvl2Field]})).sort((a,b)=>a.time-b.time);
+    const v50 = mode === 'rvol' ? [] : rawData.filter(d => d[lvl3Field] != null && !isNaN(d[lvl3Field])).map(i => ({time: i.time, value: i[lvl3Field]})).sort((a,b)=>a.time-b.time);
+    const v15 = mode === 'rvol' ? [] : rawData.filter(d => d[lvl4Field] != null && !isNaN(d[lvl4Field])).map(i => ({time: i.time, value: i[lvl4Field]})).sort((a,b)=>a.time-b.time);
+
+    normVolSeriesRef.current.setData(normVolData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+    if (vol85Ref.current) vol85Ref.current.setData(v85.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+    if (vol75Ref.current) vol75Ref.current.setData(v75.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+    if (vol50Ref.current) vol50Ref.current.setData(v50.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+    if (vol15Ref.current) vol15Ref.current.setData(v15.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+
+    if (projectedVolSeriesRef.current) {
+      projectedVolSeriesRef.current.setData(mode === 'mean_vol' ? projectedNormVol.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)) : []);
+    }
+
+    if (updateOverlaysRef.current) {
+      setTimeout(() => updateOverlaysRef.current && updateOverlaysRef.current(), 100);
+    }
+  };
+
+  useEffect(() => {
+    if (prevVolModeRef.current !== configs.volMode) {
+      prevVolModeRef.current = configs.volMode;
+      if (rawCandlesRef.current && rawCandlesRef.current.length > 0) {
+        updateVolumeSeries(configs.volMode);
+      }
+    }
+  }, [configs.volMode]);
+
 // Fetch News Data
   const fetchNews = async () => {
     try {
@@ -1145,6 +1251,7 @@ useEffect(() => {
         if (normVolSeriesRef.current) normVolSeriesRef.current.setData([]);
         if (projectedVolSeriesRef.current) projectedVolSeriesRef.current.setData([]);
         if (maVolSeriesRef.current) maVolSeriesRef.current.setData([]);
+        rawCandlesRef.current = [];
         lastVwapColorRef.current = null;
         lastMaVolColorRef.current = null;
         lastHl2ColorRef.current = null;
@@ -1215,7 +1322,14 @@ useEffect(() => {
             }
         }
         rawData = uniqueRaw;
-
+        if (!isPolling) {
+          rawCandlesRef.current = rawData;
+        } else {
+          const existingRaw = rawCandlesRef.current || [];
+          const rawMap = new Map(existingRaw.map(d => [d.time, d]));
+          rawData.forEach(d => rawMap.set(d.time, d));
+          rawCandlesRef.current = Array.from(rawMap.values()).sort((a,b) => a.time - b.time);
+        }
 
         const newMomFlip = rawData.map(d => ({
           time: d.time,
@@ -1318,8 +1432,9 @@ useEffect(() => {
         const m50Up = rawData.filter(d => d.mom_lvl3 != null && !isNaN(d.mom_lvl3)).map(i => ({time: i.time, value: i.mom_lvl3})).sort((a,b)=>a.time-b.time);
         const m50Dn = rawData.filter(d => d.mom_lvl3 != null && !isNaN(d.mom_lvl3)).map(i => ({time: i.time, value: -i.mom_lvl3})).sort((a,b)=>a.time-b.time);
 
+        const activeVolMode = configsRef.current?.volMode || 'normal';
         let projectedNormVol = [];
-        if (configs.volMode === 'mean_vol') {
+        if (activeVolMode === 'mean_vol') {
             const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
             let cTime = formattedData.length > 0 ? formattedData[formattedData.length - 1].time : Math.floor(Date.now() / 1000);
             cTime = cTime - (cTime % tfSec);
@@ -1328,7 +1443,7 @@ useEffect(() => {
             rawData.forEach(d => rawMap.set(d.time, d));
             
             const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
-            const futureTimes = generateFutureTimeline(cTime, tfSec, 1500, isCrypto, configs.timeShiftHours || 0);
+            const futureTimes = generateFutureTimeline(cTime, tfSec, 1500, isCrypto, configsRef.current?.timeShiftHours || 0);
             
             futureTimes.forEach(ft => {
                 const pastTime = ft.time - (7 * 86400); // 1 week ago
@@ -1351,25 +1466,25 @@ useEffect(() => {
         }
 
         let normVolData = rawData.filter(d => {
-          if (configs.volMode === 'rvol') return d.rvol != null && !isNaN(d.rvol);
-          if (configs.volMode === 'mean_vol') return d.mean_ma_vol != null && !isNaN(d.mean_ma_vol);
+          if (activeVolMode === 'rvol') return d.rvol != null && !isNaN(d.rvol);
+          if (activeVolMode === 'mean_vol') return d.mean_ma_vol != null && !isNaN(d.mean_ma_vol);
           return d.norm_vol != null && !isNaN(d.norm_vol);
         }).map(i => {
           let color = '#9c27b0';
           let value = i.norm_vol;
-          if (configs.volMode === 'rvol') value = i.rvol;
-          if (configs.volMode === 'mean_vol') value = i.mean_ma_vol;
+          if (activeVolMode === 'rvol') value = i.rvol;
+          if (activeVolMode === 'mean_vol') value = i.mean_ma_vol;
           
-          if (configs.volMode === 'rvol') {
+          if (activeVolMode === 'rvol') {
             if (value < 0.5) color = '#0033ff'; 
             else if (value < 1.0) color = '#ff8c00'; 
             else if (value < 2.0) color = '#ffff00'; 
             else color = '#ff3333'; 
           } else {
-            const lvl1 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl1 : i.vol_lvl1;
-            const lvl2 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl2 : i.vol_lvl2;
-            const lvl3 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl3 : i.vol_lvl3;
-            const lvl4 = configs.volMode === 'mean_vol' ? i.mean_vol_lvl4 : i.vol_lvl4;
+            const lvl1 = activeVolMode === 'mean_vol' ? i.mean_vol_lvl1 : i.vol_lvl1;
+            const lvl2 = activeVolMode === 'mean_vol' ? i.mean_vol_lvl2 : i.vol_lvl2;
+            const lvl3 = activeVolMode === 'mean_vol' ? i.mean_vol_lvl3 : i.vol_lvl3;
+            const lvl4 = activeVolMode === 'mean_vol' ? i.mean_vol_lvl4 : i.vol_lvl4;
             
             if (value <= lvl4) color = '#0033ff'; // Blue
             else if (value <= lvl3) color = '#ff8c00'; // Orange
@@ -1414,15 +1529,15 @@ useEffect(() => {
         });
         if (maVolData.length > 0) lastMaVolColorRef.current = maVolData[maVolData.length - 1].color;
         
-        const lvl1Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl1' : 'vol_lvl1';
-        const lvl2Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl2' : 'vol_lvl2';
-        const lvl3Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl3' : 'vol_lvl3';
-        const lvl4Field = configs.volMode === 'mean_vol' ? 'mean_vol_lvl4' : 'vol_lvl4';
+        const lvl1Field = activeVolMode === 'mean_vol' ? 'mean_vol_lvl1' : 'vol_lvl1';
+        const lvl2Field = activeVolMode === 'mean_vol' ? 'mean_vol_lvl2' : 'vol_lvl2';
+        const lvl3Field = activeVolMode === 'mean_vol' ? 'mean_vol_lvl3' : 'vol_lvl3';
+        const lvl4Field = activeVolMode === 'mean_vol' ? 'mean_vol_lvl4' : 'vol_lvl4';
 
-        const v85 = configs.volMode === 'rvol' ? [] : rawData.filter(d => d[lvl1Field] != null && !isNaN(d[lvl1Field])).map(i => ({time: i.time, value: i[lvl1Field]})).sort((a,b)=>a.time-b.time);
-        const v75 = configs.volMode === 'rvol' ? [] : rawData.filter(d => d[lvl2Field] != null && !isNaN(d[lvl2Field])).map(i => ({time: i.time, value: i[lvl2Field]})).sort((a,b)=>a.time-b.time);
-        const v50 = configs.volMode === 'rvol' ? [] : rawData.filter(d => d[lvl3Field] != null && !isNaN(d[lvl3Field])).map(i => ({time: i.time, value: i[lvl3Field]})).sort((a,b)=>a.time-b.time);
-        const v15 = configs.volMode === 'rvol' ? [] : rawData.filter(d => d[lvl4Field] != null && !isNaN(d[lvl4Field])).map(i => ({time: i.time, value: i[lvl4Field]})).sort((a,b)=>a.time-b.time);
+        const v85 = activeVolMode === 'rvol' ? [] : rawData.filter(d => d[lvl1Field] != null && !isNaN(d[lvl1Field])).map(i => ({time: i.time, value: i[lvl1Field]})).sort((a,b)=>a.time-b.time);
+        const v75 = activeVolMode === 'rvol' ? [] : rawData.filter(d => d[lvl2Field] != null && !isNaN(d[lvl2Field])).map(i => ({time: i.time, value: i[lvl2Field]})).sort((a,b)=>a.time-b.time);
+        const v50 = activeVolMode === 'rvol' ? [] : rawData.filter(d => d[lvl3Field] != null && !isNaN(d[lvl3Field])).map(i => ({time: i.time, value: i[lvl3Field]})).sort((a,b)=>a.time-b.time);
+        const v15 = activeVolMode === 'rvol' ? [] : rawData.filter(d => d[lvl4Field] != null && !isNaN(d[lvl4Field])).map(i => ({time: i.time, value: i[lvl4Field]})).sort((a,b)=>a.time-b.time);
         
         const sortedHl2Raw = rawData.filter(d => d.hl2 != null && !isNaN(d.hl2)).sort((a,b)=>a.time-b.time);
         const fairValueData = sortedHl2Raw.map((item, index, arr) => {
@@ -1543,8 +1658,14 @@ useEffect(() => {
               v50.forEach(d => safeUpdate(vol50Ref.current, d));
               v15.forEach(d => safeUpdate(vol15Ref.current, d));
             }
-            if (projectedVolSeriesRef.current && viewMode === 'backtest') {
-              projectedVolSeriesRef.current.setData([]);
+            if (projectedVolSeriesRef.current) {
+              if (activeVolMode === 'mean_vol') {
+                if (projectedNormVol.length > 0) {
+                  projectedVolSeriesRef.current.setData(projectedNormVol.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                }
+              } else {
+                projectedVolSeriesRef.current.setData([]);
+              }
             }
             
             if (formattedData.length > 0) {
@@ -1656,7 +1777,7 @@ useEffect(() => {
                 vol15Ref.current.setData(v15.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             }
             if (projectedVolSeriesRef.current) {
-                projectedVolSeriesRef.current.setData(projectedNormVol.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+                projectedVolSeriesRef.current.setData(activeVolMode === 'mean_vol' ? projectedNormVol.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)) : []);
             }
             
             if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 200);
@@ -1750,6 +1871,7 @@ useEffect(() => {
             if (normVolSeriesRef.current) normVolSeriesRef.current.setData([]);
             if (projectedVolSeriesRef.current) projectedVolSeriesRef.current.setData([]);
             if (maVolSeriesRef.current) maVolSeriesRef.current.setData([]);
+            rawCandlesRef.current = [];
             setVpBoxes([]);
             setVolStats(null);
             volStatsRef.current = null;
@@ -1775,6 +1897,16 @@ useEffect(() => {
     };
 
   useEffect(() => {
+    // Lọc các configs thực sự cần gọi lại Backend MT5 (bỏ qua volMode vì được updateVolumeSeries xử lý trực tiếp)
+    const { emailSender, emailPassword, emailReceiver, volMode, ...backendConfigs } = configs;
+    const backendKey = JSON.stringify({ symbol, timeframe, viewMode, chartTheme, backendConfigs });
+    
+    // Nếu chỉ có volMode thay đổi thì updateVolumeSeries đã cập nhật trực tiếp trên client
+    if (prevBackendConfigsRef.current === backendKey) {
+      return;
+    }
+    prevBackendConfigsRef.current = backendKey;
+
     if (viewMode === 'chart') {
       fetchData();
       const intervalId = setInterval(() => {
