@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import axios from 'axios';
 import { AssistiveTouch, MomFlipChartComponent } from './components/MomFlip';
+import { computeCompositeRanking } from './utils/matrixUtils';
 import StrategyBuilderTab from './components/StrategyBuilderTab';
 import RrTool from './components/RrTool';
 import TradingLogPanel from './components/TradingLogPanel';
@@ -2713,42 +2714,107 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           </div>
         );
 
+        const renderCompositeTable = () => {
+          const longComposite = computeCompositeRanking(matrixDataLong?.ranking, matrixDataTrendLong?.ranking);
+          const shortComposite = computeCompositeRanking(matrixData?.ranking, matrixDataTrend?.ranking);
+
+          return (
+            <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', minWidth: '400px', border: '1px solid rgba(251, 191, 36, 0.25)', boxShadow: '0 0 25px rgba(251, 191, 36, 0.05)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h2 style={{ margin: 0, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  ⚡ Sức Mạnh Hợp Nhất ({matrixHoursLong}H / {matrixHours}H)
+                </h2>
+                <span style={{ fontSize: '11px', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.1)', padding: '4px 8px', borderRadius: '6px', border: '1px solid rgba(251, 191, 36, 0.25)', fontWeight: '500' }}>
+                  w₁=1/e | w₂=1-1/e · Vol
+                </span>
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '14px 0', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hạng</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Cur</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Điểm Power</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Trend / Flow</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Vol %</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', textAlign: 'right' }}>Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {longComposite.map((item, index) => {
+                    const shortItem = shortComposite.find(x => x.currency === item.currency);
+
+                    const powerColor = item.powerScore > 0 ? 'var(--up-color)' : (item.powerScore < 0 ? 'var(--down-color)' : 'var(--text-primary)');
+                    const shortPowerColor = shortItem?.powerScore > 0 ? 'var(--up-color)' : (shortItem?.powerScore < 0 ? 'var(--down-color)' : '#9ca3af');
+
+                    let volColor = 'var(--text-primary)';
+                    if (item.vol_percentile >= 75) volColor = '#4ade80';
+                    else if (item.vol_percentile <= 20) volColor = '#f87171';
+
+                    let shortVolColor = '#9ca3af';
+                    if (shortItem?.vol_percentile >= 75) shortVolColor = '#4ade80';
+                    else if (shortItem?.vol_percentile <= 20) shortVolColor = '#f87171';
+
+                    return (
+                      <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '12px 0', fontWeight: 'bold' }}>#{index + 1}</td>
+                        <td style={{ padding: '12px 0', fontWeight: 'bold' }}>{item.currency}</td>
+                        <td style={{ padding: '12px 0', color: powerColor, fontWeight: 'bold' }}>
+                          {(item.powerScore > 0 ? '+' : '') + item.powerScore.toFixed(1)}
+                          {shortItem && (
+                            <span style={{ fontSize: '12px', color: shortPowerColor, marginLeft: '4px', fontWeight: 'normal' }}>
+                              ({(shortItem.powerScore > 0 ? '+' : '') + shortItem.powerScore.toFixed(1)})
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px 0', fontSize: '13px' }}>
+                          <span style={{ color: item.momTrend > 0 ? 'var(--up-color)' : (item.momTrend < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
+                            {item.momTrend > 0 ? '+' : ''}{item.momTrend.toFixed(0)}%
+                          </span>
+                          <span style={{ color: 'var(--text-secondary)', margin: '0 4px' }}>/</span>
+                          <span style={{ color: item.momFlow > 0 ? 'var(--up-color)' : (item.momFlow < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
+                            {item.momFlow > 0 ? '+' : ''}{item.momFlow.toFixed(0)}%
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal' }}>
+                          {item.vol_percentile.toFixed(0)}%
+                          {shortItem && (
+                            <span style={{ fontSize: '12px', color: shortVolColor, marginLeft: '4px' }}>
+                              ({shortItem.vol_percentile.toFixed(0)}%)
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px 0', textAlign: 'right' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            color: item.statusColor,
+                            backgroundColor: `${item.statusColor}18`,
+                            border: `1px solid ${item.statusColor}33`,
+                            boxShadow: `0 0 8px ${item.statusColor}22`
+                          }}>
+                            {item.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        };
+
         return (
           <div style={{ display: 'flex', gap: '40px', marginBottom: '40px', flexWrap: 'wrap' }}>
             {/* Bảng xếp hạng đồng tiền Flow vs Trend */}
             {renderRankingTable("🌊 Money Flow (Momentum)", matrixData, matrixDataLong)}
             {renderRankingTable("📈 Price Trend (C-VWMA)", matrixDataTrend, matrixDataTrendLong)}
 
-            {/* Dữ liệu chi tiết các cặp */}
-            <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', maxHeight: '550px', overflowY: 'auto' }}>
-              <h2 style={{ marginBottom: '20px', color: '#a78bfa' }}>Chi tiết Thay đổi VWMA (15 Cặp)</h2>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Cặp tiền</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Δ VWMA (%)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {matrixDataLong.pairs_data.map(item => {
-                    const shortItem = matrixData.pairs_data ? matrixData.pairs_data.find(x => x.pair === item.pair) : null;
-                    return (
-                    <tr key={item.pair} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <td style={{ padding: '12px 0' }}>{item.pair}</td>
-                      <td style={{ padding: '12px 0', color: item.change_pct > 0 ? 'var(--up-color)' : (item.change_pct < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
-                        {item.change_pct > 0 ? '+' : ''}{item.change_pct.toFixed(2)}%
-                        {shortItem && (() => {
-                          let shortColor = '#9ca3af';
-                          if (shortItem.change_pct > 0) shortColor = 'var(--up-color)';
-                          else if (shortItem.change_pct < 0) shortColor = 'var(--down-color)';
-                          return <span style={{fontSize:'12px', color:shortColor, marginLeft: '6px'}}>({shortItem.change_pct > 0 ? '+' : ''}{shortItem.change_pct.toFixed(2)}%)</span>;
-                        })()}
-                      </td>
-                    </tr>
-                  )})}
-                </tbody>
-              </table>
-            </div>
+            {/* Bảng xếp hạng Sức Mạnh Hợp Nhất (Composite Power) thay thế bảng Chi tiết VWMA */}
+            {renderCompositeTable()}
           </div>
         );
       })()}

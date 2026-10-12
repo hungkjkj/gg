@@ -275,3 +275,18 @@ To�n b? h? th?ng giao di?n du?c thi?t k? theo c?m h?ng t? h? di?u h�nh **J.A
   - Integrated official real-time cash index `USD_FX_Index#` (XM US Dollar Index) into the `usd_assets` configuration (`backend/app_configs.json` & `backend/strategies.json`).
   - Added `USD_FX_Index#` to MT5 startup cache pre-scan in `backend/mt5_service.py`.
   - Enables direct cross-asset Pearson correlation analysis in the Correlation Matrix (M30 log-returns) between USD and Gold, Silver, Oil, US Equity Indices (S&P500, Nasdaq, Dow Jones), and Crypto (BTC, ETH, SOL).
+
+## Update: Composite Power Ranking (Sức Mạnh Hợp Nhất)
+- **Natural Euler Constant Weighting:**
+  - $w_1$ (Price Trend) $= 1/e \approx 0.36788$ (~36.8%).
+  - $w_2$ (Money Flow) $= 1 - 1/e \approx 0.63212$ (~63.2%).
+  - Base Score $= w_1 \cdot \text{Mom}_{\text{PriceTrend}} + w_2 \cdot \text{Mom}_{\text{MoneyFlow}}$.
+  - Volume Reliability Multiplier: $\text{Power Score} = \text{Base Score} \times \left(0.5 + 0.5 \times \frac{\text{Vol}_{\%}}{100}\right)$.
+- **4-Quadrant Market Classification (Trạng thái):**
+  - **Dẫn dắt (Leader)**: Trend > 0 & Flow > 0 (Ưu tiên Buy/Long).
+  - **Tích lũy (Accumulation)**: Trend ≤ 0 & Flow > 0 (Dòng tiền gom ngầm / Early breakout).
+  - **Suy yếu (Exhaustion)**: Trend > 0 & Flow ≤ 0 (Rỗng volume / Phân kỳ âm).
+  - **Tụt hậu (Lagging)**: Trend < 0 & Flow < 0 (Ưu tiên Sell/Short).
+- **UI Integration:**
+  - Replaced the old "Chi tiết Thay đổi VWMA (15 Cặp)" table in Currency Matrix tab with the new "⚡ Sức Mạnh Hợp Nhất (Composite Power)" table.
+  - Added the Composite Power ranking table directly to the AssistiveTouch floating Arc Reactor button (`MomFlip.jsx`).
