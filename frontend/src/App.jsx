@@ -2719,7 +2719,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           const shortComposite = computeCompositeRanking(matrixData?.ranking, matrixDataTrend?.ranking);
 
           return (
-            <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', minWidth: '400px', border: '1px solid rgba(251, 191, 36, 0.25)', boxShadow: '0 0 25px rgba(251, 191, 36, 0.05)' }}>
+            <div style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(251, 191, 36, 0.25)', boxShadow: '0 0 25px rgba(251, 191, 36, 0.05)', overflowX: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h2 style={{ margin: 0, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   ⚡ Sức Mạnh Hợp Nhất ({matrixHoursLong}H / {matrixHours}H)
@@ -2731,12 +2731,12 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
               <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '14px 0', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hạng</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Cur</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Điểm Power</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Trend / Flow</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Vol %</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', textAlign: 'right' }}>Trạng thái</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Hạng</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Cur</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Điểm Power</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Trend / Flow</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Vol %</th>
+                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', textAlign: 'right', whiteSpace: 'nowrap' }}>Trạng thái</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2756,9 +2756,9 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
 
                     return (
                       <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        <td style={{ padding: '12px 0', fontWeight: 'bold' }}>#{index + 1}</td>
-                        <td style={{ padding: '12px 0', fontWeight: 'bold' }}>{item.currency}</td>
-                        <td style={{ padding: '12px 0', color: powerColor, fontWeight: 'bold' }}>
+                        <td style={{ padding: '12px 0', fontWeight: 'bold', whiteSpace: 'nowrap' }}>#{index + 1}</td>
+                        <td style={{ padding: '12px 0', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{item.currency}</td>
+                        <td style={{ padding: '12px 0', color: powerColor, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                           {(item.powerScore > 0 ? '+' : '') + item.powerScore.toFixed(1)}
                           {shortItem && (
                             <span style={{ fontSize: '12px', color: shortPowerColor, marginLeft: '4px', fontWeight: 'normal' }}>
@@ -2766,7 +2766,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                             </span>
                           )}
                         </td>
-                        <td style={{ padding: '12px 0', fontSize: '13px' }}>
+                        <td style={{ padding: '12px 0', fontSize: '13px', whiteSpace: 'nowrap' }}>
                           <span style={{ color: item.momTrend > 0 ? 'var(--up-color)' : (item.momTrend < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
                             {item.momTrend > 0 ? '+' : ''}{item.momTrend.toFixed(0)}%
                           </span>
@@ -2775,7 +2775,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                             {item.momFlow > 0 ? '+' : ''}{item.momFlow.toFixed(0)}%
                           </span>
                         </td>
-                        <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal' }}>
+                        <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal', whiteSpace: 'nowrap' }}>
                           {item.vol_percentile.toFixed(0)}%
                           {shortItem && (
                             <span style={{ fontSize: '12px', color: shortVolColor, marginLeft: '4px' }}>
@@ -2783,7 +2783,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                             </span>
                           )}
                         </td>
-                        <td style={{ padding: '12px 0', textAlign: 'right' }}>
+                        <td style={{ padding: '12px 0', textAlign: 'right', whiteSpace: 'nowrap' }}>
                           <span style={{
                             display: 'inline-block',
                             padding: '3px 8px',
@@ -2808,12 +2808,14 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         };
 
         return (
-          <div style={{ display: 'flex', gap: '40px', marginBottom: '40px', flexWrap: 'wrap' }}>
-            {/* Bảng xếp hạng đồng tiền Flow vs Trend */}
-            {renderRankingTable("🌊 Money Flow (Momentum)", matrixData, matrixDataLong)}
-            {renderRankingTable("📈 Price Trend (C-VWMA)", matrixDataTrend, matrixDataTrendLong)}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', marginBottom: '40px' }}>
+            {/* Hàng 1: Bảng xếp hạng đồng tiền Flow vs Trend */}
+            <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap' }}>
+              {renderRankingTable("🌊 Money Flow (Momentum)", matrixData, matrixDataLong)}
+              {renderRankingTable("📈 Price Trend (C-VWMA)", matrixDataTrend, matrixDataTrendLong)}
+            </div>
 
-            {/* Bảng xếp hạng Sức Mạnh Hợp Nhất (Composite Power) thay thế bảng Chi tiết VWMA */}
+            {/* Hàng 2: Bảng xếp hạng Sức Mạnh Hợp Nhất (Composite Power) nằm ở hàng mới rộng rãi */}
             {renderCompositeTable()}
           </div>
         );
