@@ -2441,6 +2441,40 @@ useEffect(() => {
   );
 };
 
+const MATRIX_BAR_THRESHOLDS = [50, 75, 85];
+
+const MatrixThresholdBar = ({ value, color, maxWidth, height = 5, label }) => {
+  const normalizedValue = Math.min(Math.max(Math.abs(value), 0), 100);
+
+  return (
+    <div
+      role="img"
+      aria-label={`${label} ${normalizedValue.toFixed(1)} trên 100; các mốc 50, 75 và 85`}
+      style={{ width: '100%', maxWidth: `${maxWidth}px`, height: `${height}px`, background: 'rgba(255,255,255,0.08)', borderRadius: '3px', marginTop: '6px', position: 'relative' }}
+    >
+      <div style={{ width: `${normalizedValue}%`, height: '100%', background: color, borderRadius: '3px' }} />
+      {MATRIX_BAR_THRESHOLDS.map(threshold => (
+        <span
+          key={threshold}
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: `${threshold}%`,
+            top: '-2px',
+            width: '2px',
+            height: '9px',
+            transform: 'translateX(-1px)',
+            borderRadius: '2px',
+            background: '#4ade80',
+            boxShadow: '0 0 4px rgba(74, 222, 128, 0.9)',
+            zIndex: 1
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
 const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, initialMatrixVolDays, onSaveMatrixSettings, symbol }) => {
   const [matrixData, setMatrixData] = useState(null);
   const [matrixDataLong, setMatrixDataLong] = useState(null);
@@ -2867,36 +2901,12 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                               </span>
                             )}
                           </div>
-                          <div
-                            role="img"
-                            aria-label={`Điểm Power ${Math.abs(item.powerScore).toFixed(1)} trên 100; các mốc 50, 75 và 85`}
-                            style={{ width: '100%', maxWidth: '160px', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', marginTop: '6px', position: 'relative' }}
-                          >
-                            <div style={{
-                              width: `${Math.min(Math.abs(item.powerScore), 100)}%`,
-                              height: '100%',
-                              background: item.powerScore >= 0 ? 'var(--up-color)' : 'var(--down-color)',
-                              borderRadius: '3px'
-                            }} />
-                            {[50, 75, 85].map(threshold => (
-                              <span
-                                key={threshold}
-                                aria-hidden="true"
-                                style={{
-                                  position: 'absolute',
-                                  left: `${threshold}%`,
-                                  top: '-2px',
-                                  width: '2px',
-                                  height: '9px',
-                                  transform: 'translateX(-1px)',
-                                  borderRadius: '2px',
-                                  background: '#4ade80',
-                                  boxShadow: '0 0 4px rgba(74, 222, 128, 0.9)',
-                                  zIndex: 1
-                                }}
-                              />
-                            ))}
-                          </div>
+                          <MatrixThresholdBar
+                            value={item.powerScore}
+                            color={item.powerScore >= 0 ? 'var(--up-color)' : 'var(--down-color)'}
+                            maxWidth={160}
+                            label="Điểm Power"
+                          />
                         </td>
 
                         {/* Price Trend (C-VWMA) */}
@@ -2911,14 +2921,13 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                               </span>
                             )}
                           </div>
-                          <div style={{ width: '100%', maxWidth: '120px', height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', marginTop: '6px', overflow: 'hidden' }}>
-                            <div style={{
-                              width: `${Math.min(Math.abs(item.momTrend), 100)}%`,
-                              height: '100%',
-                              background: item.momTrend >= 0 ? 'var(--up-color)' : 'var(--down-color)',
-                              borderRadius: '2px'
-                            }} />
-                          </div>
+                          <MatrixThresholdBar
+                            value={item.momTrend}
+                            color={item.momTrend >= 0 ? 'var(--up-color)' : 'var(--down-color)'}
+                            maxWidth={120}
+                            height={4}
+                            label="Price Trend"
+                          />
                         </td>
 
                         {/* Money Flow (Động lượng) */}
@@ -2933,14 +2942,13 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                               </span>
                             )}
                           </div>
-                          <div style={{ width: '100%', maxWidth: '120px', height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', marginTop: '6px', overflow: 'hidden' }}>
-                            <div style={{
-                              width: `${Math.min(Math.abs(item.momFlow), 100)}%`,
-                              height: '100%',
-                              background: item.momFlow >= 0 ? 'var(--up-color)' : 'var(--down-color)',
-                              borderRadius: '2px'
-                            }} />
-                          </div>
+                          <MatrixThresholdBar
+                            value={item.momFlow}
+                            color={item.momFlow >= 0 ? 'var(--up-color)' : 'var(--down-color)'}
+                            maxWidth={120}
+                            height={4}
+                            label="Money Flow"
+                          />
                         </td>
 
                         {/* Volume (Thanh khoản) */}
@@ -2955,14 +2963,12 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                               </span>
                             )}
                           </div>
-                          <div style={{ width: '100%', maxWidth: '120px', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', marginTop: '6px', overflow: 'hidden' }}>
-                            <div style={{
-                              width: `${Math.min(Math.max(item.vol_percentile, 0), 100)}%`,
-                              height: '100%',
-                              background: volColor,
-                              borderRadius: '3px'
-                            }} />
-                          </div>
+                          <MatrixThresholdBar
+                            value={item.vol_percentile}
+                            color={volColor}
+                            maxWidth={120}
+                            label="Thanh khoản"
+                          />
                         </td>
 
                         {/* Trạng thái 4 Pha */}
