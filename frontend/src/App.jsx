@@ -2718,25 +2718,77 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           const longComposite = computeCompositeRanking(matrixDataLong?.ranking, matrixDataTrendLong?.ranking);
           const shortComposite = computeCompositeRanking(matrixData?.ranking, matrixDataTrend?.ranking);
 
+          const topLeader = longComposite.length > 0 ? longComposite[0] : null;
+          const topLaggard = longComposite.length > 0 ? longComposite[longComposite.length - 1] : null;
+          const leadersCount = longComposite.filter(x => x.status === 'Dẫn dắt').length;
+          const accumCount = longComposite.filter(x => x.status === 'Tích lũy').length;
+          const exhaustCount = longComposite.filter(x => x.status === 'Suy yếu').length;
+          const lagCount = longComposite.filter(x => x.status === 'Tụt hậu').length;
+
           return (
-            <div style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', border: '1px solid rgba(251, 191, 36, 0.25)', boxShadow: '0 0 25px rgba(251, 191, 36, 0.05)', overflowX: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2 style={{ margin: 0, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  ⚡ Sức Mạnh Hợp Nhất ({matrixHoursLong}H / {matrixHours}H)
-                </h2>
-                <span style={{ fontSize: '11px', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.1)', padding: '4px 8px', borderRadius: '6px', border: '1px solid rgba(251, 191, 36, 0.25)', fontWeight: '500' }}>
-                  w₁=1/e | w₂=1-1/e · Vol
+            <div style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-panel)', padding: '24px', borderRadius: '12px', border: '1px solid rgba(251, 191, 36, 0.25)', boxShadow: '0 0 25px rgba(251, 191, 36, 0.05)', overflowX: 'auto' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <h2 style={{ margin: 0, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.25rem' }}>
+                    ⚡ Sức Mạnh Hợp Nhất ({matrixHoursLong}H / {matrixHours}H)
+                  </h2>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    Mô hình Euler kết hợp Price Trend và Money Flow theo trọng số tự nhiên, nhân hệ số thanh khoản Volume
+                  </div>
+                </div>
+                <span style={{ fontSize: '11px', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.1)', padding: '5px 10px', borderRadius: '6px', border: '1px solid rgba(251, 191, 36, 0.25)', fontWeight: '600', letterSpacing: '0.3px' }}>
+                  w₁=1/e · Trend | w₂=(1-1/e) · Flow | × Vol Factor
                 </span>
               </div>
-              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '14px 0', textAlign: 'left' }}>
+
+              {/* Market Breadth Summary Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px', marginBottom: '24px' }}>
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(74, 222, 128, 0.2)', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ fontSize: '22px' }}>🏆</div>
+                  <div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Mạnh Nhất (Top Leader)</div>
+                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#4ade80' }}>
+                      {topLeader ? `${topLeader.currency} (${topLeader.powerScore > 0 ? '+' : ''}${topLeader.powerScore.toFixed(1)})` : 'N/A'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(248, 113, 113, 0.2)', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ fontSize: '22px' }}>🔻</div>
+                  <div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Yếu Nhất (Top Laggard)</div>
+                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#f87171' }}>
+                      {topLaggard ? `${topLaggard.currency} (${topLaggard.powerScore > 0 ? '+' : ''}${topLaggard.powerScore.toFixed(1)})` : 'N/A'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(251, 191, 36, 0.2)', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ fontSize: '22px' }}>🧭</div>
+                  <div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Phân Bổ 4 Pha Thị Trường</div>
+                    <div style={{ fontSize: '12px', fontWeight: '600', display: 'flex', gap: '10px', marginTop: '2px', flexWrap: 'wrap' }}>
+                      <span style={{ color: '#4ade80' }}>🟢 {leadersCount} Dẫn dắt</span>
+                      <span style={{ color: '#38bdf8' }}>🔵 {accumCount} Tích lũy</span>
+                      <span style={{ color: '#fbbf24' }}>🟡 {exhaustCount} Suy yếu</span>
+                      <span style={{ color: '#f87171' }}>🔴 {lagCount} Tụt hậu</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Table */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Hạng</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Cur</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Điểm Power</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Trend / Flow</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Vol %</th>
-                    <th style={{ padding: '10px 0', color: 'var(--text-secondary)', textAlign: 'right', whiteSpace: 'nowrap' }}>Trạng thái</th>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', fontSize: '12px' }}>
+                    <th style={{ padding: '12px 8px', whiteSpace: 'nowrap', width: '70px' }}>Hạng</th>
+                    <th style={{ padding: '12px 14px', whiteSpace: 'nowrap', width: '120px' }}>Tài sản</th>
+                    <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Điểm Power ({matrixHoursLong}H / {matrixHours}H)</th>
+                    <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Price Trend (C-VWMA)</th>
+                    <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Money Flow (Động lượng)</th>
+                    <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Thanh khoản (Vol %)</th>
+                    <th style={{ padding: '12px 14px', textAlign: 'right', whiteSpace: 'nowrap', width: '140px' }}>Trạng thái</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2754,47 +2806,159 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                     if (shortItem?.vol_percentile >= 75) shortVolColor = '#4ade80';
                     else if (shortItem?.vol_percentile <= 20) shortVolColor = '#f87171';
 
+                    const rankStyle = index === 0 ? { bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.35), rgba(217, 119, 6, 0.15))', border: '#f59e0b', color: '#fbbf24' }
+                                    : index === 1 ? { bg: 'linear-gradient(135deg, rgba(148, 163, 184, 0.3), rgba(100, 116, 139, 0.15))', border: '#94a3b8', color: '#e2e8f0' }
+                                    : index === 2 ? { bg: 'linear-gradient(135deg, rgba(180, 83, 9, 0.3), rgba(146, 64, 14, 0.15))', border: '#b45309', color: '#fcd34d' }
+                                    : { bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)' };
+
                     return (
-                      <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        <td style={{ padding: '12px 0', fontWeight: 'bold', whiteSpace: 'nowrap' }}>#{index + 1}</td>
-                        <td style={{ padding: '12px 0', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{item.currency}</td>
-                        <td style={{ padding: '12px 0', color: powerColor, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                          {(item.powerScore > 0 ? '+' : '') + item.powerScore.toFixed(1)}
-                          {shortItem && (
-                            <span style={{ fontSize: '12px', color: shortPowerColor, marginLeft: '4px', fontWeight: 'normal' }}>
-                              ({(shortItem.powerScore > 0 ? '+' : '') + shortItem.powerScore.toFixed(1)})
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '12px 0', fontSize: '13px', whiteSpace: 'nowrap' }}>
-                          <span style={{ color: item.momTrend > 0 ? 'var(--up-color)' : (item.momTrend < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
-                            {item.momTrend > 0 ? '+' : ''}{item.momTrend.toFixed(0)}%
+                      <tr 
+                        key={item.currency} 
+                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background-color 0.15s ease' }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.03)'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        {/* Hạng */}
+                        <td style={{ padding: '14px 8px', whiteSpace: 'nowrap' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minWidth: '34px',
+                            height: '24px',
+                            padding: '0 6px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            background: rankStyle.bg,
+                            border: `1px solid ${rankStyle.border}`,
+                            color: rankStyle.color
+                          }}>
+                            #{index + 1}
                           </span>
-                          <span style={{ color: 'var(--text-secondary)', margin: '0 4px' }}>/</span>
-                          <span style={{ color: item.momFlow > 0 ? 'var(--up-color)' : (item.momFlow < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
-                            {item.momFlow > 0 ? '+' : ''}{item.momFlow.toFixed(0)}%
-                          </span>
                         </td>
-                        <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal', whiteSpace: 'nowrap' }}>
-                          {item.vol_percentile.toFixed(0)}%
-                          {shortItem && (
-                            <span style={{ fontSize: '12px', color: shortVolColor, marginLeft: '4px' }}>
-                              ({shortItem.vol_percentile.toFixed(0)}%)
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '12px 0', textAlign: 'right', whiteSpace: 'nowrap' }}>
+
+                        {/* Ticker / Cur */}
+                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
                           <span style={{
                             display: 'inline-block',
-                            padding: '3px 8px',
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            background: 'rgba(255,255,255,0.06)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            fontWeight: '700',
+                            fontSize: '13px',
+                            color: '#f8fafc',
+                            letterSpacing: '0.3px'
+                          }}>
+                            {item.currency}
+                          </span>
+                        </td>
+
+                        {/* Điểm Power + Power Bar */}
+                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                            <span style={{ color: powerColor, fontWeight: 'bold', fontSize: '14px' }}>
+                              {(item.powerScore > 0 ? '+' : '') + item.powerScore.toFixed(1)}
+                            </span>
+                            {shortItem && (
+                              <span style={{ fontSize: '12px', color: shortPowerColor, fontWeight: 'normal' }}>
+                                ({(shortItem.powerScore > 0 ? '+' : '') + shortItem.powerScore.toFixed(1)})
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ width: '100%', maxWidth: '160px', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', marginTop: '6px', overflow: 'hidden' }}>
+                            <div style={{
+                              width: `${Math.min(Math.abs(item.powerScore), 100)}%`,
+                              height: '100%',
+                              background: item.powerScore >= 0 ? 'var(--up-color)' : 'var(--down-color)',
+                              borderRadius: '3px'
+                            }} />
+                          </div>
+                        </td>
+
+                        {/* Price Trend (C-VWMA) */}
+                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: item.momTrend > 0 ? 'var(--up-color)' : (item.momTrend < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
+                              {item.momTrend > 0 ? '+' : ''}{item.momTrend.toFixed(0)}%
+                            </span>
+                            {shortItem && (
+                              <span style={{ fontSize: '12px', color: shortItem.momTrend > 0 ? 'var(--up-color)' : (shortItem.momTrend < 0 ? 'var(--down-color)' : '#9ca3af') }}>
+                                ({shortItem.momTrend > 0 ? '+' : ''}{shortItem.momTrend.toFixed(0)}%)
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ width: '100%', maxWidth: '120px', height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', marginTop: '6px', overflow: 'hidden' }}>
+                            <div style={{
+                              width: `${Math.min(Math.abs(item.momTrend), 100)}%`,
+                              height: '100%',
+                              background: item.momTrend >= 0 ? 'var(--up-color)' : 'var(--down-color)',
+                              borderRadius: '2px'
+                            }} />
+                          </div>
+                        </td>
+
+                        {/* Money Flow (Động lượng) */}
+                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: item.momFlow > 0 ? 'var(--up-color)' : (item.momFlow < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
+                              {item.momFlow > 0 ? '+' : ''}{item.momFlow.toFixed(0)}%
+                            </span>
+                            {shortItem && (
+                              <span style={{ fontSize: '12px', color: shortItem.momFlow > 0 ? 'var(--up-color)' : (shortItem.momFlow < 0 ? 'var(--down-color)' : '#9ca3af') }}>
+                                ({shortItem.momFlow > 0 ? '+' : ''}{shortItem.momFlow.toFixed(0)}%)
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ width: '100%', maxWidth: '120px', height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', marginTop: '6px', overflow: 'hidden' }}>
+                            <div style={{
+                              width: `${Math.min(Math.abs(item.momFlow), 100)}%`,
+                              height: '100%',
+                              background: item.momFlow >= 0 ? 'var(--up-color)' : 'var(--down-color)',
+                              borderRadius: '2px'
+                            }} />
+                          </div>
+                        </td>
+
+                        {/* Volume (Thanh khoản) */}
+                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal', color: volColor }}>
+                              {item.vol_percentile.toFixed(0)}%
+                            </span>
+                            {shortItem && (
+                              <span style={{ fontSize: '12px', color: shortVolColor }}>
+                                ({shortItem.vol_percentile.toFixed(0)}%)
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ width: '100%', maxWidth: '120px', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', marginTop: '6px', overflow: 'hidden' }}>
+                            <div style={{
+                              width: `${Math.min(Math.max(item.vol_percentile, 0), 100)}%`,
+                              height: '100%',
+                              background: volColor,
+                              borderRadius: '3px'
+                            }} />
+                          </div>
+                        </td>
+
+                        {/* Trạng thái 4 Pha */}
+                        <td style={{ padding: '14px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '4px 10px',
                             borderRadius: '6px',
                             fontSize: '11px',
                             fontWeight: '600',
                             color: item.statusColor,
                             backgroundColor: `${item.statusColor}18`,
                             border: `1px solid ${item.statusColor}33`,
-                            boxShadow: `0 0 8px ${item.statusColor}22`
+                            boxShadow: `0 0 10px ${item.statusColor}22`
                           }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: item.statusColor, boxShadow: `0 0 6px ${item.statusColor}` }} />
                             {item.status}
                           </span>
                         </td>
