@@ -3860,6 +3860,7 @@ function App() {
               <option value="M3">3 Minutes</option>
               <option value="M5">5 Minutes</option>
               <option value="M15">15 Minutes</option>
+              <option value="M30">30 Minutes</option>
               <option value="H1">1 Hour</option>
               <option value="H4">4 Hours</option>
               <option value="D1">Daily</option>
