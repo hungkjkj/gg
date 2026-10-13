@@ -2867,13 +2867,35 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                               </span>
                             )}
                           </div>
-                          <div style={{ width: '100%', maxWidth: '160px', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', marginTop: '6px', overflow: 'hidden' }}>
+                          <div
+                            role="img"
+                            aria-label={`Điểm Power ${Math.abs(item.powerScore).toFixed(1)} trên 100; các mốc 50, 75 và 85`}
+                            style={{ width: '100%', maxWidth: '160px', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', marginTop: '6px', position: 'relative' }}
+                          >
                             <div style={{
                               width: `${Math.min(Math.abs(item.powerScore), 100)}%`,
                               height: '100%',
                               background: item.powerScore >= 0 ? 'var(--up-color)' : 'var(--down-color)',
                               borderRadius: '3px'
                             }} />
+                            {[50, 75, 85].map(threshold => (
+                              <span
+                                key={threshold}
+                                aria-hidden="true"
+                                style={{
+                                  position: 'absolute',
+                                  left: `${threshold}%`,
+                                  top: '-2px',
+                                  width: '2px',
+                                  height: '9px',
+                                  transform: 'translateX(-1px)',
+                                  borderRadius: '2px',
+                                  background: '#4ade80',
+                                  boxShadow: '0 0 4px rgba(74, 222, 128, 0.9)',
+                                  zIndex: 1
+                                }}
+                              />
+                            ))}
                           </div>
                         </td>
 
