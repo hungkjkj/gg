@@ -103,7 +103,36 @@ export const AssistiveTouch = ({
     if (!isDragging) setIsOpen(!isOpen);
   };
 
-  const hasMatrixRankingData = showMatrixBubble && (bubbleMatrixData || bubbleMatrixDataLong);
+  const hasLongMatrixPair = Array.isArray(bubbleMatrixDataLong) && Array.isArray(bubbleMatrixDataTrendLong);
+  const hasShortMatrixPair = Array.isArray(bubbleMatrixData) && Array.isArray(bubbleMatrixDataTrend);
+  const hasMatrixRankingData = showMatrixBubble && hasLongMatrixPair;
+  const controlOptions = [
+    {
+      id: 'sd-bands', label: 'Dải SD', description: 'Dải lệch chuẩn', checked: showSdBands,
+      onChange: checked => { setShowSdBands(checked); localStorage.setItem('showSdBands', checked); }
+    },
+    {
+      id: 'momentum-flip', label: 'Momentum Flip', description: 'Điểm đảo chiều', checked: showMomFlip,
+      onChange: setShowMomFlip
+    },
+    {
+      id: 'volume-chart', label: 'Biểu đồ Volume', description: 'Tick volume', checked: showVolChart,
+      onChange: checked => { setShowVolChart(checked); localStorage.setItem('showVolChart', checked); }
+    },
+    {
+      id: 'average-volume', label: 'Trung bình Vol', description: 'Làm mượt volume', checked: volMode === 'mean_vol',
+      onChange: checked => handleVolModeToggle && handleVolModeToggle(checked)
+    },
+    {
+      id: 'momentum-chart', label: 'Biểu đồ Momentum', description: 'Động lượng giá', checked: showMomChart,
+      onChange: checked => { setShowMomChart(checked); localStorage.setItem('showMomChart', checked); }
+    },
+    {
+      id: 'matrix-ranking', label: 'Xếp hạng Matrix', description: 'Price Trend + Money Flow', checked: showMatrixBubble,
+      onChange: checked => { setShowMatrixBubble(checked); localStorage.setItem('showMatrixBubble', checked); }
+    }
+  ];
+  const enabledControlCount = controlOptions.filter(option => option.checked).length;
   const panelMaxWidth = position.x > window.innerWidth / 2
     ? `${position.x + 50}px`
     : `calc(100vw - ${position.x + 10}px)`;
@@ -117,43 +146,59 @@ export const AssistiveTouch = ({
           ...(position.x > window.innerWidth / 2 ? { right: '0px' } : { left: '0px' }),
           background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(12px)', padding: '16px', borderRadius: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1)', width: hasMatrixRankingData ? 'min(780px, calc(100vw - 20px))' : 'min(320px, calc(100vw - 20px))', maxWidth: panelMaxWidth, maxHeight: 'calc(100vh - 20px)', boxSizing: 'border-box', overflowY: 'auto', border: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', flexDirection: 'column', gap: '12px', animation: 'fadeInBub 0.2s ease-out'
         }}>
-          <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
-            <input type="checkbox" checked={showSdBands} onChange={e => { setShowSdBands(e.target.checked); localStorage.setItem('showSdBands', e.target.checked); }} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
-            Dải SD
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
-            <input type="checkbox" checked={showMomFlip} onChange={e => setShowMomFlip(e.target.checked)} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
-            Biểu đồ Momentum Flip
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
-            <input type="checkbox" checked={showVolChart} onChange={e => { setShowVolChart(e.target.checked); localStorage.setItem('showVolChart', e.target.checked); }} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
-            Biểu đồ Volume
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
-            <input type="checkbox" checked={volMode === 'mean_vol'} onChange={e => handleVolModeToggle && handleVolModeToggle(e.target.checked)} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
-            ↳ Chế độ Trung bình Vol
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
-            <input type="checkbox" checked={showMomChart} onChange={e => { setShowMomChart(e.target.checked); localStorage.setItem('showMomChart', e.target.checked); }} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
-            Biểu đồ Momentum
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
-            <input type="checkbox" checked={showMatrixBubble} onChange={e => { setShowMatrixBubble(e.target.checked); localStorage.setItem('showMatrixBubble', e.target.checked); }} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
-            Xếp hạng Matrix
-          </label>
+          <section style={{ paddingBottom: showMatrixBubble ? '12px' : '0', borderBottom: showMatrixBubble ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '10px' }}>
+              <div>
+                <div style={{ color: '#38bdf8', fontSize: '10px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>Điều khiển biểu đồ</div>
+                <div style={{ color: '#e2e8f0', fontSize: '14px', fontWeight: '700', marginTop: '2px' }}>Lớp hiển thị</div>
+              </div>
+              <span style={{ color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '999px', padding: '4px 9px', fontSize: '11px', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                {enabledControlCount}/{controlOptions.length} đang bật
+              </span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: '8px' }}>
+              {controlOptions.map(option => (
+                <label
+                  key={option.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, minHeight: '50px', boxSizing: 'border-box',
+                    padding: '8px 10px', borderRadius: '10px', cursor: 'pointer', color: '#e2e8f0',
+                    background: option.checked ? 'rgba(88,28,135,0.18)' : 'rgba(255,255,255,0.025)',
+                    border: `1px solid ${option.checked ? 'rgba(168,85,247,0.4)' : 'rgba(148,163,184,0.12)'}`,
+                    transition: 'background 0.18s ease, border-color 0.18s ease'
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={option.checked}
+                    onChange={e => option.onChange(e.target.checked)}
+                    style={{ margin: 0, width: '17px', height: '17px', flex: '0 0 auto', accentColor: '#a855f7' }}
+                  />
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                    <span style={{ fontSize: '12px', fontWeight: '600', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{option.label}</span>
+                    <span style={{ color: '#94a3b8', fontSize: '10px', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{option.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </section>
           
           {showMatrixBubble && (() => {
             const renderCompositeTable = () => {
-              const primaryFlow = bubbleMatrixDataLong || bubbleMatrixData;
-              const primaryTrend = bubbleMatrixDataTrendLong || bubbleMatrixDataTrend;
-              if (!primaryFlow || !primaryTrend) return null;
+              const primaryFlow = hasLongMatrixPair ? bubbleMatrixDataLong : null;
+              const primaryTrend = hasLongMatrixPair ? bubbleMatrixDataTrendLong : null;
+              if (!primaryFlow || !primaryTrend) {
+                return <div style={{ padding: '10px 2px', color: '#94a3b8', fontSize: '12px' }}>Đang chờ dữ liệu xếp hạng Matrix…</div>;
+              }
 
               const longComposite = computeCompositeRanking(primaryFlow, primaryTrend);
-              const shortComposite = (bubbleMatrixData && bubbleMatrixDataTrend)
+              const shortComposite = hasShortMatrixPair
                 ? computeCompositeRanking(bubbleMatrixData, bubbleMatrixDataTrend)
                 : [];
 
-              if (!longComposite || longComposite.length === 0) return null;
+              if (!longComposite || longComposite.length === 0) {
+                return <div style={{ padding: '10px 2px', color: '#94a3b8', fontSize: '12px' }}>Chưa có dữ liệu xếp hạng cho nhóm tài sản này.</div>;
+              }
 
               return (
                 <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)', minWidth: 0 }}>
