@@ -374,11 +374,11 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
 
 
     
-    series.createPriceLine({ price: 0, color: 'rgba(226,232,240,0.65)', lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: '0 · TRUNG TÍNH' });
+    series.createPriceLine({ price: 0, color: 'rgba(226,232,240,0.65)', lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: '0%' });
     [75, 85].forEach(level => {
       const color = level === 85 ? 'rgba(248,113,113,0.7)' : 'rgba(251,191,36,0.65)';
-      series.createPriceLine({ price: level, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: `BUY ${level}%` });
-      series.createPriceLine({ price: -level, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: `SELL ${level}%` });
+      series.createPriceLine({ price: level, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: `${level}%` });
+      series.createPriceLine({ price: -level, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: `${level}%` });
     });
     
     chartRef.current = chart;
@@ -415,8 +415,8 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
       const level = Math.abs(Number(alert.price));
       const color = alert.status === 'active' ? '#eab308' : '#94a3b8';
       [
-        { price: level, title: `BUY alert ${level}%` },
-        { price: -level, title: `SELL alert ${level}%` }
+        { price: level, title: `${level}%` },
+        { price: -level, title: `${level}%` }
       ].forEach(({ price, title }) => {
         const line = seriesRef.current.createPriceLine({
           price,
