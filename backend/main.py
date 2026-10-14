@@ -380,7 +380,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     # TÃ­nh median Ä‘á»™ng lÆ°á»£ng trong chu ká»³ N giá»
     rolling_median_mom = df['abs_mom_raw'].rolling(window=lookback_candles, min_periods=1).median().replace(0, np.nan).fillna(1e-9)
     
-    # --- Momentum Flip ---
+    # --- Momentum Burst (legacy mom_flip output key) ---
     # SMA Moment: trung bÃ¬nh cá»™ng Ä‘á»™ lá»›n momentum cá»§a N náº¿n gáº§n nháº¥t (khÃ´ng tÃ­nh náº¿n hiá»‡n táº¡i)
     sma_mom_window = max(1, smaMomLength)
     sma_mom = df['abs_mom_raw'].shift(1).rolling(window=sma_mom_window, min_periods=1).mean().replace(0, np.nan).fillna(1e-9)

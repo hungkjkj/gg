@@ -2316,7 +2316,7 @@ useEffect(() => {
                 closeContextMenu();
               }}
             >
-              🌊 Thêm cảnh báo % Mom Flip...
+              ⚡ Thêm cảnh báo bùng nổ động lượng...
             </div>
             
             <div 
@@ -2370,7 +2370,7 @@ useEffect(() => {
               display: 'flex', flexDirection: 'column', gap: '15px'
             }}>
               <h3 style={{ margin: 0, color: 'white' }}>
-                {customAlertModal.type === 'mom' ? 'Thêm cảnh báo % Mom Flip' : 'Thêm cảnh báo giá'}
+                {customAlertModal.type === 'mom' ? 'Thêm cảnh báo bùng nổ động lượng' : 'Thêm cảnh báo giá'}
               </h3>
               
               <div>
@@ -2380,7 +2380,7 @@ useEffect(() => {
               
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' }}>
-                  {customAlertModal.type === 'mom' ? 'Mức % Mom Flip' : 'Mức giá'}
+                  {customAlertModal.type === 'mom' ? 'Phân vị bùng nổ (%)' : 'Mức giá'}
                 </label>
                 <input 
                   type="number" 
@@ -3107,12 +3107,12 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
             <input type="number" value={local.smaMomLength} onChange={e => handleChange('smaMomLength', Number(e.target.value))} style={styleInput} />
           </div>
           <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #334155' }}>
-            <label style={styleLabel}>Mức lọc động lượng cho Flip (%)</label>
-            <input type="number" value={local.momFlipFilterPct} onChange={e => handleChange('momFlipFilterPct', Number(e.target.value))} style={styleInput} title="Chỉ lấy những nến có Momentum lớn hơn mức này để phân phối Flip" />
+            <label style={styleLabel}>Ngưỡng động lượng bùng nổ (%)</label>
+            <input type="number" value={local.momFlipFilterPct} onChange={e => handleChange('momFlipFilterPct', Number(e.target.value))} style={styleInput} title="Chỉ xét các nến có độ lớn động lượng đạt phân vị này trong cửa sổ nhìn lại" />
           </div>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Mức lọc khối lượng cho Flip (%)</label>
-            <input type="number" value={local.momFlipVolFilterPct !== undefined ? local.momFlipVolFilterPct : 50.0} onChange={e => handleChange('momFlipVolFilterPct', Number(e.target.value))} style={styleInput} title="Chỉ lấy những nến có Volume lớn hơn mức này trong nhóm đã lọc Mom" />
+            <label style={styleLabel}>Ngưỡng tick volume xác nhận (%)</label>
+            <input type="number" value={local.momFlipVolFilterPct !== undefined ? local.momFlipVolFilterPct : 50.0} onChange={e => handleChange('momFlipVolFilterPct', Number(e.target.value))} style={styleInput} title="Lọc theo phân vị tick volume của các nến đã đạt ngưỡng động lượng; đây không phải khối lượng giao dịch thực" />
           </div>
         </details>
 
@@ -3966,14 +3966,14 @@ function App() {
               <select
                 value={newAlertType}
                 onChange={e => setNewAlertType(e.target.value)}
-                style={{ padding: '6px', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'white', maxWidth: '75px', fontSize: '0.8rem' }}
+                style={{ padding: '6px', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'white', maxWidth: '170px', fontSize: '0.8rem' }}
               >
                 <option value="price">Giá</option>
-                <option value="mom">% Mom Flip</option>
+                <option value="mom">% Bùng nổ động lượng</option>
               </select>
               <input 
                 type="number" 
-                placeholder={newAlertType === 'price' ? "Giá" : "% Mom Flip"} 
+                placeholder={newAlertType === 'price' ? "Giá" : "% Bùng nổ động lượng"}
                 value={newAlertPrice}
                 onChange={e => setNewAlertPrice(e.target.value)}
                 style={{ flex: 1, padding: '6px', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'white', minWidth: 0 }}
@@ -4008,7 +4008,7 @@ function App() {
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <div>
                       <span style={{ color: a.status==='active' ? '#eab308' : '#94a3b8', fontWeight: 'bold' }}>{a.symbol}</span>
-                      <span style={{ margin: '0 5px', fontSize: '0.75rem', color: '#94a3b8' }}>{a.type === 'mom' ? 'Mom Flip' : '@'}</span>
+                      <span style={{ margin: '0 5px', fontSize: '0.75rem', color: '#94a3b8' }}>{a.type === 'mom' ? 'Bùng nổ' : '@'}</span>
                       <span style={{ marginLeft: '2px', color: '#4ade80' }}>{a.type === 'mom' ? a.price + '%' : a.price}</span>
                       {a.status === 'triggered' && <span style={{ marginLeft: '5px', color: '#ef4444' }}>(Triggered)</span>}
                     </div>

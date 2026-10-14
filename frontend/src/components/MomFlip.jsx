@@ -112,7 +112,7 @@ export const AssistiveTouch = ({
       onChange: checked => { setShowSdBands(checked); localStorage.setItem('showSdBands', checked); }
     },
     {
-      id: 'momentum-flip', label: 'Momentum Flip', description: 'Điểm đảo chiều', checked: showMomFlip,
+      id: 'momentum-flip', label: 'Bùng nổ động lượng', description: 'Phân vị theo hướng mua/bán', checked: showMomFlip,
       onChange: setShowMomFlip
     },
     {
@@ -355,10 +355,14 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
     });
     
     const series = chart.addHistogramSeries({
-      priceFormat: { type: 'volume' },
+      priceFormat: {
+        type: 'custom',
+        minMove: 1,
+        formatter: price => `${price > 0 ? '+' : ''}${price.toFixed(0)}%`
+      },
       autoscaleInfoProvider: () => ({
         priceRange: {
-          minValue: 0,
+          minValue: -100,
           maxValue: 100,
         },
       }),
@@ -370,22 +374,11 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
 
 
     
-    series.createPriceLine({
-        price: 75,
-        color: '#f59e0b',
-        lineWidth: 1,
-        lineStyle: 2,
-        axisLabelVisible: true,
-        title: '75%',
-    });
-    
-    series.createPriceLine({
-        price: 85,
-        color: '#ef4444',
-        lineWidth: 1,
-        lineStyle: 2,
-        axisLabelVisible: true,
-        title: '85%',
+    series.createPriceLine({ price: 0, color: 'rgba(226,232,240,0.65)', lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: '0 · TRUNG TÍNH' });
+    [75, 85].forEach(level => {
+      const color = level === 85 ? 'rgba(248,113,113,0.7)' : 'rgba(251,191,36,0.65)';
+      series.createPriceLine({ price: level, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: `BUY ${level}%` });
+      series.createPriceLine({ price: -level, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: `SELL ${level}%` });
     });
     
     chartRef.current = chart;
@@ -416,18 +409,25 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
     });
     priceLinesRef.current = [];
     
-    // Add new lines for mom flip alerts
+    // Show each magnitude alert on both directional sides of the zero line.
     const momAlerts = alerts.filter(a => a.symbol === symbol && a.type === 'mom');
     momAlerts.forEach(alert => {
-      const line = seriesRef.current.createPriceLine({
-        price: alert.price,
-        color: alert.status === 'active' ? '#eab308' : '#94a3b8',
-        lineWidth: 1,
-        lineStyle: 1,
-        axisLabelVisible: true,
-        title: `Alert: ${alert.price}%`,
+      const level = Math.abs(Number(alert.price));
+      const color = alert.status === 'active' ? '#eab308' : '#94a3b8';
+      [
+        { price: level, title: `BUY alert ${level}%` },
+        { price: -level, title: `SELL alert ${level}%` }
+      ].forEach(({ price, title }) => {
+        const line = seriesRef.current.createPriceLine({
+          price,
+          color,
+          lineWidth: 1,
+          lineStyle: 1,
+          axisLabelVisible: true,
+          title,
+        });
+        priceLinesRef.current.push(line);
       });
-      priceLinesRef.current.push(line);
     });
   }, [alerts, symbol]);
   
@@ -481,7 +481,8 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
         const item = findDataByTime(param.time);
         if (item) {
             try {
-                chartRef.current.setCrosshairPosition(item.value, param.time, seriesRef.current);
+                const signedValue = Math.sign(item.mom_raw || 0) * Math.abs(item.value || 0);
+                chartRef.current.setCrosshairPosition(signedValue, param.time, seriesRef.current);
             } catch(e) {}
         } else {
             chartRef.current.clearCrosshairPosition();
@@ -524,21 +525,23 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
     if (seriesRef.current && data && data.length > 0) {
       const isSunsetMom = chartTheme === 'sunset';
       seriesRef.current.setData(data.map(d => {
-        const val = d.value || 0;
-        let alpha = Math.min(1.0, Math.max(0, val / 100));
+        const score = Math.min(100, Math.max(0, Math.abs(d.value || 0)));
+        const direction = d.mom_raw > 0 ? 1 : (d.mom_raw < 0 ? -1 : 0);
+        const signedScore = direction * score;
+        const alpha = Math.min(1.0, Math.max(0, score / 100));
         
         let r, g, b;
-        if (d.mom_raw >= 0) {
-           r = 0; g = 230; b = 118;
-           if (isSunsetMom) { r = 255; g = 255; b = 255; }
+        if (direction >= 0) {
+           r = 34; g = 211; b = 238;
+           if (isSunsetMom) { r = 14; g = 165; b = 233; }
         } else {
-           r = 255; g = 23; b = 68;
-           if (isSunsetMom) { r = 31; g = 41; b = 55; }
+           r = 251; g = 146; b = 60;
+           if (isSunsetMom) { r = 249; g = 115; b = 22; }
         }
 
         return {
           time: d.time,
-          value: val,
+          value: signedScore,
           color: `rgba(${r}, ${g}, ${b}, ${alpha})`
         };
       }));
@@ -546,7 +549,6 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
   }, [data, chartTheme]);
 
   const handlePointerDown = (e) => {
-    if (e.target.id !== 'mom-flip-header') return;
     e.preventDefault();
     dragRef.current = { startX: e.clientX, startY: e.clientY, initialX: position.x, initialY: position.y };
     document.addEventListener('pointermove', handlePointerMove);
@@ -577,10 +579,17 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
       <div 
         id="mom-flip-header"
         onPointerDown={handlePointerDown}
-        style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.05)', cursor: 'grab', userSelect: 'none', fontSize: '13px', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#c084fc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+        style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.05)', cursor: 'grab', userSelect: 'none', fontSize: '12px', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#c084fc', display: 'flex', flexDirection: 'column', gap: '6px' }}
       >
-        <span>📉 Momentum Flip (%)</span>
-        <span style={{ fontSize: '10px', color: '#94a3b8' }}>(Kéo giãn ở góc phải dưới)</span>
+        <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+          <span>⚡ Bùng Nổ Động Lượng (%)</span>
+          <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 'normal' }}>Kéo giãn ở góc phải dưới</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px 14px', fontSize: '10px', fontWeight: '600' }}>
+          <span title="Chiều tăng của mom_raw; biểu thị áp lực giá đi lên, không xác định bên chủ động khớp lệnh" style={{ color: '#22d3ee' }}>▲ BUY PRESSURE · cột phía trên 0</span>
+          <span title="Chiều giảm của mom_raw; biểu thị áp lực giá đi xuống, không xác định bên chủ động khớp lệnh" style={{ color: '#fb923c' }}>▼ SELL PRESSURE · cột phía dưới 0</span>
+          <span style={{ color: '#94a3b8', fontWeight: 'normal' }}>Độ cao = phân vị động lượng</span>
+        </div>
       </div>
       <div ref={chartContainerRef} style={{ flex: 1, width: '100%', minHeight: 0 }} />
     </div>
