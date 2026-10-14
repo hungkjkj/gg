@@ -3253,6 +3253,8 @@ const CatalystTab = ({ configs }) => {
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const todayCardRef = useRef(null);
+  const didAutoScrollRef = useRef(false);
 
   const loadCatalyst = () => {
     setLoading(true);
@@ -3275,6 +3277,18 @@ const CatalystTab = ({ configs }) => {
     loadCatalyst();
   }, []);
 
+  useEffect(() => {
+    if (loading || didAutoScrollRef.current) return;
+
+    const frame = requestAnimationFrame(() => {
+      if (!todayCardRef.current) return;
+      todayCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      didAutoScrollRef.current = true;
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [loading]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
@@ -3296,6 +3310,8 @@ const CatalystTab = ({ configs }) => {
     acc[dayStr].push(curr);
     return acc;
   }, {});
+  const today = new Date(Date.now() + (Number(configs?.timeShiftHours) || 0) * 3600000)
+    .toLocaleDateString('vi-VN', { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit' });
 
   const getImpactColor = (impact) => {
     if (impact === 'High') return 'var(--down-color)';
@@ -3334,41 +3350,76 @@ const CatalystTab = ({ configs }) => {
           {refreshing ? 'Đang cập nhật...' : 'Cập nhật tin tức'}
         </button>
       </div>
-      {Object.keys(grouped).map(day => (
-        <div key={day} style={{ marginBottom: '30px', background: 'var(--bg-panel)', borderRadius: '12px', padding: '15px' }}>
-          <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px', marginBottom: '15px', color: '#60a5fa' }}>{day}</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Giờ</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Quốc gia</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Tác động</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Tin tức</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Trước đó</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Dự báo</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Thực tế</th>
-                <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Đánh giá</th>
-              </tr>
-            </thead>
-            <tbody>
-              {grouped[day].map((item, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '12px 5px' }}>{new Date(item.time * 1000).toLocaleTimeString('vi-VN', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })}</td>
-                  <td style={{ padding: '12px 5px', fontWeight: 'bold' }}>{item.country}</td>
-                  <td style={{ padding: '12px 5px', color: getImpactColor(item.impact), fontWeight: 'bold' }}>{item.impact}</td>
-                  <td style={{ padding: '12px 5px' }}>{item.title}</td>
-                  <td style={{ padding: '12px 5px', color: '#94a3b8' }}>{item.previous || '-'}</td>
-                  <td style={{ padding: '12px 5px', color: '#94a3b8' }}>{item.forecast || '-'}</td>
-                  <td style={{ padding: '12px 5px', fontWeight: 'bold' }}>{item.actual || '-'}</td>
-                  <td style={{ padding: '12px 5px', fontWeight: 'bold', color: getEvalColor(item.evaluation) }}>
-                    {item.evaluation === 'Positive' ? 'Tích cực' : (item.evaluation === 'Negative' ? 'Tiêu cực' : (item.evaluation === 'Neutral' ? 'Trung tính' : '-'))}
-                  </td>
+      {Object.keys(grouped).map(day => {
+        const isToday = day === today;
+        return (
+          <div
+            key={day}
+            ref={isToday ? todayCardRef : null}
+            style={{
+              marginBottom: '30px',
+              background: 'var(--bg-panel)',
+              borderRadius: '12px',
+              padding: '15px',
+              scrollMarginTop: '16px',
+              ...(isToday ? {
+                border: '1px solid #39ff14',
+                boxShadow: '0 0 10px rgba(57, 255, 20, 0.55), 0 0 26px rgba(57, 255, 20, 0.2), inset 0 0 12px rgba(57, 255, 20, 0.07)'
+              } : {})
+            }}
+          >
+            <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px', marginBottom: '15px', color: '#60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+              <span>{day}</span>
+              {isToday && (
+                <span style={{
+                  color: '#8cff80',
+                  background: 'rgba(57, 255, 20, 0.12)',
+                  border: '1px solid rgba(57, 255, 20, 0.8)',
+                  borderRadius: '999px',
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  lineHeight: 1,
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 0 10px rgba(57, 255, 20, 0.35)'
+                }}>
+                  Hôm nay
+                </span>
+              )}
+            </h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                  <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Giờ</th>
+                  <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Quốc gia</th>
+                  <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Tác động</th>
+                  <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Tin tức</th>
+                  <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Trước đó</th>
+                  <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Dự báo</th>
+                  <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Thực tế</th>
+                  <th style={{ padding: '10px 5px', color: 'var(--text-secondary)' }}>Đánh giá</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
+              </thead>
+              <tbody>
+                {grouped[day].map((item, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '12px 5px' }}>{new Date(item.time * 1000).toLocaleTimeString('vi-VN', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })}</td>
+                    <td style={{ padding: '12px 5px', fontWeight: 'bold' }}>{item.country}</td>
+                    <td style={{ padding: '12px 5px', color: getImpactColor(item.impact), fontWeight: 'bold' }}>{item.impact}</td>
+                    <td style={{ padding: '12px 5px' }}>{item.title}</td>
+                    <td style={{ padding: '12px 5px', color: '#94a3b8' }}>{item.previous || '-'}</td>
+                    <td style={{ padding: '12px 5px', color: '#94a3b8' }}>{item.forecast || '-'}</td>
+                    <td style={{ padding: '12px 5px', fontWeight: 'bold' }}>{item.actual || '-'}</td>
+                    <td style={{ padding: '12px 5px', fontWeight: 'bold', color: getEvalColor(item.evaluation) }}>
+                      {item.evaluation === 'Positive' ? 'Tích cực' : (item.evaluation === 'Negative' ? 'Tiêu cực' : (item.evaluation === 'Neutral' ? 'Trung tính' : '-'))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
     </div>
   );
 };
