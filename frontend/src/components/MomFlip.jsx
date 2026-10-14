@@ -2,6 +2,40 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createChart } from 'lightweight-charts';
 import { computeCompositeRanking } from '../utils/matrixUtils';
 
+const MATRIX_BAR_THRESHOLDS = [50, 75, 85];
+
+const MatrixBubbleBar = ({ value, color, label }) => {
+  const normalizedValue = Math.min(Math.max(Math.abs(value ?? 0), 0), 100);
+
+  return (
+    <div
+      role="img"
+      aria-label={`${label}: ${normalizedValue.toFixed(1)} trên 100`}
+      style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', marginTop: '5px', position: 'relative' }}
+    >
+      <div style={{ width: `${normalizedValue}%`, height: '100%', background: color, borderRadius: '3px' }} />
+      {MATRIX_BAR_THRESHOLDS.map(threshold => (
+        <span
+          key={threshold}
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: `${threshold}%`,
+            top: '-2px',
+            width: '2px',
+            height: '8px',
+            transform: 'translateX(-1px)',
+            borderRadius: '2px',
+            background: '#4ade80',
+            boxShadow: '0 0 4px rgba(74, 222, 128, 0.9)',
+            zIndex: 1
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
 export const AssistiveTouch = ({ 
   showSdBands, setShowSdBands, 
   showMomFlip, setShowMomFlip, 
@@ -69,6 +103,11 @@ export const AssistiveTouch = ({
     if (!isDragging) setIsOpen(!isOpen);
   };
 
+  const hasMatrixRankingData = showMatrixBubble && (bubbleMatrixData || bubbleMatrixDataLong);
+  const panelMaxWidth = position.x > window.innerWidth / 2
+    ? `${position.x + 50}px`
+    : `calc(100vw - ${position.x + 10}px)`;
+
   return (
     <div ref={containerRef} style={{ position: 'fixed', left: position.x, top: position.y, zIndex: 9999 }}>
       {isOpen && (
@@ -76,7 +115,7 @@ export const AssistiveTouch = ({
           position: 'absolute', 
           ...(position.y < window.innerHeight / 2 ? { top: '70px' } : { bottom: '70px' }),
           ...(position.x > window.innerWidth / 2 ? { right: '0px' } : { left: '0px' }),
-          background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(12px)', padding: '16px', borderRadius: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1)', width: (showMatrixBubble && (bubbleMatrixData || bubbleMatrixDataLong)) ? '460px' : '320px', border: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', flexDirection: 'column', gap: '12px', animation: 'fadeInBub 0.2s ease-out' 
+          background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(12px)', padding: '16px', borderRadius: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1)', width: hasMatrixRankingData ? 'min(780px, calc(100vw - 20px))' : 'min(320px, calc(100vw - 20px))', maxWidth: panelMaxWidth, maxHeight: 'calc(100vh - 20px)', boxSizing: 'border-box', overflowY: 'auto', border: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', flexDirection: 'column', gap: '12px', animation: 'fadeInBub 0.2s ease-out'
         }}>
           <label style={{ display: 'flex', alignItems: 'center', color: '#e2e8f0', cursor: 'pointer', fontSize: '15px', fontWeight: '500', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'white'} onMouseLeave={e => e.currentTarget.style.color = '#e2e8f0'}>
             <input type="checkbox" checked={showSdBands} onChange={e => { setShowSdBands(e.target.checked); localStorage.setItem('showSdBands', e.target.checked); }} style={{ marginRight: '12px', width: '18px', height: '18px', accentColor: '#a855f7' }} />
@@ -117,32 +156,41 @@ export const AssistiveTouch = ({
               if (!longComposite || longComposite.length === 0) return null;
 
               return (
-                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)', minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '5px', marginBottom: '8px' }}>
                     <div style={{ fontSize: '13px', color: '#fbbf24', fontWeight: 'bold' }}>⚡ Sức Mạnh Hợp Nhất (Dài / Ngắn)</div>
-                    <span style={{ fontSize: '10px', color: '#94a3b8' }}>w₁=1/e | w₂=1-1/e</span>
+                    <span title="w₁=1/e · Price Trend | w₂=(1−1/e) · Money Flow" style={{ fontSize: '10px', color: '#94a3b8', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>w₁=1/e · Trend | w₂=1−1/e · Flow</span>
                   </div>
-                  <table style={{ width: '100%', fontSize: '13px', color: '#e2e8f0', borderCollapse: 'collapse', marginBottom: '16px' }}>
-                    <thead>
-                      <tr style={{ color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                        <th style={{ textAlign: 'left', paddingBottom: '4px' }}>#</th>
-                        <th style={{ textAlign: 'left', paddingBottom: '4px' }}>Cur</th>
-                        <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Power</th>
-                        <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Vol %</th>
-                        <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Trạng thái</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <div style={{ width: '100%', minWidth: 0, overflowX: 'auto', overscrollBehaviorX: 'contain' }}>
+                    <table style={{ width: '100%', minWidth: '570px', tableLayout: 'fixed', fontSize: '12px', color: '#e2e8f0', borderCollapse: 'collapse', marginBottom: '12px' }}>
+                      <colgroup>
+                        <col style={{ width: '7%' }} />
+                        <col style={{ width: '9%' }} />
+                        <col style={{ width: '17%' }} />
+                        <col style={{ width: '18%' }} />
+                        <col style={{ width: '18%' }} />
+                        <col style={{ width: '11%' }} />
+                        <col style={{ width: '20%' }} />
+                      </colgroup>
+                      <thead>
+                        <tr style={{ color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                          <th style={{ textAlign: 'left', padding: '0 4px 5px' }}>#</th>
+                          <th style={{ textAlign: 'left', padding: '0 4px 5px' }}>Cur</th>
+                          <th title="Điểm Power" style={{ textAlign: 'left', padding: '0 4px 5px' }}>Power</th>
+                          <th title="Price Trend (C-VWMA)" style={{ textAlign: 'left', padding: '0 4px 5px' }}>Trend</th>
+                          <th title="Money Flow (Động lượng)" style={{ textAlign: 'left', padding: '0 4px 5px' }}>Flow</th>
+                          <th title="Thanh khoản" style={{ textAlign: 'left', padding: '0 4px 5px' }}>Vol %</th>
+                          <th style={{ textAlign: 'right', padding: '0 4px 5px' }}>Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody>
                       {longComposite.map((item, idx) => {
                         const shortItem = shortComposite.find(x => x.currency === item.currency);
 
                         const powerColor = item.powerScore > 0 ? '#4ade80' : (item.powerScore < 0 ? '#f87171' : '#e2e8f0');
-                        let shortPowerColor = '#94a3b8';
-                        if (shortItem?.powerScore > 0) shortPowerColor = '#4ade80';
-                        else if (shortItem?.powerScore < 0) shortPowerColor = '#f87171';
-
-                        const powerStr = (item.powerScore > 0 ? '+' : '') + item.powerScore.toFixed(1);
-                        const shortPowerStr = shortItem ? ` (${shortItem.powerScore > 0 ? '+' : ''}${shortItem.powerScore.toFixed(1)})` : '';
+                        const valueColor = value => value > 0 ? '#00e5ff' : (value < 0 ? '#ff4d5e' : '#e2e8f0');
+                        const formatValue = (value, suffix = '') => `${value > 0 ? '+' : ''}${value.toFixed(0)}${suffix}`;
+                        const formatPower = value => `${value > 0 ? '+' : ''}${value.toFixed(1)}`;
 
                         let volColor = '#e2e8f0';
                         if (item.vol_percentile >= 75) volColor = '#4ade80';
@@ -150,41 +198,68 @@ export const AssistiveTouch = ({
 
                         return (
                           <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                            <td style={{ padding: '6px 0' }}>{idx + 1}</td>
-                            <td style={{ padding: '6px 0', fontWeight: 'bold' }}>{item.currency}</td>
-                            <td style={{ padding: '6px 0', textAlign: 'right', color: powerColor, fontWeight: 'bold' }}>
-                              {powerStr}
-                              <span style={{ fontSize: '11px', color: shortPowerColor, marginLeft: '3px', fontWeight: 'normal' }}>
-                                {shortPowerStr}
-                              </span>
+                            <td style={{ padding: '6px 4px', overflow: 'hidden', whiteSpace: 'nowrap' }}>{idx + 1}</td>
+                            <td style={{ padding: '6px 4px', overflow: 'hidden', whiteSpace: 'nowrap', fontWeight: 'bold' }}>{item.currency}</td>
+                            <td style={{ padding: '6px 4px', overflow: 'hidden' }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                <span style={{ color: powerColor, fontWeight: 'bold' }}>{formatPower(item.powerScore)}</span>
+                                {shortItem && <span style={{ fontSize: '10px', color: valueColor(shortItem.powerScore) }}>({formatPower(shortItem.powerScore)})</span>}
+                              </div>
+                              <MatrixBubbleBar value={item.powerScore} color={powerColor} label="Điểm Power" />
                             </td>
-                            <td style={{ padding: '6px 0', textAlign: 'right', color: volColor }}>
-                              {item.vol_percentile.toFixed(0)}%
+                            <td style={{ padding: '6px 4px', overflow: 'hidden' }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                <span style={{ color: valueColor(item.momTrend), fontWeight: 'bold' }}>{formatValue(item.momTrend, '%')}</span>
+                                {shortItem && <span style={{ fontSize: '10px', color: valueColor(shortItem.momTrend) }}>({formatValue(shortItem.momTrend, '%')})</span>}
+                              </div>
+                              <MatrixBubbleBar value={item.momTrend} color={valueColor(item.momTrend)} label="Price Trend" />
                             </td>
-                            <td style={{ padding: '6px 0', textAlign: 'right' }}>
+                            <td style={{ padding: '6px 4px', overflow: 'hidden' }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                <span style={{ color: valueColor(item.momFlow), fontWeight: 'bold' }}>{formatValue(item.momFlow, '%')}</span>
+                                {shortItem && <span style={{ fontSize: '10px', color: valueColor(shortItem.momFlow) }}>({formatValue(shortItem.momFlow, '%')})</span>}
+                              </div>
+                              <MatrixBubbleBar value={item.momFlow} color={valueColor(item.momFlow)} label="Money Flow" />
+                            </td>
+                            <td style={{ padding: '6px 4px', overflow: 'hidden' }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', overflow: 'hidden', whiteSpace: 'nowrap', color: volColor }}>
+                                {item.vol_percentile.toFixed(0)}%
+                                {shortItem && <span style={{ fontSize: '10px', color: '#94a3b8' }}>({shortItem.vol_percentile.toFixed(0)}%)</span>}
+                              </div>
+                              <MatrixBubbleBar value={item.vol_percentile} color={volColor} label="Thanh khoản" />
+                            </td>
+                            <td style={{ padding: '6px 4px', textAlign: 'right', overflow: 'hidden' }}>
                               <span style={{
+                                display: 'inline-block',
+                                maxWidth: '100%',
+                                boxSizing: 'border-box',
                                 fontSize: '10px',
                                 padding: '2px 5px',
                                 borderRadius: '4px',
                                 color: item.statusColor,
                                 backgroundColor: `${item.statusColor}22`,
                                 border: `1px solid ${item.statusColor}44`,
-                                fontWeight: '600'
-                              }}>
+                                fontWeight: '600',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                verticalAlign: 'middle'
+                              }} title={item.status}>
                                 {item.status}
                               </span>
                             </td>
                           </tr>
                         );
                       })}
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               );
             };
 
             return (
-              <div style={{ maxHeight: '420px', overflowY: 'auto', paddingRight: '5px' }}>
+              <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'hidden', minWidth: 0, paddingRight: '5px' }}>
                 {renderCompositeTable()}
               </div>
             );
