@@ -374,11 +374,11 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
 
 
     
-    series.createPriceLine({ price: 0, color: 'rgba(226,232,240,0.65)', lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: '0%' });
+    series.createPriceLine({ price: 0, color: 'rgba(226,232,240,0.65)', lineWidth: 1, lineStyle: 0, axisLabelVisible: true });
     [75, 85].forEach(level => {
       const color = level === 85 ? 'rgba(248,113,113,0.7)' : 'rgba(251,191,36,0.65)';
-      series.createPriceLine({ price: level, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: `${level}%` });
-      series.createPriceLine({ price: -level, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: `${level}%` });
+      series.createPriceLine({ price: level, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true });
+      series.createPriceLine({ price: -level, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true });
     });
     
     chartRef.current = chart;
@@ -414,17 +414,13 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
     momAlerts.forEach(alert => {
       const level = Math.abs(Number(alert.price));
       const color = alert.status === 'active' ? '#eab308' : '#94a3b8';
-      [
-        { price: level, title: `${level}%` },
-        { price: -level, title: `${level}%` }
-      ].forEach(({ price, title }) => {
+      [level, -level].forEach(price => {
         const line = seriesRef.current.createPriceLine({
           price,
           color,
           lineWidth: 1,
           lineStyle: 1,
           axisLabelVisible: true,
-          title,
         });
         priceLinesRef.current.push(line);
       });
@@ -584,11 +580,6 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
         <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
           <span>⚡ Bùng Nổ Động Lượng (%)</span>
           <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 'normal' }}>Kéo giãn ở góc phải dưới</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px 14px', fontSize: '10px', fontWeight: '600' }}>
-          <span title="Chiều tăng của mom_raw; biểu thị áp lực giá đi lên, không xác định bên chủ động khớp lệnh" style={{ color: '#22d3ee' }}>▲ BUY PRESSURE · cột phía trên 0</span>
-          <span title="Chiều giảm của mom_raw; biểu thị áp lực giá đi xuống, không xác định bên chủ động khớp lệnh" style={{ color: '#fb923c' }}>▼ SELL PRESSURE · cột phía dưới 0</span>
-          <span style={{ color: '#94a3b8', fontWeight: 'normal' }}>Độ cao = phân vị động lượng</span>
         </div>
       </div>
       <div ref={chartContainerRef} style={{ flex: 1, width: '100%', minHeight: 0 }} />
