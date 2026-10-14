@@ -104,73 +104,6 @@ export const AssistiveTouch = ({
           </label>
           
           {showMatrixBubble && (() => {
-            const renderTable = (title, shortData, longData) => {
-              const primaryData = longData || shortData;
-              if (!primaryData) return null;
-              return (
-                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ fontSize: '13px', color: '#60a5fa', marginBottom: '8px', fontWeight: 'bold' }}>{title}</div>
-                  <table style={{ width: '100%', fontSize: '13px', color: '#e2e8f0', borderCollapse: 'collapse', marginBottom: '16px' }}>
-                    <thead>
-                      <tr style={{ color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                        <th style={{ textAlign: 'left', paddingBottom: '4px' }}>#</th>
-                        <th style={{ textAlign: 'left', paddingBottom: '4px' }}>Cur</th>
-                        <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Mom %</th>
-                        <th style={{ textAlign: 'right', paddingBottom: '4px' }}>Vol %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {primaryData.map((item, idx) => {
-                        const shortItem = shortData ? shortData.find(x => x.currency === item.currency) : null;
-                        
-                        let momColor = '#e2e8f0';
-                        if (item.mom_percentile >= 50) momColor = '#4ade80';
-                        else if (item.mom_percentile <= -50) momColor = '#f87171';
-                        
-                        let volColor = '#e2e8f0';
-                        if (item.vol_percentile >= 75) volColor = '#4ade80';
-                        else if (item.vol_percentile <= 20) volColor = '#f87171';
-                        
-                        const momStr = (item.mom_percentile > 0 ? '+' : '') + (item.mom_percentile != null ? item.mom_percentile.toFixed(1) : 0) + '%';
-                        const volStr = (item.vol_percentile != null ? item.vol_percentile.toFixed(1) : 0) + '%';
-                        
-                        let shortMomStr = '';
-                        let shortVolStr = '';
-                        let shortMomColor = '#94a3b8';
-                        let shortVolColor = '#94a3b8';
-                        
-                        if (shortItem) {
-                          shortMomStr = ' (' + (shortItem.mom_percentile > 0 ? '+' : '') + (shortItem.mom_percentile != null ? shortItem.mom_percentile.toFixed(1) : 0) + '%)';
-                          shortVolStr = ' (' + (shortItem.vol_percentile != null ? shortItem.vol_percentile.toFixed(1) : 0) + '%)';
-                          
-                          if (shortItem.mom_percentile >= 50) shortMomColor = '#4ade80';
-                          else if (shortItem.mom_percentile <= -50) shortMomColor = '#f87171';
-                          
-                          if (shortItem.vol_percentile >= 75) shortVolColor = '#4ade80';
-                          else if (shortItem.vol_percentile <= 20) shortVolColor = '#f87171';
-                        }
-  
-                        return (
-                          <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                            <td style={{ padding: '6px 0' }}>{idx + 1}</td>
-                            <td style={{ padding: '6px 0', fontWeight: 'bold' }}>{item.currency}</td>
-                            <td style={{ padding: '6px 0', textAlign: 'right', color: momColor }}>
-                              {momStr}
-                              <span style={{ fontSize: '11px', color: shortMomColor, marginLeft: '4px' }}>{shortMomStr}</span>
-                            </td>
-                            <td style={{ padding: '6px 0', textAlign: 'right', color: volColor }}>
-                              {volStr}
-                              <span style={{ fontSize: '11px', color: shortVolColor, marginLeft: '4px' }}>{shortVolStr}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            };
-
             const renderCompositeTable = () => {
               const primaryFlow = bubbleMatrixDataLong || bubbleMatrixData;
               const primaryTrend = bubbleMatrixDataTrendLong || bubbleMatrixDataTrend;
@@ -253,8 +186,6 @@ export const AssistiveTouch = ({
             return (
               <div style={{ maxHeight: '420px', overflowY: 'auto', paddingRight: '5px' }}>
                 {renderCompositeTable()}
-                {renderTable('🌊 Money Flow (Dài / Ngắn)', bubbleMatrixData, bubbleMatrixDataLong)}
-                {renderTable('📈 Price Trend (Dài / Ngắn)', bubbleMatrixDataTrend, bubbleMatrixDataTrendLong)}
               </div>
             );
           })()}
