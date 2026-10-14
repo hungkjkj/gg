@@ -2684,70 +2684,6 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       </div>
 
       {(matrixData && matrixDataLong && matrixDataTrend && matrixDataTrendLong) && (() => {
-        const renderRankingTable = (title, shortData, longData) => (
-          <div style={{ flex: 1, background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', minWidth: '400px' }}>
-            <h2 style={{ marginBottom: '20px', color: '#60a5fa' }}>{title} ({matrixHoursLong}H / {matrixHours}H)</h2>
-            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '16px 0', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                  <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hạng</th>
-                  <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Cur</th>
-                  <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Score</th>
-                  <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>% Mom</th>
-                  <th style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Vol %</th>
-                </tr>
-              </thead>
-              <tbody>
-                {longData.ranking.map((item, index) => {
-                  const shortItem = shortData.ranking ? shortData.ranking.find(x => x.currency === item.currency) : null;
-                  let volColor = 'var(--text-primary)';
-                  if (item.vol_percentile >= 75) volColor = '#4ade80';
-                  else if (item.vol_percentile <= 20) volColor = '#f87171';
-                  
-                  let momColor = 'var(--text-primary)';
-                  if (item.mom_percentile >= 50) momColor = '#4ade80';
-                  else if (item.mom_percentile <= -50) momColor = '#f87171';
-
-                  const renderVal = (val, shortVal, suffix = '', precision = 2, valType = '') => {
-                     const mainStr = (val > 0 && suffix !== '%' ? '+' : '') + (val != null ? val.toFixed(precision) : '0') + suffix;
-                     const shortStr = shortVal ? ` (${shortVal > 0 && suffix !== '%' ? '+' : ''}${shortVal != null ? shortVal.toFixed(precision) : '0'}${suffix})` : '';
-                     
-                     let shortColor = '#9ca3af';
-                     if (shortVal != null) {
-                       if (valType === 'mom') {
-                         if (shortVal >= 50) shortColor = '#4ade80';
-                         else if (shortVal <= -50) shortColor = '#f87171';
-                       } else if (valType === 'vol') {
-                         if (shortVal >= 75) shortColor = '#4ade80';
-                         else if (shortVal <= 20) shortColor = '#f87171';
-                       } else if (valType === 'score') {
-                         if (shortVal > 0) shortColor = 'var(--up-color)';
-                         else if (shortVal < 0) shortColor = 'var(--down-color)';
-                       }
-                     }
-                     return <>{mainStr} <span style={{fontSize:'12px', color:shortColor, marginLeft: '4px'}}>{shortStr}</span></>;
-                  };
-                  
-                  return (
-                  <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '12px 0', fontWeight: 'bold' }}>#{index + 1}</td>
-                    <td style={{ padding: '12px 0' }}>{item.currency}</td>
-                    <td style={{ padding: '12px 0', color: item.score > 0 ? 'var(--up-color)' : (item.score < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
-                      {renderVal(item.score, shortItem?.score, '', 2, 'score')}
-                    </td>
-                    <td style={{ padding: '12px 0', color: momColor, fontWeight: Math.abs(item.mom_percentile || 0) >= 50 ? 'bold' : 'normal' }}>
-                      {renderVal(item.mom_percentile, shortItem?.mom_percentile, '%', 2, 'mom')}
-                    </td>
-                    <td style={{ padding: '12px 0', color: volColor, fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal' }}>
-                      {renderVal(item.vol_percentile, shortItem?.vol_percentile, '%', 0, 'vol')}
-                    </td>
-                  </tr>
-                )})}
-              </tbody>
-            </table>
-          </div>
-        );
-
         const renderCompositeTable = () => {
           const longComposite = computeCompositeRanking(matrixDataLong?.ranking, matrixDataTrendLong?.ranking);
           const shortComposite = computeCompositeRanking(matrixData?.ranking, matrixDataTrend?.ranking);
@@ -3000,14 +2936,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         };
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', marginBottom: '40px' }}>
-            {/* Hàng 1: Bảng xếp hạng đồng tiền Flow vs Trend */}
-            <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap' }}>
-              {renderRankingTable("🌊 Money Flow (Momentum)", matrixData, matrixDataLong)}
-              {renderRankingTable("📈 Price Trend (C-VWMA)", matrixDataTrend, matrixDataTrendLong)}
-            </div>
-
-            {/* Hàng 2: Bảng xếp hạng Sức Mạnh Hợp Nhất (Composite Power) nằm ở hàng mới rộng rãi */}
+          <div style={{ marginBottom: '40px' }}>
             {renderCompositeTable()}
           </div>
         );
