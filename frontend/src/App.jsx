@@ -459,7 +459,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
               position: 'aboveBar',
               color: color,
               shape: 'circle',
-              size: 1.5,
+              size: 0.4,
               text: '' // Keep text empty
             });
           }
