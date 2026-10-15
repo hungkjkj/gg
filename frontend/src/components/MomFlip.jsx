@@ -237,9 +237,13 @@ export const AssistiveTouch = ({
                         const formatValue = (value, suffix = '') => `${value > 0 ? '+' : ''}${value.toFixed(0)}${suffix}`;
                         const formatPower = value => `${value > 0 ? '+' : ''}${value.toFixed(1)}`;
 
-                        let volColor = '#e2e8f0';
+                        let volColor = '#38bdf8';
                         if (item.vol_percentile >= 75) volColor = '#4ade80';
                         else if (item.vol_percentile <= 20) volColor = '#f87171';
+
+                        let shortVolColor = '#7dd3fc';
+                        if (shortItem?.vol_percentile >= 75) shortVolColor = '#4ade80';
+                        else if (shortItem?.vol_percentile <= 20) shortVolColor = '#f87171';
 
                         return (
                           <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
@@ -267,9 +271,9 @@ export const AssistiveTouch = ({
                               <MatrixBubbleBar value={item.momFlow} color={valueColor(item.momFlow)} label="Money Flow" />
                             </td>
                             <td style={{ padding: '6px 4px', overflow: 'hidden' }}>
-                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', overflow: 'hidden', whiteSpace: 'nowrap', color: volColor }}>
-                                {item.vol_percentile.toFixed(0)}%
-                                {shortItem && <span style={{ fontSize: '10px', color: '#94a3b8' }}>({shortItem.vol_percentile.toFixed(0)}%)</span>}
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                <span style={{ color: volColor, fontWeight: '600' }}>{item.vol_percentile.toFixed(0)}%</span>
+                                {shortItem && <span style={{ fontSize: '10px', color: shortVolColor }}>({shortItem.vol_percentile.toFixed(0)}%)</span>}
                               </div>
                               <MatrixBubbleBar value={item.vol_percentile} color={volColor} label="Thanh khoản" />
                             </td>
