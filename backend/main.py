@@ -343,16 +343,14 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     
     lookback_candles = max(1, int((matrixLookbackHours * 3600) / tf_seconds))
     
-    # --- New VF-Momentum Logic directly on current timeframe ---
-    # 1. TÃ­nh V = percentile mfTargetPct cá»§a tá»•ng volume N náº¿n (mom_window) trong cá»­a sá»• chung
+    # Momentum uses the established volume-weighted candle movement over the V-block.
     target_vol_candles = max(1, int(mfTimeoutCandles))
     rolling_vol_N = df['value'].rolling(window=target_vol_candles, min_periods=1).sum()
     V_series = np.maximum(rolling_vol_N.rolling(window=lookback_candles, min_periods=1).quantile(mfTargetPct / 100.0).fillna(1.0).values, 1.0)
     
     cum_vol = df['value'].cumsum().values
-    cum_vwap_vol = df['vwap_vol'].cumsum().values
     
-    # Calculate Matrix-style Money Flow and Price Trend over the existing V-block.
+    # Per-candle percentage price change weighted by tick volume.
     hlc3_pre = df['hlc3'].shift(1).fillna(df['hlc3'])
     df['hlc3_diff_pct'] = np.where(hlc3_pre > 0, (df['hlc3'] - hlc3_pre) / hlc3_pre * 100, 0.0)
     df['candle_mom'] = df['hlc3_diff_pct'] * df['value']
@@ -371,38 +369,9 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     net_mom_cur = cum_candle_mom - np.where(has_j_cur, cum_candle_mom[j_cur_m1], 0)
     
     N_candles = np.maximum(i_arr - j_current + 1, 1.0)
-    flow_raw = np.where(vol_cur > 0, net_mom_cur / V_series, 0.0)
-
-    # Compare VWAPs of the recent and earlier halves of the same equal-volume block.
-    V_half = V_series / 2.0
-    target_mid = np.maximum(cum_vol - V_half, 0)
-    j_mid = np.searchsorted(cum_vol, target_mid, side='right')
-    j_mid_m1 = np.where(j_mid > 0, j_mid - 1, 0)
-    has_j_mid = j_mid > 0
-
-    vol_after = cum_vol - np.where(has_j_mid, cum_vol[j_mid_m1], 0)
-    vwap_vol_after = cum_vwap_vol - np.where(has_j_mid, cum_vwap_vol[j_mid_m1], 0)
-    vwap_after = np.where(vol_after > 0, vwap_vol_after / np.maximum(vol_after, 1e-9), df['hlc3'].values)
-
-    vol_before = np.where(has_j_mid, cum_vol[j_mid_m1], 0) - np.where(has_j_cur, cum_vol[j_cur_m1], 0)
-    vwap_vol_before = np.where(has_j_mid, cum_vwap_vol[j_mid_m1], 0) - np.where(has_j_cur, cum_vwap_vol[j_cur_m1], 0)
-    vwap_before = np.where(vol_before > 0, vwap_vol_before / np.maximum(vol_before, 1e-9), df['hlc3'].values)
-    distance_pct = np.where(vwap_before > 0, (vwap_after - vwap_before) / vwap_before * 100.0, 0.0)
-    N_after = np.maximum(i_arr - j_mid + 1, 1.0)
-    trend_raw = distance_pct / N_after
-
-    df['vblock_avg_vol'] = vol_cur / N_candles
-
-    # Rank both components over the existing comparison window so their scales match.
-    flow_pct = pd.Series(np.abs(flow_raw)).rolling(window=lookback_candles, min_periods=1).rank(pct=True, method='max').to_numpy() * 100.0 * np.sign(flow_raw)
-    trend_pct = pd.Series(np.abs(trend_raw)).rolling(window=lookback_candles, min_periods=1).rank(pct=True, method='max').to_numpy() * 100.0 * np.sign(trend_raw)
-    vol_pct = pd.Series(df['vblock_avg_vol']).rolling(window=lookback_candles, min_periods=1).rank(pct=True, method='max').to_numpy() * 100.0
-
-    trend_weight = 1.0 / np.e
-    flow_weight = 1.0 - trend_weight
-    vol_factor = 0.5 + 0.5 * (vol_pct / 100.0)
-    df['mom_raw_raw'] = (trend_weight * trend_pct + flow_weight * flow_pct) * vol_factor
+    df['mom_raw_raw'] = np.where(vol_cur > 0, net_mom_cur / V_series, 0.0)
     df['abs_mom_raw'] = df['mom_raw_raw'].abs()
+    df['vblock_avg_vol'] = vol_cur / N_candles
     
     # TÃ­nh median Ä‘á»™ng lÆ°á»£ng trong chu ká»³ N giá»
     rolling_median_mom = df['abs_mom_raw'].rolling(window=lookback_candles, min_periods=1).median().replace(0, np.nan).fillna(1e-9)
