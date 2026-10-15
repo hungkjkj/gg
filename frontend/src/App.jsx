@@ -38,6 +38,59 @@ const customTickMarkFormatter = (time, tickMarkType) => {
     return `${dayStr} ${hh}:${mm}`;
 };
 
+const calculateMomentumWaveStats = (bars, sampleSize = 20, threshold = 50) => {
+  const completedWaves = { 1: [], '-1': [] };
+  let activeWave = null;
+  let previousClose = null;
+
+  const getPercentChange = wave => wave && wave.startPrice > 0
+    ? ((wave.lastPrice / wave.startPrice) - 1) * 100
+    : null;
+
+  for (const bar of bars) {
+    const close = bar.close == null ? NaN : Number(bar.close);
+    if (!Number.isFinite(close) || close <= 0) continue;
+
+    const momentum = bar.mom_raw == null ? NaN : Number(bar.mom_raw);
+    const signal = Number.isFinite(momentum)
+      ? momentum >= threshold ? 1 : momentum <= -threshold ? -1 : 0
+      : 0;
+
+    if (!activeWave) {
+      if (signal !== 0) {
+        activeWave = { direction: signal, startPrice: previousClose ?? close, lastPrice: close };
+      }
+    } else if (signal !== 0 && signal !== activeWave.direction) {
+      const completedReturn = getPercentChange(activeWave);
+      if (completedReturn !== null) completedWaves[activeWave.direction].push(completedReturn);
+      activeWave = { direction: signal, startPrice: previousClose ?? close, lastPrice: close };
+    } else {
+      activeWave.lastPrice = close;
+    }
+
+    previousClose = close;
+  }
+
+  const summarize = direction => {
+    const samples = completedWaves[direction].slice(-sampleSize);
+    return {
+      average: samples.length ? samples.reduce((sum, value) => sum + value, 0) / samples.length : null,
+      count: samples.length,
+    };
+  };
+
+  return {
+    current: activeWave ? {
+      direction: activeWave.direction,
+      changePct: getPercentChange(activeWave),
+    } : null,
+    up: summarize(1),
+    down: summarize(-1),
+    sampleSize,
+    threshold,
+  };
+};
+
 const generateFutureTimeline = (cTime, tfSec, count, isCrypto = false, timeShiftHours = 0) => {
     const futureTimes = [];
     let t = cTime + tfSec;
@@ -74,6 +127,7 @@ const generateFutureTimeline = (cTime, tfSec, count, isCrypto = false, timeShift
 const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
   const [momFlipData, setMomFlipData] = useState([]);
   const [currentSdPosition, setCurrentSdPosition] = useState(null);
+  const [momentumWaveStats, setMomentumWaveStats] = useState(null);
   const chartContainerRef = useRef(null);
   const momentumChartContainerRef = useRef(null);
   const volumeChartContainerRef = useRef();
@@ -115,6 +169,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
 
   useEffect(() => {
     setCurrentSdPosition(null);
+    setMomentumWaveStats(null);
   }, [symbol, timeframe]);
   
   const [contextMenu, setContextMenu] = useState(null);
@@ -1371,6 +1426,7 @@ useEffect(() => {
         const sdSourceData = viewMode === 'backtest' && targetEndTime > 0
           ? rawCandlesRef.current.filter(item => item.time <= targetEndTime)
           : rawCandlesRef.current;
+        setMomentumWaveStats(calculateMomentumWaveStats(sdSourceData));
         const configuredBandMultiplier = Number(configsRef.current?.vwapMult ?? 2);
         let latestSdPosition = null;
         for (let i = sdSourceData.length - 1; i >= 0; i--) {
@@ -2339,6 +2395,37 @@ useEffect(() => {
         {/* Momentum Chart */}
         <div style={{ flex: showMomChart ? 1 : 0, display: showMomChart ? 'block' : 'none', position: 'relative', width: '100%', borderTop: '2px solid var(--border-color)' }}>
           <div ref={momentumChartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
+          {momentumWaveStats && (
+            <div
+              title={`Sóng đổi hướng khi Momentum vượt ±${momentumWaveStats.threshold}. % là thay đổi giá từ trước nến bắt đầu đến nến cuối sóng; trung bình dùng tối đa ${momentumWaveStats.sampleSize} sóng đã hoàn tất mỗi chiều.`}
+              style={{
+                position: 'absolute', top: '6px', left: '10px', zIndex: 8, pointerEvents: 'none',
+                display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 10px',
+                maxWidth: 'calc(100% - 80px)', padding: '4px 7px', borderRadius: '5px',
+                background: 'rgba(15, 23, 42, 0.88)', border: '1px solid rgba(148, 163, 184, 0.2)',
+                color: 'var(--text-secondary)', fontSize: '10px', fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              <span>
+                Sóng hiện tại:{' '}
+                {momentumWaveStats.current ? (
+                  <strong style={{ color: momentumWaveStats.current.changePct >= 0 ? '#34d399' : '#fb7185' }}>
+                    {momentumWaveStats.current.direction > 0 ? '↑' : '↓'} {momentumWaveStats.current.changePct > 0 ? '+' : ''}{momentumWaveStats.current.changePct.toFixed(2)}%
+                  </strong>
+                ) : <strong style={{ color: '#94a3b8' }}>chưa xác lập</strong>}
+              </span>
+              <span>
+                TB sóng ↑: <strong style={{ color: momentumWaveStats.up.average == null ? '#94a3b8' : momentumWaveStats.up.average >= 0 ? '#34d399' : '#fb7185' }}>
+                  {momentumWaveStats.up.average == null ? '—' : `${momentumWaveStats.up.average > 0 ? '+' : ''}${momentumWaveStats.up.average.toFixed(2)}%`}
+                </strong> ({momentumWaveStats.up.count})
+              </span>
+              <span>
+                TB sóng ↓: <strong style={{ color: momentumWaveStats.down.average == null ? '#94a3b8' : momentumWaveStats.down.average >= 0 ? '#34d399' : '#fb7185' }}>
+                  {momentumWaveStats.down.average == null ? '—' : `${momentumWaveStats.down.average > 0 ? '+' : ''}${momentumWaveStats.down.average.toFixed(2)}%`}
+                </strong> ({momentumWaveStats.down.count})
+              </span>
+            </div>
+          )}
         </div>
         
         {/* Normalized Volume Chart */}
