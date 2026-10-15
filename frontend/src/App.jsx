@@ -210,6 +210,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const [backtestDate, setBacktestDate] = useState("");
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [backtestNewsStatus, setBacktestNewsStatus] = useState('Chưa tải');
   const simulatedTimeRef = useRef(0);
   const isPlayingRef = useRef(false);
   const lastVwapColorRef = useRef(null);
@@ -349,12 +350,12 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   }, [configs.volMode]);
 
 // Fetch News Data
-  const fetchNews = async () => {
+  const fetchNews = async (isCurrentRequest = () => true) => {
     try {
       const response = await axios.get(`${API_BASE}/api/v1/news`, {
         params: { symbol }
       });
-      if (response.data.status === 'success') {
+      if (isCurrentRequest() && response.data.status === 'success') {
         let finalData = response.data.data;
         if (configs.timeShiftHours) {
            finalData = finalData.map(item => ({
@@ -370,8 +371,15 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   };
 
   useEffect(() => {
-    fetchNews();
-  }, [symbol, configs.timeShiftHours]);
+    let isCurrentRequest = true;
+    if (viewMode === 'chart') {
+      fetchNews(() => isCurrentRequest);
+    } else {
+      setNewsData([]);
+      newsDataRef.current = [];
+    }
+    return () => { isCurrentRequest = false; };
+  }, [symbol, configs.timeShiftHours, viewMode]);
 
   // Apply News Markers and Future Timeline (for v_lines and news)
   const applyTimelineAndMarkers = () => {
@@ -451,7 +459,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
               position: 'aboveBar',
               color: color,
               shape: 'circle',
-              size: 0.4,
+              size: 1.5,
               text: '' // Keep text empty
             });
           }
@@ -1965,6 +1973,7 @@ useEffect(() => {
       // Khi đổi symbol hoặc timeframe trong lúc backtest
       fetchData(false, simulatedTimeRef.current);
       // Tải lại tin tức cho cặp tiền mới
+      setBacktestNewsStatus('Đang tải tin...');
       axios.get(`${API_BASE}/api/v1/news/backtest`, {
         params: { symbol, timestamp: simulatedTimeRef.current }
       }).then(response => {
@@ -1977,8 +1986,14 @@ useEffect(() => {
             }));
           }
           setNewsData(finalData);
+          setBacktestNewsStatus(finalData.length ? `${finalData.length} tin` : '0 tin — kiểm tra Forex Factory/VPN');
+        } else {
+          setBacktestNewsStatus('Không tải được tin');
         }
-      }).catch(e => console.error(e));
+      }).catch(e => {
+        console.error(e);
+        setBacktestNewsStatus('Lỗi kết nối nguồn tin');
+      });
     }
   }, [symbol, timeframe, configs, viewMode, chartTheme]);
 
@@ -2079,9 +2094,13 @@ useEffect(() => {
               });
               return merged;
             });
+            setBacktestNewsStatus(newEvents.length ? 'Đã cập nhật lịch tin' : '0 tin — kiểm tra Forex Factory/VPN');
+          } else {
+            setBacktestNewsStatus('Không tải được tin');
           }
         } catch (e) {
           console.error("Failed to fetch next week news", e);
+          setBacktestNewsStatus('Lỗi kết nối nguồn tin');
         }
       }
       
@@ -2115,6 +2134,8 @@ useEffect(() => {
     setIsPlaying(false);
     isPlayingRef.current = false;
     newsDataRef.current = []; // Clear stale news data so futureTimes aligns properly before new news arrives
+    setNewsData([]);
+    setBacktestNewsStatus('Đang tải tin...');
     fetchData(false, targetTimestamp);
     
     // Tải tin tức lịch sử cho backtest
@@ -2131,9 +2152,13 @@ useEffect(() => {
           }));
         }
         setNewsData(finalData);
+        setBacktestNewsStatus(finalData.length ? `${finalData.length} tin` : '0 tin — kiểm tra Forex Factory/VPN');
+      } else {
+        setBacktestNewsStatus('Không tải được tin');
       }
     } catch (e) {
       console.error("Failed to fetch backtest news", e);
+      setBacktestNewsStatus('Lỗi kết nối nguồn tin');
     }
   };
   
@@ -2182,8 +2207,13 @@ useEffect(() => {
               </select>
             </div>
             
-            <div style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Thời gian giả lập: {simulatedTimeRef.current ? new Date(simulatedTimeRef.current * 1000).toLocaleString() : 'Chưa tải'}
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: '14px', fontSize: '0.85rem' }}>
+              <span style={{ color: backtestNewsStatus.startsWith('0 tin') || backtestNewsStatus.startsWith('Lỗi') ? '#fbbf24' : 'var(--text-secondary)' }}>
+                Tin lịch sử: {backtestNewsStatus}
+              </span>
+              <span style={{ color: 'var(--text-secondary)' }}>
+                Thời gian giả lập: {simulatedTimeRef.current ? new Date(simulatedTimeRef.current * 1000).toLocaleString() : 'Chưa tải'}
+              </span>
             </div>
           </div>
         )}
