@@ -2858,11 +2858,11 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                     const powerColor = item.powerScore > 0 ? 'var(--up-color)' : (item.powerScore < 0 ? 'var(--down-color)' : 'var(--text-primary)');
                     const shortPowerColor = shortItem?.powerScore > 0 ? 'var(--up-color)' : (shortItem?.powerScore < 0 ? 'var(--down-color)' : '#9ca3af');
 
-                    let volColor = 'var(--text-primary)';
+                    let volColor = '#38bdf8';
                     if (item.vol_percentile >= 75) volColor = '#4ade80';
                     else if (item.vol_percentile <= 20) volColor = '#f87171';
 
-                    let shortVolColor = '#9ca3af';
+                    let shortVolColor = '#7dd3fc';
                     if (shortItem?.vol_percentile >= 75) shortVolColor = '#4ade80';
                     else if (shortItem?.vol_percentile <= 20) shortVolColor = '#f87171';
 
