@@ -1357,27 +1357,6 @@ useEffect(() => {
             }
         }
         rawData = uniqueRaw;
-        // In backtest, anchor the SD readout to the simulated time so the chart
-        // never displays a value calculated from a candle after the replay point.
-        const sdSourceData = viewMode === 'backtest' && targetEndTime > 0
-          ? rawData.filter(item => item.time <= targetEndTime)
-          : rawData;
-        const latestSdBar = sdSourceData[sdSourceData.length - 1];
-        const latestClose = Number(latestSdBar?.close);
-        const latestVwap = Number(latestSdBar?.vwap);
-        const reportedStdev = Number(latestSdBar?.stdev);
-        const bandWidth = Number(latestSdBar?.upper_band) - Number(latestSdBar?.lower_band);
-        const configuredBandMultiplier = Number(configsRef.current?.vwapMult ?? 2);
-        const latestStdev = Number.isFinite(reportedStdev) && reportedStdev > 0
-          ? reportedStdev
-          : Number.isFinite(bandWidth) && bandWidth > 0 && configuredBandMultiplier > 0
-            ? bandWidth / (2 * configuredBandMultiplier)
-            : NaN;
-        setCurrentSdPosition(
-          Number.isFinite(latestClose) && Number.isFinite(latestVwap) && Number.isFinite(latestStdev) && latestStdev > 0
-            ? (latestClose - latestVwap) / latestStdev
-            : null
-        );
         if (!isPolling) {
           rawCandlesRef.current = rawData;
         } else {
@@ -1385,6 +1364,41 @@ useEffect(() => {
           const rawMap = new Map(existingRaw.map(d => [d.time, d]));
           rawData.forEach(d => rawMap.set(d.time, d));
           rawCandlesRef.current = Array.from(rawMap.values()).sort((a,b) => a.time - b.time);
+        }
+
+        // In backtest, anchor the SD readout to the simulated time so the chart
+        // never displays a value calculated from a candle after the replay point.
+        const sdSourceData = viewMode === 'backtest' && targetEndTime > 0
+          ? rawCandlesRef.current.filter(item => item.time <= targetEndTime)
+          : rawCandlesRef.current;
+        const configuredBandMultiplier = Number(configsRef.current?.vwapMult ?? 2);
+        let latestSdPosition = null;
+        for (let i = sdSourceData.length - 1; i >= 0; i--) {
+          const bar = sdSourceData[i];
+          const toFiniteNumber = value => value == null || value === '' ? NaN : Number(value);
+          const close = toFiniteNumber(bar.close);
+          const vwap = toFiniteNumber(bar.vwap);
+          const reportedStdev = toFiniteNumber(bar.stdev);
+          const upperBand = toFiniteNumber(bar.upper_band);
+          const lowerBand = toFiniteNumber(bar.lower_band);
+          const bandWidth = upperBand - lowerBand;
+          const stdev = Number.isFinite(reportedStdev) && reportedStdev > 0
+            ? reportedStdev
+            : Number.isFinite(bandWidth) && bandWidth > 0 && configuredBandMultiplier > 0
+              ? bandWidth / (2 * configuredBandMultiplier)
+              : NaN;
+
+          if (Number.isFinite(close) && Number.isFinite(vwap) && Number.isFinite(stdev) && stdev > 0) {
+            latestSdPosition = (close - vwap) / stdev;
+            break;
+          }
+        }
+        if (latestSdPosition !== null) {
+          setCurrentSdPosition(latestSdPosition);
+        } else if (!isPolling) {
+          // A bad/incomplete live candle should not hide the last valid readout
+          // during polling; a fresh full load can still clear stale data.
+          setCurrentSdPosition(null);
         }
 
         const newMomFlip = rawData.map(d => ({
