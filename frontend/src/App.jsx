@@ -2192,6 +2192,12 @@ useEffect(() => {
                 type="datetime-local" 
                 value={backtestDate}
                 onChange={(e) => setBacktestDate(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleLoadBacktest();
+                  }
+                }}
                 style={{ padding: '6px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '4px' }}
               />
               <button onClick={handleLoadBacktest} className="primary" style={{ padding: '6px 12px' }}>Tải Dữ Liệu</button>
