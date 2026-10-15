@@ -1328,7 +1328,12 @@ useEffect(() => {
             }
         }
         rawData = uniqueRaw;
-        const latestSdBar = rawData[rawData.length - 1];
+        // In backtest, anchor the SD readout to the simulated time so the chart
+        // never displays a value calculated from a candle after the replay point.
+        const sdSourceData = viewMode === 'backtest' && targetEndTime > 0
+          ? rawData.filter(item => item.time <= targetEndTime)
+          : rawData;
+        const latestSdBar = sdSourceData[sdSourceData.length - 1];
         const latestClose = Number(latestSdBar?.close);
         const latestVwap = Number(latestSdBar?.vwap);
         const reportedStdev = Number(latestSdBar?.stdev);
@@ -2198,7 +2203,7 @@ useEffect(() => {
         {/* Main Chart */}
         <div style={{ flex: 3, position: 'relative', width: '100%', overflow: 'hidden' }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
-          {currentSdPosition !== null && (
+          {currentSdPosition !== null && (viewMode !== 'backtest' || simulatedTimeRef.current > 0) && (
             <div style={{
               position: 'absolute', top: '10px', left: '10px', zIndex: 8, pointerEvents: 'none',
               padding: '5px 9px', borderRadius: '6px',
@@ -2208,7 +2213,7 @@ useEffect(() => {
               boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
               fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
             }}>
-              VWAP {currentSdPosition > 0 ? '+' : ''}{currentSdPosition.toFixed(2)} SD
+              {viewMode === 'backtest' ? 'Backtest · ' : ''}VWAP {currentSdPosition > 0 ? '+' : ''}{currentSdPosition.toFixed(2)} SD
             </div>
           )}
           <canvas 
