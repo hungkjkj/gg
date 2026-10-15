@@ -1331,7 +1331,14 @@ useEffect(() => {
         const latestSdBar = rawData[rawData.length - 1];
         const latestClose = Number(latestSdBar?.close);
         const latestVwap = Number(latestSdBar?.vwap);
-        const latestStdev = Number(latestSdBar?.stdev);
+        const reportedStdev = Number(latestSdBar?.stdev);
+        const bandWidth = Number(latestSdBar?.upper_band) - Number(latestSdBar?.lower_band);
+        const configuredBandMultiplier = Number(configsRef.current?.vwapMult ?? 2);
+        const latestStdev = Number.isFinite(reportedStdev) && reportedStdev > 0
+          ? reportedStdev
+          : Number.isFinite(bandWidth) && bandWidth > 0 && configuredBandMultiplier > 0
+            ? bandWidth / (2 * configuredBandMultiplier)
+            : NaN;
         setCurrentSdPosition(
           Number.isFinite(latestClose) && Number.isFinite(latestVwap) && Number.isFinite(latestStdev) && latestStdev > 0
             ? (latestClose - latestVwap) / latestStdev
@@ -2191,7 +2198,7 @@ useEffect(() => {
         {/* Main Chart */}
         <div style={{ flex: 3, position: 'relative', width: '100%', overflow: 'hidden' }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
-          {showSdBands && currentSdPosition !== null && (
+          {currentSdPosition !== null && (
             <div style={{
               position: 'absolute', top: '10px', left: '10px', zIndex: 8, pointerEvents: 'none',
               padding: '5px 9px', borderRadius: '6px',
