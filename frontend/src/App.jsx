@@ -2234,7 +2234,7 @@ useEffect(() => {
               boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
               fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
             }}>
-              {viewMode === 'backtest' ? 'Backtest · ' : ''}VWAP {currentSdPosition > 0 ? '+' : ''}{currentSdPosition.toFixed(2)} SD
+              VWAP {currentSdPosition > 0 ? '+' : ''}{currentSdPosition.toFixed(2)} SD
             </div>
           )}
           <canvas 
