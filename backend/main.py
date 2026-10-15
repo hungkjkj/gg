@@ -433,16 +433,15 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     
     df['mom_flip'] = mom_flip_metric_valid.rolling(window=lookback_candles, min_periods=1).rank(pct=True, method='max') * 100.0
     
-    # TÃ­nh toÃ¡n cÃ¡c Ä‘Æ°á»ng xÃ¡c suáº¥t Momentum (Momentum Ä‘Ã£ chuáº©n hÃ³a theo median)
-    df['mom_raw'] = df['mom_raw_raw'] / rolling_median_mom
+    # Normalize the composite, then rank it once more over the same lookback window.
     df['abs_mom'] = df['abs_mom_raw'] / rolling_median_mom
-    
-    df['mom_lvl1'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct1 / 100.0)
-    df['mom_lvl2'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct2 / 100.0)
-    df['mom_lvl3'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).quantile(momPct3 / 100.0)
-    
-    # TÃ­nh xáº¿p háº¡ng pháº§n trÄƒm cá»§a Äá»™ng lÆ°á»£ng (cÃ³ dáº¥u: -100% Ä‘áº¿n 100%)
     df['mom_percent_rank'] = df['abs_mom'].rolling(window=lookback_candles, min_periods=1).rank(pct=True, method='max') * 100.0 * np.sign(df['mom_raw_raw'])
+    df['mom_raw'] = df['mom_percent_rank']
+
+    # These chart levels now share the same percentile scale as mom_raw.
+    df['mom_lvl1'] = float(momPct1)
+    df['mom_lvl2'] = float(momPct2)
+    df['mom_lvl3'] = float(momPct3)
 
     
     # --- TÃ­nh toÃ¡n Normalized Volume ---
