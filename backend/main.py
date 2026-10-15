@@ -548,7 +548,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['session_color'] = None
     df.loc[in_asia, 'session_color'] = 'rgba(139, 69, 19, 0.18)' # Brown/Orange
     df.loc[in_euro, 'session_color'] = 'rgba(139, 0, 139, 0.18)' # Dark Purple
-    df.loc[in_pre_us, 'session_color'] = 'rgba(75, 0, 130, 0.20)' # Pre-US Indigo
+    df.loc[in_pre_us, 'session_color'] = 'rgba(255, 193, 7, 0.20)' # Pre-US Amber
     df.loc[in_us, 'session_color'] = 'rgba(0, 0, 139, 0.18)' # Dark Blue
     
     # --- Thá»‘ng kÃª Äá»‰nh/ÄÃ¡y Vol theo Phase ---
