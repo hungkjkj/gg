@@ -247,6 +247,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
               timeShiftHours: float = 0.0, browserOffsetHours: float = 7.0, autoDst: bool = True,
               asiaStart: str = "07:00", asiaEnd: str = "10:00",
               euroStart: str = "13:00", euroEnd: str = "16:00",
+              preUsStart: str = "16:00", preUsEnd: str = "19:00",
               usStart: str = "18:30", usEnd: str = "23:00",
               brokerTimezone: str = "Europe/Athens"):
     """
@@ -541,11 +542,13 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
 
     in_asia = get_session_mask(asiaStart, asiaEnd, 'Asia/Tokyo')
     in_euro = get_session_mask(euroStart, euroEnd, 'Europe/London')
+    in_pre_us = get_session_mask(preUsStart, preUsEnd, 'America/New_York')
     in_us = get_session_mask(usStart, usEnd, 'America/New_York')
     
     df['session_color'] = None
     df.loc[in_asia, 'session_color'] = 'rgba(139, 69, 19, 0.18)' # Brown/Orange
     df.loc[in_euro, 'session_color'] = 'rgba(139, 0, 139, 0.18)' # Dark Purple
+    df.loc[in_pre_us, 'session_color'] = 'rgba(75, 0, 130, 0.20)' # Pre-US Indigo
     df.loc[in_us, 'session_color'] = 'rgba(0, 0, 139, 0.18)' # Dark Blue
     
     # --- Thá»‘ng kÃª Äá»‰nh/ÄÃ¡y Vol theo Phase ---
@@ -1165,7 +1168,7 @@ async def strategy_worker():
                     if not configs:
                         configs = get_configs()
                         
-                    allowed_keys = ['pct1', 'pct2', 'gridMode', 'fixedPips', 'rowCount', 'timeoutHours', 'dvpLookbackDays', 'mfTargetPct', 'mfTimeoutCandles', 'vwapLength', 'vwapMult', 'rvolLookbackDays', 'peakVolLookbackDays', 'momLength', 'matrixLookbackHours', 'momPct1', 'momPct2', 'momPct3', 'maVolLength', 'momMaLength', 'smaMomLength', 'momFlipFilterPct', 'momFlipVolFilterPct', 'volPct1', 'volPct2', 'volPct3', 'volPct4', 'timeShiftHours', 'browserOffsetHours', 'autoDst', 'asiaStart', 'asiaEnd', 'euroStart', 'euroEnd', 'usStart', 'usEnd', 'brokerTimezone']
+                    allowed_keys = ['pct1', 'pct2', 'gridMode', 'fixedPips', 'rowCount', 'timeoutHours', 'dvpLookbackDays', 'mfTargetPct', 'mfTimeoutCandles', 'vwapLength', 'vwapMult', 'rvolLookbackDays', 'peakVolLookbackDays', 'momLength', 'matrixLookbackHours', 'momPct1', 'momPct2', 'momPct3', 'maVolLength', 'momMaLength', 'smaMomLength', 'momFlipFilterPct', 'momFlipVolFilterPct', 'volPct1', 'volPct2', 'volPct3', 'volPct4', 'timeShiftHours', 'browserOffsetHours', 'autoDst', 'asiaStart', 'asiaEnd', 'euroStart', 'euroEnd', 'preUsStart', 'preUsEnd', 'usStart', 'usEnd', 'brokerTimezone']
                     kwargs = {k: v for k, v in configs.items() if k in allowed_keys}
                     
                     ohlcv_res = await asyncio.to_thread(get_ohlcv, symbol, timeframe, 1000, 0, True, **kwargs)

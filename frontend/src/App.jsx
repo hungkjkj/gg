@@ -1128,14 +1128,35 @@ useEffect(() => {
         // --- DRAW SESSION BACKGROUNDS FIRST ---
         if (sessionDataRef.current && sessionDataRef.current.length > 0) {
           const barSpacing = timeScale.options().barSpacing || 6;
-          for (let i = 0; i < sessionDataRef.current.length; i++) {
-             const session = sessionDataRef.current[i];
-             if (session.time < minTime || session.time > maxTime) continue; // CULLING OFF-SCREEN SESSIONS
-             const x = timeScale.timeToCoordinate(session.time);
-             if (x !== null) {
-               ctx.fillStyle = session.color;
-               ctx.fillRect(x - barSpacing/2, 0, barSpacing, canvas.height);
+          const sessionBarSeconds = ({ M1: 60, M2: 120, M3: 180, M4: 240, M5: 300, M15: 900, M30: 1800, H1: 3600, H2: 7200, H4: 14400, H8: 28800, D1: 86400 })[timeframe] || 3600;
+          const maxSessionGap = sessionBarSeconds * 1.5;
+          const sessions = sessionDataRef.current;
+          for (let i = 0; i < sessions.length;) {
+             const first = sessions[i];
+             let last = first;
+             let next = i + 1;
+             while (next < sessions.length &&
+                    sessions[next].color === first.color &&
+                    sessions[next].time - last.time <= maxSessionGap) {
+               last = sessions[next];
+               next++;
              }
+
+             if (last.time >= minTime && first.time <= maxTime) {
+               const startX = timeScale.timeToCoordinate(first.time);
+               const endX = timeScale.timeToCoordinate(last.time);
+               if (startX !== null || endX !== null) {
+                 const left = Math.max(0, (startX ?? 0) - barSpacing / 2);
+                 const right = Math.min(canvas.width, (endX ?? canvas.width) + barSpacing / 2);
+                 const width = Math.max(barSpacing, right - left);
+                 ctx.fillStyle = first.color;
+                 ctx.fillRect(left, 0, width, canvas.height);
+                 ctx.strokeStyle = first.color.replace(/,\s*0\.\d+\)$/, ', 0.65)');
+                 ctx.lineWidth = 1;
+                 ctx.strokeRect(left + 0.5, 0.5, Math.max(0, width - 1), Math.max(0, canvas.height - 1));
+               }
+             }
+             i = next;
           }
         }
         
@@ -3252,6 +3273,16 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
           </div>
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
             <div style={{ flex: 1 }}>
+              <label style={styleLabel}>Phiên Pre-US (Mở - NY)</label>
+              <input type="time" value={local.preUsStart || '16:00'} onChange={e => handleChange('preUsStart', e.target.value)} style={styleInput} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={styleLabel}>Phiên Pre-US (Đóng - NY)</label>
+              <input type="time" value={local.preUsEnd || '19:00'} onChange={e => handleChange('preUsEnd', e.target.value)} style={styleInput} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+            <div style={{ flex: 1 }}>
               <label style={styleLabel}>Phiên Mỹ (Mở - NY)</label>
               <input type="time" value={local.usStart} onChange={e => handleChange('usStart', e.target.value)} style={styleInput} />
             </div>
@@ -3666,6 +3697,8 @@ function App() {
     asiaEnd: "11:00",
     euroStart: "07:00",
     euroEnd: "09:00",
+    preUsStart: "16:00",
+    preUsEnd: "19:00",
     usStart: "07:30",
     usEnd: "11:00",
     autoDst: true,
