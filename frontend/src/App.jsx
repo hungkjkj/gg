@@ -73,6 +73,7 @@ const generateFutureTimeline = (cTime, tfSec, count, isCrypto = false, timeShift
 
 const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
   const [momFlipData, setMomFlipData] = useState([]);
+  const [currentSdPosition, setCurrentSdPosition] = useState(null);
   const chartContainerRef = useRef(null);
   const momentumChartContainerRef = useRef(null);
   const volumeChartContainerRef = useRef();
@@ -111,6 +112,10 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   configsRef.current = configs;
   const prevVolModeRef = useRef(configs.volMode);
   const prevBackendConfigsRef = useRef(null);
+
+  useEffect(() => {
+    setCurrentSdPosition(null);
+  }, [symbol, timeframe]);
   
   const [contextMenu, setContextMenu] = useState(null);
   
@@ -1323,6 +1328,15 @@ useEffect(() => {
             }
         }
         rawData = uniqueRaw;
+        const latestSdBar = rawData[rawData.length - 1];
+        const latestClose = Number(latestSdBar?.close);
+        const latestVwap = Number(latestSdBar?.vwap);
+        const latestStdev = Number(latestSdBar?.stdev);
+        setCurrentSdPosition(
+          Number.isFinite(latestClose) && Number.isFinite(latestVwap) && Number.isFinite(latestStdev) && latestStdev > 0
+            ? (latestClose - latestVwap) / latestStdev
+            : null
+        );
         if (!isPolling) {
           rawCandlesRef.current = rawData;
         } else {
@@ -2177,6 +2191,19 @@ useEffect(() => {
         {/* Main Chart */}
         <div style={{ flex: 3, position: 'relative', width: '100%', overflow: 'hidden' }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
+          {showSdBands && currentSdPosition !== null && (
+            <div style={{
+              position: 'absolute', top: '10px', left: '10px', zIndex: 8, pointerEvents: 'none',
+              padding: '5px 9px', borderRadius: '6px',
+              background: 'rgba(15, 23, 42, 0.9)',
+              border: `1px solid ${currentSdPosition >= 0 ? 'rgba(34, 211, 238, 0.55)' : 'rgba(251, 146, 60, 0.55)'}`,
+              color: currentSdPosition >= 0 ? '#67e8f9' : '#fdba74',
+              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
+              fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+            }}>
+              VWAP {currentSdPosition > 0 ? '+' : ''}{currentSdPosition.toFixed(2)} SD
+            </div>
+          )}
           <canvas 
             ref={canvasRef} 
             style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 5 }} 
