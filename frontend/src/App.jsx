@@ -1159,9 +1159,41 @@ useEffect(() => {
                  const width = Math.max(barSpacing, right - left);
                  ctx.fillStyle = first.color;
                  ctx.fillRect(left, 0, width, canvas.height);
-                 ctx.strokeStyle = first.color.replace(/,\s*0\.\d+\)$/, ', 0.65)');
+
+                 // Keep the session tint subtle, but make its time boundaries
+                 // visible over SD shading and other colored chart overlays.
+                 const rgb = first.color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+                 let edgeColor = first.color;
+                 let frameColor = first.color;
+                 if (rgb) {
+                   const channels = [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+                   const brightnessScale = 255 / Math.max(...channels, 1);
+                   const brightChannels = channels.map(channel => Math.min(255, Math.round(channel * brightnessScale)));
+                   edgeColor = `rgba(${brightChannels.join(', ')}, 0.98)`;
+                   frameColor = `rgba(${brightChannels.join(', ')}, 0.62)`;
+                 }
+
+                 const leftEdge = Math.round(left) + 0.5;
+                 const rightEdge = Math.round(right) - 0.5;
+                 ctx.save();
+                 ctx.setLineDash([]);
                  ctx.lineWidth = 1;
+                 ctx.strokeStyle = frameColor;
                  ctx.strokeRect(left + 0.5, 0.5, Math.max(0, width - 1), Math.max(0, canvas.height - 1));
+                 ctx.beginPath();
+                 ctx.setLineDash([7, 5]);
+                 ctx.lineWidth = 2;
+                 ctx.strokeStyle = edgeColor;
+                 ctx.shadowColor = edgeColor;
+                 ctx.shadowBlur = 8;
+                 ctx.moveTo(leftEdge, 0);
+                 ctx.lineTo(leftEdge, canvas.height);
+                 if (width > 2) {
+                   ctx.moveTo(rightEdge, 0);
+                   ctx.lineTo(rightEdge, canvas.height);
+                 }
+                 ctx.stroke();
+                 ctx.restore();
                }
              }
              i = next;
