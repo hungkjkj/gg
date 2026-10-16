@@ -5,6 +5,8 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
   const targetBoxRef = useRef(null);
   const entryLineRef = useRef(null);
   const stopBoxRef = useRef(null);
+  const startHandleRef = useRef(null);
+  const endHandleRef = useRef(null);
   const deleteHintRef = useRef(null);
   const frameRef = useRef(null);
   const latestPropsRef = useRef({ tool, chart, series, onUpdate });
@@ -67,6 +69,8 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
       const targetBottom = isLong ? yEntry : yTarget;
       const stopTop = isLong ? yEntry : yStop;
       const stopBottom = isLong ? yStop : yEntry;
+      const boxTop = Math.min(targetTop, stopTop);
+      const boxBottom = Math.max(targetBottom, stopBottom);
 
       const place = (element, x, y, w, h) => {
         if (!element) return;
@@ -79,6 +83,8 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
       place(targetBoxRef.current, left, targetTop, width, targetBottom - targetTop);
       place(entryLineRef.current, left, yEntry - 2, width, 4);
       place(stopBoxRef.current, left, stopTop, width, stopBottom - stopTop);
+      place(startHandleRef.current, left - 6, boxTop, 12, boxBottom - boxTop);
+      place(endHandleRef.current, left + width - 6, boxTop, 12, boxBottom - boxTop);
       if (deleteHintRef.current) deleteHintRef.current.style.top = `${Math.min(targetTop, stopTop) - 20}px`;
       containerRef.current.style.visibility = 'visible';
     } catch (e) {
@@ -126,9 +132,56 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
     const handleMouseMove = event => {
       const current = latestPropsRef.current;
       const rect = chart.chartElement().getBoundingClientRect();
+      if (isDragging === 'start' || isDragging === 'end') {
+        const timeScale = chart.timeScale();
+        const pointerX = event.clientX - rect.left;
+        const pointerLogical = timeScale.coordinateToLogical(pointerX);
+        if (pointerLogical == null) return;
+
+        let startX = current.tool.time ? timeScale.timeToCoordinate(current.tool.time) : null;
+        if (startX == null && current.tool.logical != null) startX = timeScale.logicalToCoordinate(current.tool.logical);
+        let endX = current.tool.endTime ? timeScale.timeToCoordinate(current.tool.endTime) : null;
+        if (endX == null && current.tool.endLogical != null) endX = timeScale.logicalToCoordinate(current.tool.endLogical);
+        if (endX == null && startX != null) {
+          const startLogicalForFallback = timeScale.coordinateToLogical(startX);
+          const barsCount = current.tool.barsCount || 20;
+          if (startLogicalForFallback != null) endX = timeScale.logicalToCoordinate(startLogicalForFallback + barsCount);
+        }
+        if (startX == null || endX == null) return;
+
+        const startPosition = timeScale.coordinateToLogical(startX);
+        const endPosition = timeScale.coordinateToLogical(endX);
+        if (startPosition == null || endPosition == null) return;
+        const startLogical = Math.round(startPosition);
+        const endLogical = Math.round(endPosition);
+        const logical = isDragging === 'start'
+          ? Math.min(Math.round(pointerLogical), endLogical - 1)
+          : Math.max(Math.round(pointerLogical), startLogical + 1);
+        const snappedX = timeScale.logicalToCoordinate(logical);
+        const time = snappedX == null ? null : timeScale.coordinateToTime(snappedX);
+        if (time == null) return;
+
+        const unixTime = typeof time === 'number'
+          ? time
+          : Math.floor(Date.UTC(time.year, time.month - 1, time.day) / 1000);
+        if (isDragging === 'start') {
+          current.onUpdate(current.tool.id, {
+            time: unixTime,
+            logical,
+            barsCount: Math.max(1, endLogical - logical)
+          });
+        } else {
+          current.onUpdate(current.tool.id, {
+            endTime: unixTime,
+            endLogical: logical,
+            barsCount: Math.max(1, logical - startLogical)
+          });
+        }
+        return;
+      }
+
       const price = series.coordinateToPrice(event.clientY - rect.top);
       if (price == null) return;
-
       const field = isDragging === 'target' ? 'targetPrice'
         : isDragging === 'stop' ? 'stopPrice'
           : isDragging === 'entry' ? 'entryPrice' : null;
@@ -222,6 +275,24 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
         <div style={{ position: 'absolute', bottom: '-25px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(242, 54, 69, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap' }}>
           Stop: {tool.stopPrice.toFixed(5)}
         </div>
+      </div>
+
+      {/* TIME RANGE HANDLES */}
+      <div
+        ref={startHandleRef}
+        title="Kéo để đổi thời điểm bắt đầu"
+        style={{ position: 'absolute', zIndex: 53, pointerEvents: 'auto', cursor: 'ew-resize', background: 'rgba(56, 189, 248, 0.08)' }}
+        onMouseDown={event => { event.stopPropagation(); setIsDragging('start'); }}
+      >
+        <div style={{ position: 'absolute', top: '50%', left: '50%', width: '4px', height: '28px', transform: 'translate(-50%, -50%)', borderRadius: '3px', background: '#38bdf8', boxShadow: '0 0 8px rgba(56,189,248,0.9)', pointerEvents: 'none' }} />
+      </div>
+      <div
+        ref={endHandleRef}
+        title="Kéo để đổi thời điểm kết thúc"
+        style={{ position: 'absolute', zIndex: 53, pointerEvents: 'auto', cursor: 'ew-resize', background: 'rgba(56, 189, 248, 0.08)' }}
+        onMouseDown={event => { event.stopPropagation(); setIsDragging('end'); }}
+      >
+        <div style={{ position: 'absolute', top: '50%', left: '50%', width: '4px', height: '28px', transform: 'translate(-50%, -50%)', borderRadius: '3px', background: '#38bdf8', boxShadow: '0 0 8px rgba(56,189,248,0.9)', pointerEvents: 'none' }} />
       </div>
 
       <div ref={deleteHintRef} style={{ position: 'absolute', right: 0, background: 'rgba(0,0,0,0.5)', color: '#ccc', fontSize: '9px', padding: '1px 3px', pointerEvents: 'none' }}>
