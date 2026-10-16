@@ -3576,8 +3576,27 @@ function App() {
     if (!showMatrixBubble) return;
     
     let isFetching = false;
+    let pendingBacktestRefresh = false;
+    let unlockTimer = null;
+    const finishBubbleFetch = () => {
+      if (viewMode !== 'backtest') {
+        isFetching = false;
+        return;
+      }
+      unlockTimer = setTimeout(() => {
+        unlockTimer = null;
+        isFetching = false;
+        if (pendingBacktestRefresh) {
+          pendingBacktestRefresh = false;
+          fetchBubbleMatrix();
+        }
+      }, 1000);
+    };
     const fetchBubbleMatrix = () => {
-      if (isFetching) return;
+      if (isFetching) {
+        if (viewMode === 'backtest') pendingBacktestRefresh = true;
+        return;
+      }
 
       const matrixType = getMatrixTypeForSymbol(symbol);
       const sessionSettings = {
@@ -3617,18 +3636,10 @@ function App() {
           setBubbleSessionMatrix(sessionStats.data);
           setBubblePowerLong(computeCompositeRanking(flowLong.data?.ranking, trendLong.data?.ranking));
           setBubblePowerShort(computeCompositeRanking(flowShort.data?.ranking, trendShort.data?.ranking));
-          if (viewMode === 'backtest') {
-              setTimeout(() => { isFetching = false; }, 1000);
-          } else {
-              isFetching = false;
-          }
+          finishBubbleFetch();
       }).catch(err => {
           console.error(err);
-          if (viewMode === 'backtest') {
-              setTimeout(() => { isFetching = false; }, 1000);
-          } else {
-              isFetching = false;
-          }
+          finishBubbleFetch();
       });
     };
     
@@ -3639,6 +3650,7 @@ function App() {
     
     return () => {
       clearInterval(interval);
+      if (unlockTimer) clearTimeout(unlockTimer);
       window.removeEventListener('simulatedTimeChanged', fetchBubbleMatrix);
     };
   }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixVolDays, configs.asiaStart, configs.asiaEnd, configs.euroStart, configs.euroEnd, configs.preUsStart, configs.preUsEnd, configs.usStart, configs.usEnd, configs.autoDst, symbol]);

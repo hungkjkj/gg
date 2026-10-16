@@ -109,7 +109,7 @@ export const AssistiveTouch = ({
           position: 'absolute', 
           ...(position.y < window.innerHeight / 2 ? { top: '70px' } : { bottom: '70px' }),
           ...(position.x > window.innerWidth / 2 ? { right: '0px' } : { left: '0px' }),
-          background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(12px)', padding: '16px', borderRadius: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1)', width: hasMatrixRankingData ? 'min(780px, calc(100vw - 20px))' : 'min(320px, calc(100vw - 20px))', maxWidth: panelMaxWidth, maxHeight: 'calc(100vh - 20px)', boxSizing: 'border-box', overflowY: 'auto', border: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', flexDirection: 'column', gap: '12px', animation: 'fadeInBub 0.2s ease-out'
+          background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(12px)', padding: '12px', borderRadius: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1)', width: hasMatrixRankingData ? 'min(940px, calc(100vw - 20px))' : 'min(320px, calc(100vw - 20px))', maxWidth: panelMaxWidth, maxHeight: 'calc(100vh - 20px)', boxSizing: 'border-box', overflowY: 'auto', border: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', flexDirection: 'column', gap: '10px', animation: 'fadeInBub 0.2s ease-out'
         }}>
           <section style={{ paddingBottom: showMatrixBubble ? '12px' : '0', borderBottom: showMatrixBubble ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '10px' }}>
@@ -154,7 +154,7 @@ export const AssistiveTouch = ({
                 <strong style={{ color: '#fbbf24', fontSize: '13px' }}>⚡ Power V-target + Động Lượng Theo Phiên</strong>
                 {bubbleSessionMatrix && <span style={{ color: '#94a3b8', fontSize: '10px' }}>{bubbleSessionMatrix.long_hours}h / {bubbleSessionMatrix.short_hours}h · Vol {bubbleSessionMatrix.vol_days} ngày</span>}
               </div>
-              <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '7px' }}>Trend · Flow · tick volume trung bình (phân vị)</div>
+              <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '7px' }}>T/F: biến động % · V: tick volume TB · P: phân vị volume trong số ngày đã chọn</div>
               <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'hidden', minWidth: 0, paddingRight: '3px' }}>
                 {bubbleSessionMatrix
                   ? <SessionMatrixTable data={bubbleSessionMatrix} compact longPowerRanking={bubblePowerLong} shortPowerRanking={bubblePowerShort} />
