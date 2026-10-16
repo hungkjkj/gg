@@ -2839,9 +2839,9 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <h2 style={{ margin: 0, color: '#fbbf24', fontSize: '1.25rem' }}>⚡ Sức Mạnh Hợp Nhất V-target ({matrixHoursLong}H / {matrixHours}H) + Động Lượng Theo Phiên</h2>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '5px' }}>Power V-target giữ nguyên · mỗi phiên có Trend, Flow, tick volume trung bình và Power riêng.</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '5px' }}>Power V-target giữ nguyên · mỗi phiên có Trend, Flow, phân vị volume và Power riêng.</div>
               </div>
-              <span style={{ color: '#7dd3fc', background: 'rgba(14,165,233,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: '7px', padding: '6px 9px', fontSize: '11px', whiteSpace: 'nowrap' }}>V: tick volume TB · P: Power kết hợp T/F, điều chỉnh theo volume {sessionMatrixData.vol_days} ngày</span>
+              <span style={{ color: '#7dd3fc', background: 'rgba(14,165,233,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: '7px', padding: '6px 9px', fontSize: '11px', whiteSpace: 'nowrap' }}>V: phân vị volume trong {sessionMatrixData.vol_days} ngày · P: Power T/F × hệ số V</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '10px', marginBottom: '14px' }}>
               <div style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(74,222,128,0.18)', background: 'rgba(255,255,255,0.02)' }}>
