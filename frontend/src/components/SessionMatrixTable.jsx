@@ -54,7 +54,7 @@ export const SessionMatrixTable = ({ data, compact = false }) => {
           <tr style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(125,211,252,0.2)' }}>
             <th style={{ textAlign: 'left', padding: cellPadding }}>#</th>
             <th style={{ textAlign: 'left', padding: cellPadding }}>Tài sản</th>
-            <th style={{ textAlign: 'left', padding: cellPadding }}>Power {longLabel} / {shortLabel}</th>
+            <th style={{ textAlign: 'left', padding: cellPadding }}>Power (%) {longLabel} / {shortLabel}</th>
             {sessions.map(session => <th key={session.key} style={{ textAlign: 'left', padding: cellPadding }}>{session.label}</th>)}
             <th style={{ textAlign: 'right', padding: cellPadding }}>Pha</th>
           </tr>
@@ -67,8 +67,8 @@ export const SessionMatrixTable = ({ data, compact = false }) => {
                 <td style={{ padding: cellPadding, color: index < 3 ? '#fbbf24' : '#94a3b8', fontWeight: 700 }}>{index + 1}</td>
                 <td style={{ padding: cellPadding, fontWeight: 700, color: '#f8fafc' }}>{item.currency}</td>
                 <td style={{ padding: cellPadding, whiteSpace: 'nowrap' }}>
-                  <span style={{ color: powerColor, fontWeight: 700 }}>{item.power_score > 0 ? '+' : ''}{Number(item.power_score || 0).toFixed(1)}</span>
-                  <span style={{ color: '#94a3b8', fontSize: compact ? '10px' : '11px' }}> ({item.short_power_score > 0 ? '+' : ''}{Number(item.short_power_score || 0).toFixed(1)})</span>
+                  <span style={{ color: powerColor, fontWeight: 700 }}>{item.power_score > 0 ? '+' : ''}{Number(item.power_score || 0).toFixed(4)}%</span>
+                  <span style={{ color: '#94a3b8', fontSize: compact ? '10px' : '11px' }}> ({item.short_power_score > 0 ? '+' : ''}{Number(item.short_power_score || 0).toFixed(4)}%)</span>
                 </td>
                 {sessions.map(session => {
                   const stats = item.sessions?.[session.key] || {};

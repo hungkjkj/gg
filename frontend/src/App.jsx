@@ -2827,11 +2827,11 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '10px', marginBottom: '14px' }}>
               <div style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(74,222,128,0.18)', background: 'rgba(255,255,255,0.02)' }}>
                 <div style={{ color: '#94a3b8', fontSize: '10px' }}>Dẫn đầu · {sessionMatrixData.long_hours}h</div>
-                <strong style={{ color: '#4ade80', fontSize: '14px' }}>{topLeader ? topLeader.currency + ' (' + (topLeader.power_score > 0 ? '+' : '') + topLeader.power_score.toFixed(1) + ')' : '—'}</strong>
+                <strong style={{ color: '#4ade80', fontSize: '14px' }}>{topLeader ? topLeader.currency + ' (' + (topLeader.power_score > 0 ? '+' : '') + topLeader.power_score.toFixed(4) + '%)' : '—'}</strong>
               </div>
               <div style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.18)', background: 'rgba(255,255,255,0.02)' }}>
                 <div style={{ color: '#94a3b8', fontSize: '10px' }}>Yếu nhất · {sessionMatrixData.long_hours}h</div>
-                <strong style={{ color: '#fb7185', fontSize: '14px' }}>{topLaggard ? topLaggard.currency + ' (' + (topLaggard.power_score > 0 ? '+' : '') + topLaggard.power_score.toFixed(1) + ')' : '—'}</strong>
+                <strong style={{ color: '#fb7185', fontSize: '14px' }}>{topLaggard ? topLaggard.currency + ' (' + (topLaggard.power_score > 0 ? '+' : '') + topLaggard.power_score.toFixed(4) + '%)' : '—'}</strong>
               </div>
               <div style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(251,191,36,0.18)', background: 'rgba(255,255,255,0.02)', color: '#cbd5e1', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '9px', flexWrap: 'wrap' }}>
                 <span style={{ color: '#4ade80' }}>● {counts['Dẫn dắt'] || 0} Dẫn dắt</span>
