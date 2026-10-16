@@ -3,17 +3,18 @@ import React from 'react';
 const metricColor = value => value > 0 ? '#22d3ee' : value < 0 ? '#fb7185' : '#cbd5e1';
 const signed = value => `${value > 0 ? '+' : ''}${Number(value || 0).toFixed(2)}%`;
 const signedPower = value => `${value > 0 ? '+' : ''}${Number(value || 0).toFixed(2)}`;
+const volumePercentileColor = value => value == null ? '#94a3b8'
+  : value >= 75 ? '#4ade80'
+    : value <= 20 ? '#f87171' : '#7dd3fc';
 
 const SessionPeriodCell = ({ period, label }) => {
   if (!period) return <div style={{ color: '#64748b', fontSize: '11px' }}>{label}: —</div>;
   const volumePercentile = period.volume_percentile;
-  const volumeColor = volumePercentile == null ? '#94a3b8'
-    : volumePercentile >= 75 ? '#4ade80'
-      : volumePercentile <= 20 ? '#f87171' : '#7dd3fc';
+  const volumeColor = volumePercentileColor(volumePercentile);
   const powerScore = period.power_score;
 
   return (
-    <div title={`${label}: trung bình ${period.samples} phiên, ${period.bars} nến mỗi phiên. V là phân vị volume so với lịch sử. P là Power kết hợp T/F và được điều chỉnh theo phân vị volume.`} style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', alignItems: 'start', columnGap: '4px', rowGap: '1px', margin: '2px 0', minWidth: 0 }}>
+    <div title={`${label}: trung bình ${period.samples} phiên, ${period.bars} nến mỗi phiên. V là phân vị volume so với lịch sử của cùng phiên. P là Power kết hợp T/F và được điều chỉnh theo phân vị volume.`} style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', alignItems: 'start', columnGap: '4px', rowGap: '1px', margin: '2px 0', minWidth: 0 }}>
       <span style={{ color: '#94a3b8', fontSize: '9px', fontWeight: 700, paddingTop: '1px' }}>{label}</span>
       <span style={{ minWidth: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', rowGap: '1px', fontSize: '9px', lineHeight: 1.25 }}>
         <span style={{ display: 'flex', flexWrap: 'wrap', columnGap: '5px', minWidth: 0 }}>
@@ -77,10 +78,10 @@ export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [
           <tr style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(125,211,252,0.2)' }}>
             <th style={{ textAlign: 'left', padding: cellPadding }}>#</th>
             <th style={{ textAlign: 'left', padding: cellPadding }}>Tài sản</th>
-            <th style={{ textAlign: 'left', padding: cellPadding }}>Power V-target {longLabel} / {shortLabel}</th>
+            <th style={{ textAlign: 'left', padding: cellPadding }}>{compact ? `Power / Vol % ${longLabel}/${shortLabel}` : `Power V-target ${longLabel} / ${shortLabel}`}</th>
             {!compact && <th style={{ textAlign: 'left', padding: cellPadding }}>Price Trend V-target</th>}
             {!compact && <th style={{ textAlign: 'left', padding: cellPadding }}>Money Flow V-target</th>}
-            {!compact && <th style={{ textAlign: 'left', padding: cellPadding }}>Vol % V-target</th>}
+            {!compact && <th style={{ textAlign: 'left', padding: cellPadding }}>Vol % {longLabel} / {shortLabel}</th>}
             {sessions.map(session => <th key={session.key} style={{ textAlign: 'left', padding: cellPadding }}>{session.label}</th>)}
             <th style={{ textAlign: 'right', padding: cellPadding }}>Pha</th>
           </tr>
@@ -89,6 +90,8 @@ export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [
           {ranking.map((item, index) => {
             const powerValue = item.legacyLongPower?.powerScore;
             const shortPowerValue = item.legacyShortPower?.powerScore;
+            const longVolumePercentile = item.legacyLongPower?.vol_percentile;
+            const shortVolumePercentile = item.legacyShortPower?.vol_percentile;
             const powerColor = powerValue > 0 ? '#4ade80' : powerValue < 0 ? '#fb7185' : '#cbd5e1';
             const shortPowerColor = shortPowerValue > 0 ? '#4ade80' : shortPowerValue < 0 ? '#fb7185' : '#cbd5e1';
             const status = item.legacyLongPower?.status || item.status;
@@ -110,9 +113,22 @@ export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [
               <tr key={item.currency} style={{ borderBottom: '1px solid rgba(148,163,184,0.09)' }}>
                 <td style={{ padding: cellPadding, color: index < 3 ? '#fbbf24' : '#94a3b8', fontWeight: 700 }}>{index + 1}</td>
                 <td title={item.currency} style={{ padding: cellPadding, fontWeight: 700, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.currency}</td>
-                <td style={{ padding: cellPadding, whiteSpace: 'nowrap' }}>
-                  <span style={{ color: powerColor, fontWeight: 700 }}>{powerValue == null ? '—' : `${powerValue > 0 ? '+' : ''}${powerValue.toFixed(1)}`}</span>
-                  <span style={{ color: shortPowerColor, fontSize: compact ? '9px' : '10px', fontWeight: 700 }}> ({shortPowerValue == null ? '—' : `${shortPowerValue > 0 ? '+' : ''}${shortPowerValue.toFixed(1)}`})</span>
+                <td
+                  title={compact ? `Power V-target: ${longLabel} / ${shortLabel}. Phân vị volume của toàn cửa sổ so với các cửa sổ lịch sử trong ${data?.vol_days || 'Vol days'} ngày.` : undefined}
+                  style={{ padding: cellPadding, whiteSpace: compact ? 'normal' : 'nowrap' }}
+                >
+                  <div style={{ whiteSpace: 'nowrap' }}>
+                    <span style={{ color: powerColor, fontWeight: 700 }}>{powerValue == null ? '—' : `${powerValue > 0 ? '+' : ''}${powerValue.toFixed(1)}`}</span>
+                    <span style={{ color: shortPowerColor, fontSize: compact ? '9px' : '10px', fontWeight: 700 }}> ({shortPowerValue == null ? '—' : `${shortPowerValue > 0 ? '+' : ''}${shortPowerValue.toFixed(1)}`})</span>
+                  </div>
+                  {compact && (
+                    <div style={{ fontSize: '9px', lineHeight: 1.25, whiteSpace: 'nowrap' }}>
+                      <span style={{ color: '#94a3b8' }}>Vol </span>
+                      <span style={{ color: volumePercentileColor(longVolumePercentile), fontWeight: 700 }}>{longVolumePercentile == null ? '—' : `${Math.round(longVolumePercentile)}%`}</span>
+                      <span style={{ color: '#94a3b8' }}> / </span>
+                      <span style={{ color: volumePercentileColor(shortVolumePercentile), fontWeight: 700 }}>{shortVolumePercentile == null ? '—' : `${Math.round(shortVolumePercentile)}%`}</span>
+                    </div>
+                  )}
                 </td>
                 {!compact && renderLegacyPercent('momTrend')}
                 {!compact && renderLegacyPercent('momFlow')}

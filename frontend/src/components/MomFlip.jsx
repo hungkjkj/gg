@@ -154,7 +154,7 @@ export const AssistiveTouch = ({
                 <strong style={{ color: '#fbbf24', fontSize: '13px' }}>⚡ Power V-target + Động Lượng Theo Phiên</strong>
                 {bubbleSessionMatrix && <span style={{ color: '#94a3b8', fontSize: '10px' }}>{bubbleSessionMatrix.long_hours}h / {bubbleSessionMatrix.short_hours}h · Vol {bubbleSessionMatrix.vol_days} ngày</span>}
               </div>
-              <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '7px' }}>T/F: biến động % · V: phân vị volume · P: Power T/F × hệ số V</div>
+              <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '7px' }}>Vol: phân vị volume toàn cửa sổ {bubbleSessionMatrix ? `${bubbleSessionMatrix.long_hours}h/${bubbleSessionMatrix.short_hours}h` : '89h/24h'} trong {bubbleSessionMatrix?.vol_days || 'Vol days'} · V ở từng phiên: phân vị riêng · P: Power T/F × hệ số V</div>
               <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'hidden', minWidth: 0, paddingRight: '3px' }}>
                 {bubbleSessionMatrix
                   ? <SessionMatrixTable data={bubbleSessionMatrix} compact longPowerRanking={bubblePowerLong} shortPowerRanking={bubblePowerShort} />
