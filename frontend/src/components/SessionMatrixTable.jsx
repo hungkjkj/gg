@@ -28,9 +28,21 @@ const SessionPeriodCell = ({ period, label }) => {
   );
 };
 
-export const SessionMatrixTable = ({ data, compact = false }) => {
-  const ranking = data?.ranking || [];
+export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [], shortPowerRanking = [] }) => {
+  const sessionRanking = data?.ranking || [];
   const sessions = data?.sessions || [];
+  const longPower = Array.isArray(longPowerRanking) ? longPowerRanking : [];
+  const shortPower = Array.isArray(shortPowerRanking) ? shortPowerRanking : [];
+  const sessionByCurrency = new Map(sessionRanking.map(item => [item.currency, item]));
+  const shortPowerByCurrency = new Map(shortPower.map(item => [item.currency, item]));
+  const ranking = longPower.length
+    ? longPower.map(power => ({
+        ...(sessionByCurrency.get(power.currency) || {}),
+        currency: power.currency,
+        legacyLongPower: power,
+        legacyShortPower: shortPowerByCurrency.get(power.currency)
+      }))
+    : sessionRanking;
   if (!ranking.length) {
     return <div style={{ padding: '14px', color: '#94a3b8', fontSize: compact ? '11px' : '13px' }}>Chưa có dữ liệu phiên cho nhóm tài sản này.</div>;
   }
@@ -42,11 +54,14 @@ export const SessionMatrixTable = ({ data, compact = false }) => {
 
   return (
     <div style={{ width: '100%', minWidth: 0, overflowX: 'auto', overscrollBehaviorX: 'contain' }}>
-      <table style={{ width: '100%', minWidth: compact ? '1074px' : '1363px', tableLayout: 'fixed', borderCollapse: 'collapse', color: '#e2e8f0', fontSize }}>
+      <table style={{ width: '100%', minWidth: compact ? '1360px' : '1725px', tableLayout: 'fixed', borderCollapse: 'collapse', color: '#e2e8f0', fontSize }}>
         <colgroup>
           <col style={{ width: compact ? '34px' : '58px' }} />
           <col style={{ width: compact ? '58px' : '90px' }} />
-          <col style={{ width: compact ? '132px' : '170px' }} />
+          <col style={{ width: compact ? '132px' : '165px' }} />
+          <col style={{ width: compact ? '100px' : '130px' }} />
+          <col style={{ width: compact ? '100px' : '130px' }} />
+          <col style={{ width: compact ? '85px' : '105px' }} />
           {sessions.map(session => <col key={session.key} style={{ width: compact ? '194px' : '235px' }} />)}
           <col style={{ width: compact ? '74px' : '105px' }} />
         </colgroup>
@@ -54,22 +69,45 @@ export const SessionMatrixTable = ({ data, compact = false }) => {
           <tr style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(125,211,252,0.2)' }}>
             <th style={{ textAlign: 'left', padding: cellPadding }}>#</th>
             <th style={{ textAlign: 'left', padding: cellPadding }}>Tài sản</th>
-            <th style={{ textAlign: 'left', padding: cellPadding }}>Power (%) {longLabel} / {shortLabel}</th>
+            <th style={{ textAlign: 'left', padding: cellPadding }}>Power V-target {longLabel} / {shortLabel}</th>
+            <th style={{ textAlign: 'left', padding: cellPadding }}>Price Trend V-target</th>
+            <th style={{ textAlign: 'left', padding: cellPadding }}>Money Flow V-target</th>
+            <th style={{ textAlign: 'left', padding: cellPadding }}>Vol % V-target</th>
             {sessions.map(session => <th key={session.key} style={{ textAlign: 'left', padding: cellPadding }}>{session.label}</th>)}
             <th style={{ textAlign: 'right', padding: cellPadding }}>Pha</th>
           </tr>
         </thead>
         <tbody>
           {ranking.map((item, index) => {
-            const powerColor = item.power_score > 0 ? '#4ade80' : item.power_score < 0 ? '#fb7185' : '#cbd5e1';
+            const powerValue = item.legacyLongPower?.powerScore;
+            const shortPowerValue = item.legacyShortPower?.powerScore;
+            const powerColor = powerValue > 0 ? '#4ade80' : powerValue < 0 ? '#fb7185' : '#cbd5e1';
+            const status = item.legacyLongPower?.status || item.status;
+            const statusColor = item.legacyLongPower?.statusColor || item.status_color;
+            const renderLegacyPercent = (field, colorByDirection = true) => {
+              const longValue = item.legacyLongPower?.[field];
+              const shortValue = item.legacyShortPower?.[field];
+              const colorFor = value => colorByDirection ? metricColor(value)
+                : value >= 75 ? '#4ade80' : value <= 20 ? '#f87171' : '#7dd3fc';
+              const formatValue = value => `${colorByDirection && value > 0 ? '+' : ''}${value.toFixed(0)}%`;
+              return (
+                <td style={{ padding: cellPadding, whiteSpace: 'nowrap' }}>
+                  <span style={{ color: longValue == null ? '#64748b' : colorFor(longValue) }}>{longValue == null ? '—' : formatValue(longValue)}</span>
+                  <span style={{ color: shortValue == null ? '#64748b' : colorFor(shortValue), fontSize: compact ? '10px' : '11px' }}> ({shortValue == null ? '—' : formatValue(shortValue)})</span>
+                </td>
+              );
+            };
             return (
               <tr key={item.currency} style={{ borderBottom: '1px solid rgba(148,163,184,0.09)' }}>
                 <td style={{ padding: cellPadding, color: index < 3 ? '#fbbf24' : '#94a3b8', fontWeight: 700 }}>{index + 1}</td>
                 <td style={{ padding: cellPadding, fontWeight: 700, color: '#f8fafc' }}>{item.currency}</td>
                 <td style={{ padding: cellPadding, whiteSpace: 'nowrap' }}>
-                  <span style={{ color: powerColor, fontWeight: 700 }}>{item.power_score > 0 ? '+' : ''}{Number(item.power_score || 0).toFixed(4)}%</span>
-                  <span style={{ color: '#94a3b8', fontSize: compact ? '10px' : '11px' }}> ({item.short_power_score > 0 ? '+' : ''}{Number(item.short_power_score || 0).toFixed(4)}%)</span>
+                  <span style={{ color: powerColor, fontWeight: 700 }}>{powerValue == null ? '—' : `${powerValue > 0 ? '+' : ''}${powerValue.toFixed(1)}`}</span>
+                  <span style={{ color: '#94a3b8', fontSize: compact ? '10px' : '11px' }}> ({shortPowerValue == null ? '—' : `${shortPowerValue > 0 ? '+' : ''}${shortPowerValue.toFixed(1)}`})</span>
                 </td>
+                {renderLegacyPercent('momTrend')}
+                {renderLegacyPercent('momFlow')}
+                {renderLegacyPercent('vol_percentile', false)}
                 {sessions.map(session => {
                   const stats = item.sessions?.[session.key] || {};
                   return (
@@ -80,7 +118,7 @@ export const SessionMatrixTable = ({ data, compact = false }) => {
                   );
                 })}
                 <td style={{ padding: cellPadding, textAlign: 'right' }}>
-                  <span style={{ color: item.status_color, fontSize: compact ? '10px' : '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>{item.status}</span>
+                  <span style={{ color: statusColor, fontSize: compact ? '10px' : '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>{status || '—'}</span>
                 </td>
               </tr>
             );

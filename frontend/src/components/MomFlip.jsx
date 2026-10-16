@@ -9,6 +9,8 @@ export const AssistiveTouch = ({
   showMomChart, setShowMomChart, 
   showMatrixBubble, setShowMatrixBubble, 
   bubbleSessionMatrix,
+  bubblePowerLong,
+  bubblePowerShort,
   volMode, handleVolModeToggle 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -149,13 +151,13 @@ export const AssistiveTouch = ({
           {showMatrixBubble && (
             <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)', minWidth: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap', marginBottom: '5px' }}>
-                <strong style={{ color: '#fbbf24', fontSize: '13px' }}>⚡ Sức Mạnh Theo Phiên</strong>
+                <strong style={{ color: '#fbbf24', fontSize: '13px' }}>⚡ Power V-target + Động Lượng Theo Phiên</strong>
                 {bubbleSessionMatrix && <span style={{ color: '#94a3b8', fontSize: '10px' }}>{bubbleSessionMatrix.long_hours}h / {bubbleSessionMatrix.short_hours}h · Vol {bubbleSessionMatrix.vol_days} ngày</span>}
               </div>
               <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '7px' }}>Trend · Flow · tick volume trung bình (phân vị)</div>
               <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'hidden', minWidth: 0, paddingRight: '3px' }}>
                 {bubbleSessionMatrix
-                  ? <SessionMatrixTable data={bubbleSessionMatrix} compact />
+                  ? <SessionMatrixTable data={bubbleSessionMatrix} compact longPowerRanking={bubblePowerLong} shortPowerRanking={bubblePowerShort} />
                   : <div style={{ padding: '10px 2px', color: '#94a3b8', fontSize: '12px' }}>Đang chờ dữ liệu Matrix theo phiên…</div>}
               </div>
             </div>

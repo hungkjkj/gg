@@ -3,6 +3,7 @@ import { createChart, ColorType } from 'lightweight-charts';
 import axios from 'axios';
 import { AssistiveTouch, MomFlipChartComponent } from './components/MomFlip';
 import { SessionMatrixTable } from './components/SessionMatrixTable';
+import { computeCompositeRanking } from './utils/matrixUtils';
 import StrategyBuilderTab from './components/StrategyBuilderTab';
 import RrTool from './components/RrTool';
 import TradingLogPanel from './components/TradingLogPanel';
@@ -2599,6 +2600,8 @@ useEffect(() => {
 
 const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, initialMatrixVolDays, onSaveMatrixSettings, symbol, sessionSettings }) => {
   const [sessionMatrixData, setSessionMatrixData] = useState(null);
+  const [legacyPowerLong, setLegacyPowerLong] = useState(null);
+  const [legacyPowerShort, setLegacyPowerShort] = useState(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [matrixHours, setMatrixHours] = useState(initialMatrixHours || Number(localStorage.getItem('currencyMatrixHours')) || 24);
@@ -2663,29 +2666,45 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       if (cached && cachedTime && cachedSignature === cacheSignature) {
         const age = Date.now() - parseInt(cachedTime);
         if (age < 60 * 1000) {
-          setSessionMatrixData(JSON.parse(cached));
-          return;
+            const parsed = JSON.parse(cached);
+            if (parsed.session && parsed.powerLong && parsed.powerShort) {
+              setSessionMatrixData(parsed.session);
+              setLegacyPowerLong(parsed.powerLong);
+              setLegacyPowerShort(parsed.powerShort);
+              return;
+            }
         }
       }
     }
     
     setLoading(true);
     try {
-      const response = await axios.get(`${API_BASE}/api/v1/matrix/session-stats`, {
-        params: {
-          short_hours: matrixHours,
-          long_hours: matrixHoursLong,
-          vol_days: matrixVolDays,
-          matrix_type: matrixType,
-          end_time: simulatedTime || 0,
-          brokerTimezone,
-          ...sessionParams
-        }
-      });
-      setSessionMatrixData(response.data);
+      const commonParams = { vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone };
+      const [flowShort, flowLong, trendShort, trendLong, sessionStats] = await Promise.all([
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...commonParams, n_hours: matrixHours, matrix_mode: 'money_flow' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...commonParams, n_hours: matrixHoursLong, matrix_mode: 'money_flow' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...commonParams, n_hours: matrixHours, matrix_mode: 'trend' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...commonParams, n_hours: matrixHoursLong, matrix_mode: 'trend' } }),
+        axios.get(`${API_BASE}/api/v1/matrix/session-stats`, {
+          params: {
+            short_hours: matrixHours,
+            long_hours: matrixHoursLong,
+            vol_days: matrixVolDays,
+            matrix_type: matrixType,
+            end_time: simulatedTime || 0,
+            brokerTimezone,
+            ...sessionParams
+          }
+        })
+      ]);
+      const powerLong = computeCompositeRanking(flowLong.data?.ranking, trendLong.data?.ranking);
+      const powerShort = computeCompositeRanking(flowShort.data?.ranking, trendShort.data?.ranking);
+      setSessionMatrixData(sessionStats.data);
+      setLegacyPowerLong(powerLong);
+      setLegacyPowerShort(powerShort);
       
       if (!simulatedTime) {
-          localStorage.setItem(`matrixCache_${matrixType}`, JSON.stringify(response.data));
+          localStorage.setItem(`matrixCache_${matrixType}`, JSON.stringify({ session: sessionStats.data, powerLong, powerShort }));
           localStorage.setItem(`matrixCacheTime_${matrixType}`, Date.now().toString());
           localStorage.setItem(`matrixCacheSignature_${matrixType}`, cacheSignature);
       }
@@ -2808,7 +2827,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       </div>
 
       {sessionMatrixData && (() => {
-        const ranking = sessionMatrixData.ranking || [];
+        const ranking = legacyPowerLong || [];
         const topLeader = ranking[0] || null;
         const topLaggard = ranking[ranking.length - 1] || null;
         const counts = ranking.reduce((result, item) => {
@@ -2819,19 +2838,19 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           <div style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-panel)', padding: '24px', borderRadius: '12px', border: '1px solid rgba(34, 211, 238, 0.24)', boxShadow: '0 0 25px rgba(34, 211, 238, 0.05)', overflow: 'hidden' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
               <div>
-                <h2 style={{ margin: 0, color: '#fbbf24', fontSize: '1.25rem' }}>⚡ Sức Mạnh Theo Phiên ({sessionMatrixData.long_hours}H / {sessionMatrixData.short_hours}H)</h2>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '5px' }}>Trend = dịch chuyển C-VWMA giữa nửa đầu và nửa sau phiên · Flow = biến động giá có trọng số tick volume trên toàn bộ nến phiên.</div>
+                <h2 style={{ margin: 0, color: '#fbbf24', fontSize: '1.25rem' }}>⚡ Sức Mạnh Hợp Nhất V-target ({matrixHoursLong}H / {matrixHours}H) + Động Lượng Theo Phiên</h2>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '5px' }}>Power giữ nguyên thang điểm V-target cũ · các ô phiên bổ sung Trend, Flow (%) và tick volume riêng cho từng phiên.</div>
               </div>
               <span style={{ color: '#7dd3fc', background: 'rgba(14,165,233,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: '7px', padding: '6px 9px', fontSize: '11px', whiteSpace: 'nowrap' }}>Tick volume trung bình mỗi phiên · phân vị so với các phiên trước trong {sessionMatrixData.vol_days} ngày</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '10px', marginBottom: '14px' }}>
               <div style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(74,222,128,0.18)', background: 'rgba(255,255,255,0.02)' }}>
                 <div style={{ color: '#94a3b8', fontSize: '10px' }}>Dẫn đầu · {sessionMatrixData.long_hours}h</div>
-                <strong style={{ color: '#4ade80', fontSize: '14px' }}>{topLeader ? topLeader.currency + ' (' + (topLeader.power_score > 0 ? '+' : '') + topLeader.power_score.toFixed(4) + '%)' : '—'}</strong>
+                <strong style={{ color: '#4ade80', fontSize: '14px' }}>{topLeader ? topLeader.currency + ' (' + (topLeader.powerScore > 0 ? '+' : '') + topLeader.powerScore.toFixed(1) + ')' : '—'}</strong>
               </div>
               <div style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.18)', background: 'rgba(255,255,255,0.02)' }}>
                 <div style={{ color: '#94a3b8', fontSize: '10px' }}>Yếu nhất · {sessionMatrixData.long_hours}h</div>
-                <strong style={{ color: '#fb7185', fontSize: '14px' }}>{topLaggard ? topLaggard.currency + ' (' + (topLaggard.power_score > 0 ? '+' : '') + topLaggard.power_score.toFixed(4) + '%)' : '—'}</strong>
+                <strong style={{ color: '#fb7185', fontSize: '14px' }}>{topLaggard ? topLaggard.currency + ' (' + (topLaggard.powerScore > 0 ? '+' : '') + topLaggard.powerScore.toFixed(1) + ')' : '—'}</strong>
               </div>
               <div style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(251,191,36,0.18)', background: 'rgba(255,255,255,0.02)', color: '#cbd5e1', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '9px', flexWrap: 'wrap' }}>
                 <span style={{ color: '#4ade80' }}>● {counts['Dẫn dắt'] || 0} Dẫn dắt</span>
@@ -2840,7 +2859,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                 <span style={{ color: '#f87171' }}>● {counts['Tụt hậu'] || 0} Tụt hậu</span>
               </div>
             </div>
-            <SessionMatrixTable data={sessionMatrixData} />
+            <SessionMatrixTable data={sessionMatrixData} longPowerRanking={legacyPowerLong} shortPowerRanking={legacyPowerShort} />
           </div>
         );
       })()}
@@ -3499,6 +3518,8 @@ function App() {
   const [showMomChart, setShowMomChart] = useState(localStorage.getItem('showMomChart') !== 'false');
   const [showMatrixBubble, setShowMatrixBubble] = useState(localStorage.getItem('showMatrixBubble') === 'true');
   const [bubbleSessionMatrix, setBubbleSessionMatrix] = useState(null);
+  const [bubblePowerLong, setBubblePowerLong] = useState(null);
+  const [bubblePowerShort, setBubblePowerShort] = useState(null);
 
   
   const [configs, setConfigs] = useState(() => ({
@@ -3576,10 +3597,26 @@ function App() {
         ...sessionSettings
       };
       if (viewMode === 'backtest' && window.currentSimulatedTime) params.end_time = window.currentSimulatedTime;
+      const shortHours = params.short_hours;
+      const longHours = params.long_hours;
+      const legacyParams = {
+        vol_days: params.vol_days,
+        matrix_type: matrixType,
+        end_time: params.end_time || 0,
+        brokerTimezone: params.brokerTimezone
+      };
 
       isFetching = true;
-      axios.get(`${API_BASE}/api/v1/matrix/session-stats`, { params }).then(response => {
-          setBubbleSessionMatrix(response.data);
+      Promise.all([
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...legacyParams, n_hours: shortHours, matrix_mode: 'money_flow' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...legacyParams, n_hours: longHours, matrix_mode: 'money_flow' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...legacyParams, n_hours: shortHours, matrix_mode: 'trend' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...legacyParams, n_hours: longHours, matrix_mode: 'trend' } }),
+        axios.get(`${API_BASE}/api/v1/matrix/session-stats`, { params })
+      ]).then(([flowShort, flowLong, trendShort, trendLong, sessionStats]) => {
+          setBubbleSessionMatrix(sessionStats.data);
+          setBubblePowerLong(computeCompositeRanking(flowLong.data?.ranking, trendLong.data?.ranking));
+          setBubblePowerShort(computeCompositeRanking(flowShort.data?.ranking, trendShort.data?.ranking));
           if (viewMode === 'backtest') {
               setTimeout(() => { isFetching = false; }, 1000);
           } else {
@@ -3670,6 +3707,8 @@ function App() {
         showMatrixBubble={showMatrixBubble}
         setShowMatrixBubble={setShowMatrixBubble}
         bubbleSessionMatrix={bubbleSessionMatrix}
+        bubblePowerLong={bubblePowerLong}
+        bubblePowerShort={bubblePowerShort}
         volMode={configs.volMode}
         handleVolModeToggle={(checked) => setConfigs(prev => ({ ...prev, volMode: checked ? 'mean_vol' : 'normal' }))}
       />
