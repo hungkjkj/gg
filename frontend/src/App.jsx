@@ -1145,6 +1145,7 @@ useEffect(() => {
              let next = i + 1;
              while (next < sessions.length &&
                     sessions[next].color === first.color &&
+                    sessions[next].name === first.name &&
                     sessions[next].time - last.time <= maxSessionGap) {
                last = sessions[next];
                next++;
@@ -1193,6 +1194,26 @@ useEffect(() => {
                    ctx.lineTo(rightEdge, canvas.height);
                  }
                  ctx.stroke();
+
+                 if (first.name) {
+                   const centerX = (left + right) / 2;
+                   const labelY = 10;
+                   ctx.setLineDash([]);
+                   ctx.shadowBlur = 0;
+                   ctx.font = '700 11px Arial, sans-serif';
+                   ctx.textAlign = 'center';
+                   ctx.textBaseline = 'middle';
+                   const labelWidth = Math.ceil(ctx.measureText(first.name).width) + 14;
+                   const labelHeight = 19;
+                   const labelLeft = Math.max(4, Math.min(canvas.width - labelWidth - 4, centerX - labelWidth / 2));
+                   ctx.fillStyle = 'rgba(7, 12, 24, 0.9)';
+                   ctx.strokeStyle = edgeColor;
+                   ctx.lineWidth = 1;
+                   ctx.fillRect(labelLeft, labelY, labelWidth, labelHeight);
+                   ctx.strokeRect(labelLeft + 0.5, labelY + 0.5, labelWidth - 1, labelHeight - 1);
+                   ctx.fillStyle = '#f8fafc';
+                   ctx.fillText(first.name, labelLeft + labelWidth / 2, labelY + labelHeight / 2);
+                 }
                  ctx.restore();
                }
              }
@@ -1600,7 +1621,8 @@ useEffect(() => {
 
         const newSessionData = rawData.filter(i => i.session_color).map(i => ({
           time: i.time,
-          color: i.session_color
+          color: i.session_color,
+          name: i.session_name
         }));
         
         if (isPolling) {

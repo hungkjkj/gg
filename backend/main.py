@@ -537,10 +537,15 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     in_us = get_session_mask(usStart, usEnd, 'America/New_York')
     
     df['session_color'] = None
+    df['session_name'] = None
     df.loc[in_asia, 'session_color'] = 'rgba(139, 69, 19, 0.18)' # Brown/Orange
+    df.loc[in_asia, 'session_name'] = 'Á'
     df.loc[in_euro, 'session_color'] = 'rgba(139, 0, 139, 0.18)' # Dark Purple
+    df.loc[in_euro, 'session_name'] = 'Âu'
     df.loc[in_pre_us, 'session_color'] = 'rgba(255, 193, 7, 0.20)' # Pre-US Amber
+    df.loc[in_pre_us, 'session_name'] = 'Pre-US'
     df.loc[in_us, 'session_color'] = 'rgba(0, 0, 139, 0.18)' # Dark Blue
+    df.loc[in_us, 'session_name'] = 'Mỹ'
     
     # --- Thá»‘ng kÃª Äá»‰nh/ÄÃ¡y Vol theo Phase ---
     try:
@@ -784,7 +789,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         # Nếu backtest (có end_time) thì lấy 100 nến để đề phòng trường hợp nhảy tốc độ cao (100x).
         df = df.tail(2 if end_time == 0 else 100)
         
-    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'stdev', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_percent_rank', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mean_ma_vol', 'mean_vol_lvl1', 'mean_vol_lvl2', 'mean_vol_lvl3', 'mean_vol_lvl4', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'spread']
+    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'stdev', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_percent_rank', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mean_ma_vol', 'mean_vol_lvl1', 'mean_vol_lvl2', 'mean_vol_lvl3', 'mean_vol_lvl4', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'session_name', 'spread']
     existing_cols = [c for c in cols_to_keep if c in df.columns]
     df = df[existing_cols]
         
