@@ -2841,7 +2841,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                 <h2 style={{ margin: 0, color: '#fbbf24', fontSize: '1.25rem' }}>⚡ Sức Mạnh Hợp Nhất V-target ({matrixHoursLong}H / {matrixHours}H) + Động Lượng Theo Phiên</h2>
                 <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '5px' }}>Power giữ nguyên thang điểm V-target cũ · các ô phiên bổ sung Trend, Flow (%) và tick volume riêng cho từng phiên.</div>
               </div>
-              <span style={{ color: '#7dd3fc', background: 'rgba(14,165,233,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: '7px', padding: '6px 9px', fontSize: '11px', whiteSpace: 'nowrap' }}>Tick volume trung bình mỗi phiên · phân vị so với các phiên trước trong {sessionMatrixData.vol_days} ngày</span>
+              <span style={{ color: '#7dd3fc', background: 'rgba(14,165,233,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: '7px', padding: '6px 9px', fontSize: '11px', whiteSpace: 'nowrap' }}>Tick volume TB mỗi phiên · P so với {sessionMatrixData.vol_days} ngày trước · +/− so với trung vị 50%</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '10px', marginBottom: '14px' }}>
               <div style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(74,222,128,0.18)', background: 'rgba(255,255,255,0.02)' }}>
