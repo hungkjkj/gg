@@ -1110,19 +1110,15 @@ useEffect(() => {
         const timeScale = chartRef.current.timeScale();
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
-        
-        let minTime = timeScale.coordinateToTime(0);
-        let maxTime = timeScale.coordinateToTime(canvas.width);
-        
-        if (minTime !== null && typeof minTime === 'object') {
-            minTime = new Date(Date.UTC(minTime.year, minTime.month - 1, minTime.day)).getTime() / 1000;
-        }
-        if (maxTime !== null && typeof maxTime === 'object') {
-            maxTime = new Date(Date.UTC(maxTime.year, maxTime.month - 1, maxTime.day)).getTime() / 1000;
-        }
-        
-        if (minTime === null) minTime = 0;
-        if (maxTime === null) maxTime = Infinity;
+
+        const visibleRange = timeScale.getVisibleRange();
+        const toUnixTime = value => value && typeof value === 'object'
+          ? new Date(Date.UTC(value.year, value.month - 1, value.day)).getTime() / 1000
+          : Number(value);
+        let minTime = visibleRange ? toUnixTime(visibleRange.from) : 0;
+        let maxTime = visibleRange ? toUnixTime(visibleRange.to) : Infinity;
+        if (!Number.isFinite(minTime)) minTime = 0;
+        if (!Number.isFinite(maxTime)) maxTime = Infinity;
         
         // Ensure canvas dimensions match its container
         const rect = chartContainerRef.current.getBoundingClientRect();
@@ -1223,30 +1219,26 @@ useEffect(() => {
         
         // --- DRAW VP BOXES ---
         if (vpBoxes && vpBoxes.length > 0) {
+          const plotWidth = timeScale.width() || canvas.width;
           for (let i = 0; i < vpBoxes.length; i++) {
            const box = vpBoxes[i];
            if (box.end < minTime || box.start > maxTime) continue; // CULLING OFF-SCREEN BOXES
            const startX = timeScale.timeToCoordinate(box.start);
-           let endX = timeScale.timeToCoordinate(box.end);
-           
-           if (startX === null && endX === null) continue;
+           const endX = timeScale.timeToCoordinate(box.end);
            
            const topY = candlestickSeriesRef.current.priceToCoordinate(box.price + box.height/2);
            const bottomY = candlestickSeriesRef.current.priceToCoordinate(box.price - box.height/2);
            
            if (topY === null || bottomY === null) continue;
            
-           let finalStartX = startX;
-           if (startX === null) {
-               finalStartX = (box.start < minTime) ? -1000 : canvas.width + 1000;
-           }
-           
-           let finalEndX = endX;
-           if (endX === null) {
-               finalEndX = (box.end < minTime) ? -1000 : canvas.width + 1000;
-           }
-           
-           const width = Math.max(1, finalEndX - finalStartX);
+           // A long-lived DVP can have both endpoints outside the viewport
+           // while still spanning it. Clip those endpoints to the plot edges.
+           const finalStartX = Math.max(0, Math.min(plotWidth,
+             startX ?? (box.start <= minTime ? 0 : plotWidth)));
+           const finalEndX = Math.max(0, Math.min(plotWidth,
+             endX ?? (box.end >= maxTime ? plotWidth : 0)));
+           const width = finalEndX - finalStartX;
+           if (width <= 0) continue;
            // Fix: Đảm bảo chiều cao tối thiểu là 1 pixel để không bị biến mất khi thu nhỏ thanh giá (sub-pixel rendering)
            const height = Math.max(1, Math.abs(bottomY - topY));
            
