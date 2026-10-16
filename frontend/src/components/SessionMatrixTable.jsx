@@ -13,20 +13,19 @@ const SessionPeriodCell = ({ period, label }) => {
   const powerScore = period.power_score;
 
   return (
-    <div title={`${label}: trung bình ${period.samples} phiên, ${period.bars} nến mỗi phiên. V là phân vị volume so với lịch sử. P là Power kết hợp T/F và được điều chỉnh theo phân vị volume.`} style={{ display: 'grid', gridTemplateColumns: '27px minmax(0, 1fr)', alignItems: 'start', columnGap: '5px', rowGap: '1px', margin: '2px 0' }}>
+    <div title={`${label}: trung bình ${period.samples} phiên, ${period.bars} nến mỗi phiên. V là phân vị volume so với lịch sử. P là Power kết hợp T/F và được điều chỉnh theo phân vị volume.`} style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', alignItems: 'start', columnGap: '4px', rowGap: '1px', margin: '2px 0', minWidth: 0 }}>
       <span style={{ color: '#94a3b8', fontSize: '9px', fontWeight: 700, paddingTop: '1px' }}>{label}</span>
-      <span style={{ minWidth: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', rowGap: '1px', fontSize: '10px', lineHeight: 1.25 }}>
-        <span style={{ whiteSpace: 'nowrap' }}>
-          <span style={{ color: metricColor(period.trend_pct) }}>T {signed(period.trend_pct)}</span>
-          <span style={{ color: '#475569' }}> </span>
-          <span style={{ color: metricColor(period.flow_pct) }}>F {signed(period.flow_pct)}</span>
+      <span style={{ minWidth: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', rowGap: '1px', fontSize: '9px', lineHeight: 1.25 }}>
+        <span style={{ display: 'flex', flexWrap: 'wrap', columnGap: '5px', minWidth: 0 }}>
+          <span style={{ color: metricColor(period.trend_pct), whiteSpace: 'nowrap' }}>T{signed(period.trend_pct)}</span>
+          <span style={{ color: metricColor(period.flow_pct), whiteSpace: 'nowrap' }}>F{signed(period.flow_pct)}</span>
         </span>
-        <span style={{ display: 'flex', justifyContent: 'space-between', gap: '4px', whiteSpace: 'nowrap', fontSize: '9px' }}>
+        <span style={{ display: 'flex', justifyContent: 'space-between', gap: '3px', whiteSpace: 'nowrap', fontSize: '9px' }}>
           <span style={{ color: volumeColor, fontWeight: 700 }}>
-            V {volumePercentile == null ? '—' : `${Math.round(volumePercentile)}%`}
+            V{volumePercentile == null ? '—' : `${Math.round(volumePercentile)}%`}
           </span>
           <span style={{ color: powerScore == null ? '#94a3b8' : metricColor(powerScore), fontWeight: 700 }}>
-            P {powerScore == null ? '—' : signedPower(powerScore)}
+            P{powerScore == null ? '—' : signedPower(powerScore)}
           </span>
         </span>
       </span>
@@ -60,16 +59,16 @@ export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [
 
   return (
     <div style={{ width: '100%', minWidth: 0, overflowX: 'auto', overscrollBehaviorX: 'contain' }}>
-      <table style={{ width: '100%', minWidth: compact ? '900px' : '1280px', tableLayout: 'fixed', borderCollapse: 'collapse', color: '#e2e8f0', fontSize }}>
+      <table style={{ width: '100%', minWidth: compact ? '900px' : '1120px', tableLayout: 'fixed', borderCollapse: 'collapse', color: '#e2e8f0', fontSize }}>
         <colgroup>
-          <col style={{ width: compact ? '28px' : '40px' }} />
-          <col style={{ width: compact ? '44px' : '65px' }} />
-          <col style={{ width: compact ? '110px' : '140px' }} />
-          {!compact && <col style={{ width: '105px' }} />}
-          {!compact && <col style={{ width: '105px' }} />}
-          {!compact && <col style={{ width: '80px' }} />}
-          {sessions.map(session => <col key={session.key} style={{ width: compact ? '165px' : '165px' }} />)}
-          <col style={{ width: compact ? '54px' : '70px' }} />
+          <col style={{ width: compact ? '28px' : '34px' }} />
+          <col style={{ width: compact ? '44px' : '58px' }} />
+          <col style={{ width: compact ? '110px' : '112px' }} />
+          {!compact && <col style={{ width: '85px' }} />}
+          {!compact && <col style={{ width: '85px' }} />}
+          {!compact && <col style={{ width: '75px' }} />}
+          {sessions.map(session => <col key={session.key} style={{ width: compact ? '165px' : `calc((100% - 513px) / ${Math.max(sessions.length, 1)})` }} />)}
+          <col style={{ width: compact ? '54px' : '64px' }} />
         </colgroup>
         <thead>
           <tr style={{ color: '#7dd3fc', borderBottom: '1px solid rgba(125,211,252,0.2)' }}>
