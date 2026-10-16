@@ -2,159 +2,155 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) => {
   const containerRef = useRef(null);
-  
-  const [coords, setCoords] = useState({
-    x1: 0,
-    x2: 0,
-    yTarget: 0,
-    yEntry: 0,
-    yStop: 0,
-    visible: false
-  });
+  const targetBoxRef = useRef(null);
+  const entryLineRef = useRef(null);
+  const stopBoxRef = useRef(null);
+  const deleteHintRef = useRef(null);
+  const frameRef = useRef(null);
+  const latestPropsRef = useRef({ tool, chart, series, onUpdate });
+  latestPropsRef.current = { tool, chart, series, onUpdate };
 
-  const [isDragging, setIsDragging] = useState(null); // 'target', 'entry', 'stop', 'body'
+  const [isDragging, setIsDragging] = useState(null);
 
   const updateCoordinates = useCallback(() => {
-    if (!chart || !series || !tool) return;
+    if (!chart || !series || !tool || !containerRef.current) return;
+
+    const hide = () => {
+      if (containerRef.current) containerRef.current.style.visibility = 'hidden';
+    };
+
     try {
       const timeScale = chart.timeScale();
-      
       let x1 = null;
       let x2 = null;
 
-      // 1. Ưu tiên tìm tọa độ dựa trên timestamp (nến cố định không bị trôi khi reload)
-      if (tool.time) {
-        x1 = timeScale.timeToCoordinate(tool.time);
-      }
+      // Anchor to timestamps so the drawing remains attached to its candles.
+      if (tool.time) x1 = timeScale.timeToCoordinate(tool.time);
 
-      // 2. Nếu tool chưa có time (tool cũ) nhưng có logical:
+      // Migrate older saved drawings that only have a logical index.
       if (x1 === null && tool.logical != null) {
         x1 = timeScale.logicalToCoordinate(tool.logical);
-        // Tự động gán time cho tool cũ nếu tìm thấy candle tại x1
         if (x1 !== null && !tool.time && onUpdate) {
-          const t = timeScale.coordinateToTime(x1);
-          if (t) {
-            onUpdate(tool.id, { time: t, endTime: tool.endTime || (t + (20 * 300)) });
-          }
+          const time = timeScale.coordinateToTime(x1);
+          if (time) onUpdate(tool.id, { time, endTime: tool.endTime || time + 20 * 300 });
         }
       }
 
-      // 3. Tìm x2 dựa trên endTime
-      if (tool.endTime) {
-        x2 = timeScale.timeToCoordinate(tool.endTime);
-      }
+      if (tool.endTime) x2 = timeScale.timeToCoordinate(tool.endTime);
 
-      // 4. Nếu có x1 nhưng x2 null (ví dụ endTime nằm ở tương lai chưa có nến)
+      // Keep the default 20-bar width for drawings whose future end is not in the scale yet.
       if (x1 !== null && x2 === null) {
-        const curLogical = timeScale.coordinateToLogical(x1);
-        const barsCount = tool.barsCount || (tool.endLogical && tool.logical ? (tool.endLogical - tool.logical) : 20);
-        if (curLogical !== null) {
-          x2 = timeScale.logicalToCoordinate(curLogical + barsCount);
-        }
+        const logical = timeScale.coordinateToLogical(x1);
+        const barsCount = tool.barsCount || (tool.endLogical && tool.logical ? tool.endLogical - tool.logical : 20);
+        if (logical !== null) x2 = timeScale.logicalToCoordinate(logical + barsCount);
         if (x2 === null) {
-          const barSpacing = (timeScale.options && timeScale.options().barSpacing) || 6;
-          x2 = x1 + (barsCount * barSpacing);
+          const barSpacing = timeScale.options?.().barSpacing || 6;
+          x2 = x1 + barsCount * barSpacing;
         }
       }
 
-      // 5. Fallback cuối cùng nếu cả 2 vẫn null
       if (x1 === null && tool.logical != null) x1 = timeScale.logicalToCoordinate(tool.logical);
       if (x2 === null && tool.endLogical != null) x2 = timeScale.logicalToCoordinate(tool.endLogical);
-      
+
       const yTarget = series.priceToCoordinate(tool.targetPrice);
       const yEntry = series.priceToCoordinate(tool.entryPrice);
       const yStop = series.priceToCoordinate(tool.stopPrice);
-
-      if (x1 !== null && x2 !== null && yTarget !== null && yEntry !== null && yStop !== null) {
-        setCoords({
-          x1: Math.min(x1, x2),
-          x2: Math.max(x1, x2),
-          yTarget,
-          yEntry,
-          yStop,
-          visible: true
-        });
-      } else {
-        setCoords(prev => ({ ...prev, visible: false }));
+      if (x1 === null || x2 === null || yTarget === null || yEntry === null || yStop === null) {
+        hide();
+        return;
       }
+
+      const left = Math.min(x1, x2);
+      const width = Math.abs(x2 - x1);
+      const isLong = tool.type === 'long';
+      const targetTop = isLong ? yTarget : yEntry;
+      const targetBottom = isLong ? yEntry : yTarget;
+      const stopTop = isLong ? yEntry : yStop;
+      const stopBottom = isLong ? yStop : yEntry;
+
+      const place = (element, x, y, w, h) => {
+        if (!element) return;
+        element.style.left = `${x}px`;
+        element.style.top = `${y}px`;
+        element.style.width = `${Math.max(0, w)}px`;
+        element.style.height = `${Math.max(0, h)}px`;
+      };
+
+      place(targetBoxRef.current, left, targetTop, width, targetBottom - targetTop);
+      place(entryLineRef.current, left, yEntry - 2, width, 4);
+      place(stopBoxRef.current, left, stopTop, width, stopBottom - stopTop);
+      if (deleteHintRef.current) deleteHintRef.current.style.top = `${Math.min(targetTop, stopTop) - 20}px`;
+      containerRef.current.style.visibility = 'visible';
     } catch (e) {
-      setCoords(prev => ({ ...prev, visible: false }));
+      hide();
     }
   }, [chart, series, tool, onUpdate]);
 
+  const scheduleCoordinateUpdate = useCallback(() => {
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      updateCoordinates();
+    });
+  }, [updateCoordinates]);
+
   useEffect(() => {
-    if (!chart) return;
-    
-    updateCoordinates();
-    
+    if (!chart) return undefined;
+
     const timeScale = chart.timeScale();
-    timeScale.subscribeVisibleLogicalRangeChange(updateCoordinates);
-    timeScale.subscribeVisibleTimeRangeChange(updateCoordinates);
+    scheduleCoordinateUpdate();
+    timeScale.subscribeVisibleLogicalRangeChange(scheduleCoordinateUpdate);
+    timeScale.subscribeVisibleTimeRangeChange(scheduleCoordinateUpdate);
+
+    let resizeObserver;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(scheduleCoordinateUpdate);
+      resizeObserver.observe(chart.chartElement());
+    }
 
     return () => {
-      timeScale.unsubscribeVisibleLogicalRangeChange(updateCoordinates);
-      timeScale.unsubscribeVisibleTimeRangeChange(updateCoordinates);
-    };
-  }, [chart, updateCoordinates, lastUpdateSignal]);
-
-  // Handle Dragging
-  useEffect(() => {
-    if (!isDragging || !chart || !series) return;
-
-    const handleMouseMove = (e) => {
-      const rect = chart.chartElement().getBoundingClientRect();
-      const y = e.clientY - rect.top;
-      
-      const price = series.coordinateToPrice(y);
-      if (price === null) return;
-
-      if (isDragging === 'target') {
-        onUpdate(tool.id, { targetPrice: price });
-      } else if (isDragging === 'stop') {
-        onUpdate(tool.id, { stopPrice: price });
-      } else if (isDragging === 'entry') {
-        onUpdate(tool.id, { entryPrice: price });
+      timeScale.unsubscribeVisibleLogicalRangeChange(scheduleCoordinateUpdate);
+      timeScale.unsubscribeVisibleTimeRangeChange(scheduleCoordinateUpdate);
+      resizeObserver?.disconnect();
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
       }
     };
+  }, [chart, lastUpdateSignal, scheduleCoordinateUpdate]);
 
-    const handleMouseUp = () => {
-      setIsDragging(null);
+  // Handle dragging without recreating document listeners on each price update.
+  useEffect(() => {
+    if (!isDragging || !chart || !series) return undefined;
+
+    const handleMouseMove = event => {
+      const current = latestPropsRef.current;
+      const rect = chart.chartElement().getBoundingClientRect();
+      const price = series.coordinateToPrice(event.clientY - rect.top);
+      if (price == null) return;
+
+      const field = isDragging === 'target' ? 'targetPrice'
+        : isDragging === 'stop' ? 'stopPrice'
+          : isDragging === 'entry' ? 'entryPrice' : null;
+      if (field) current.onUpdate(current.tool.id, { [field]: price });
     };
 
+    const handleMouseUp = () => setIsDragging(null);
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, chart, series, onUpdate, tool.id]);
-
-
-  if (!coords.visible) return null;
+  }, [isDragging, chart, series]);
 
   const isLong = tool.type === 'long';
-  
-  // For Long: Target is above Entry, Stop is below Entry
-  // Y coordinates increase downwards!
-  const targetTop = isLong ? coords.yTarget : coords.yEntry;
-  const targetBottom = isLong ? coords.yEntry : coords.yTarget;
-  
-  const stopTop = isLong ? coords.yEntry : coords.yStop;
-  const stopBottom = isLong ? coords.yStop : coords.yEntry;
-  
-  const targetHeight = Math.max(0, targetBottom - targetTop);
-  const stopHeight = Math.max(0, stopBottom - stopTop);
-
   const risk = Math.abs(tool.entryPrice - tool.stopPrice);
   const reward = Math.abs(tool.targetPrice - tool.entryPrice);
   const rrRatio = risk > 0 ? (reward / risk).toFixed(2) : '∞';
 
-  const width = coords.x2 - coords.x1;
-  const left = coords.x1;
-
   return (
-    <div 
+    <div
       ref={containerRef}
       style={{
         position: 'absolute',
@@ -163,17 +159,15 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
         width: '100%',
         height: '100%',
         pointerEvents: 'none',
+        visibility: 'hidden',
         zIndex: 50
       }}
     >
       {/* TARGET BOX (Green) */}
-      <div 
+      <div
+        ref={targetBoxRef}
         style={{
           position: 'absolute',
-          left: left,
-          top: targetTop,
-          width: width,
-          height: targetHeight,
           background: 'rgba(8, 153, 129, 0.2)',
           borderTop: isLong ? '2px solid rgba(8, 153, 129, 0.8)' : 'none',
           borderBottom: !isLong ? '2px solid rgba(8, 153, 129, 0.8)' : 'none',
@@ -182,8 +176,8 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
           pointerEvents: 'auto',
           cursor: 'pointer'
         }}
-        onMouseDown={(e) => { e.stopPropagation(); setIsDragging('target'); }}
-        onContextMenu={(e) => { e.preventDefault(); onDelete(); }}
+        onMouseDown={event => { event.stopPropagation(); setIsDragging('target'); }}
+        onContextMenu={event => { event.preventDefault(); onDelete(); }}
       >
         <div style={{ position: 'absolute', top: '-25px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(8, 153, 129, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap' }}>
           Target: {tool.targetPrice.toFixed(5)}
@@ -191,36 +185,29 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
       </div>
 
       {/* ENTRY LINE */}
-      <div 
+      <div
+        ref={entryLineRef}
         style={{
           position: 'absolute',
-          left: left,
-          top: coords.yEntry - 2,
-          width: width,
-          height: 4,
           background: 'transparent',
           pointerEvents: 'auto',
           cursor: 'ns-resize',
           zIndex: 51
         }}
-        onMouseDown={(e) => { e.stopPropagation(); setIsDragging('entry'); }}
-        onContextMenu={(e) => { e.preventDefault(); onDelete(); }}
+        onMouseDown={event => { event.stopPropagation(); setIsDragging('entry'); }}
+        onContextMenu={event => { event.preventDefault(); onDelete(); }}
       >
         <div style={{ position: 'absolute', top: 2, left: 0, width: '100%', height: '1px', background: 'rgba(120, 123, 134, 1)' }} />
-        
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(30, 34, 45, 0.9)', color: 'white', border: '1px solid #787b86', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap', zIndex: 52 }}>
           RR: {rrRatio} | Risk: {risk.toFixed(5)}
         </div>
       </div>
 
       {/* STOP BOX (Red) */}
-      <div 
+      <div
+        ref={stopBoxRef}
         style={{
           position: 'absolute',
-          left: left,
-          top: stopTop,
-          width: width,
-          height: stopHeight,
           background: 'rgba(242, 54, 69, 0.2)',
           borderTop: !isLong ? '2px solid rgba(242, 54, 69, 0.8)' : 'none',
           borderBottom: isLong ? '2px solid rgba(242, 54, 69, 0.8)' : 'none',
@@ -229,16 +216,15 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
           pointerEvents: 'auto',
           cursor: 'pointer'
         }}
-        onMouseDown={(e) => { e.stopPropagation(); setIsDragging('stop'); }}
-        onContextMenu={(e) => { e.preventDefault(); onDelete(); }}
+        onMouseDown={event => { event.stopPropagation(); setIsDragging('stop'); }}
+        onContextMenu={event => { event.preventDefault(); onDelete(); }}
       >
         <div style={{ position: 'absolute', bottom: '-25px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(242, 54, 69, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap' }}>
           Stop: {tool.stopPrice.toFixed(5)}
         </div>
       </div>
-      
-      {/* Delete button indicator (right click to delete) */}
-      <div style={{ position: 'absolute', top: Math.min(targetTop, stopTop) - 20, right: 0, background: 'rgba(0,0,0,0.5)', color: '#ccc', fontSize: '9px', padding: '1px 3px', pointerEvents: 'none' }}>
+
+      <div ref={deleteHintRef} style={{ position: 'absolute', right: 0, background: 'rgba(0,0,0,0.5)', color: '#ccc', fontSize: '9px', padding: '1px 3px', pointerEvents: 'none' }}>
         Right-click to delete
       </div>
     </div>
