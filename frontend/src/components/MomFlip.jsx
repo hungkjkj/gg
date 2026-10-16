@@ -1,40 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createChart } from 'lightweight-charts';
-import { computeCompositeRanking } from '../utils/matrixUtils';
-
-const MATRIX_BAR_THRESHOLDS = [50, 75, 85];
-
-const MatrixBubbleBar = ({ value, color, label }) => {
-  const normalizedValue = Math.min(Math.max(Math.abs(value ?? 0), 0), 100);
-
-  return (
-    <div
-      role="img"
-      aria-label={`${label}: ${normalizedValue.toFixed(1)} trên 100`}
-      style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', marginTop: '5px', position: 'relative' }}
-    >
-      <div style={{ width: `${normalizedValue}%`, height: '100%', background: color, borderRadius: '3px' }} />
-      {MATRIX_BAR_THRESHOLDS.map(threshold => (
-        <span
-          key={threshold}
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            left: `${threshold}%`,
-            top: '-2px',
-            width: '2px',
-            height: '8px',
-            transform: 'translateX(-1px)',
-            borderRadius: '2px',
-            background: '#4ade80',
-            boxShadow: '0 0 4px rgba(74, 222, 128, 0.9)',
-            zIndex: 1
-          }}
-        />
-      ))}
-    </div>
-  );
-};
+import { SessionMatrixTable } from './SessionMatrixTable';
 
 export const AssistiveTouch = ({ 
   showSdBands, setShowSdBands, 
@@ -42,8 +8,7 @@ export const AssistiveTouch = ({
   showVolChart, setShowVolChart, 
   showMomChart, setShowMomChart, 
   showMatrixBubble, setShowMatrixBubble, 
-  bubbleMatrixData, bubbleMatrixDataLong,
-  bubbleMatrixDataTrend, bubbleMatrixDataTrendLong,
+  bubbleSessionMatrix,
   volMode, handleVolModeToggle 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -103,9 +68,7 @@ export const AssistiveTouch = ({
     if (!isDragging) setIsOpen(!isOpen);
   };
 
-  const hasLongMatrixPair = Array.isArray(bubbleMatrixDataLong) && Array.isArray(bubbleMatrixDataTrendLong);
-  const hasShortMatrixPair = Array.isArray(bubbleMatrixData) && Array.isArray(bubbleMatrixDataTrend);
-  const hasMatrixRankingData = showMatrixBubble && hasLongMatrixPair;
+  const hasMatrixRankingData = showMatrixBubble && Array.isArray(bubbleSessionMatrix?.ranking) && bubbleSessionMatrix.ranking.length > 0;
   const controlOptions = [
     {
       id: 'sd-bands', label: 'Dải SD', description: 'Dải lệch chuẩn', checked: showSdBands,
@@ -183,136 +146,20 @@ export const AssistiveTouch = ({
             </div>
           </section>
           
-          {showMatrixBubble && (() => {
-            const renderCompositeTable = () => {
-              const primaryFlow = hasLongMatrixPair ? bubbleMatrixDataLong : null;
-              const primaryTrend = hasLongMatrixPair ? bubbleMatrixDataTrendLong : null;
-              if (!primaryFlow || !primaryTrend) {
-                return <div style={{ padding: '10px 2px', color: '#94a3b8', fontSize: '12px' }}>Đang chờ dữ liệu xếp hạng Matrix…</div>;
-              }
-
-              const longComposite = computeCompositeRanking(primaryFlow, primaryTrend);
-              const shortComposite = hasShortMatrixPair
-                ? computeCompositeRanking(bubbleMatrixData, bubbleMatrixDataTrend)
-                : [];
-
-              if (!longComposite || longComposite.length === 0) {
-                return <div style={{ padding: '10px 2px', color: '#94a3b8', fontSize: '12px' }}>Chưa có dữ liệu xếp hạng cho nhóm tài sản này.</div>;
-              }
-
-              return (
-                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)', minWidth: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '5px', marginBottom: '8px' }}>
-                    <div style={{ fontSize: '13px', color: '#fbbf24', fontWeight: 'bold' }}>⚡ Sức Mạnh Hợp Nhất (Dài / Ngắn)</div>
-                    <span title="w₁=1/e · Price Trend | w₂=(1−1/e) · Money Flow" style={{ fontSize: '10px', color: '#94a3b8', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>w₁=1/e · Trend | w₂=1−1/e · Flow</span>
-                  </div>
-                  <div style={{ width: '100%', minWidth: 0, overflowX: 'auto', overscrollBehaviorX: 'contain' }}>
-                    <table style={{ width: '100%', minWidth: '570px', tableLayout: 'fixed', fontSize: '12px', color: '#e2e8f0', borderCollapse: 'collapse', marginBottom: '12px' }}>
-                      <colgroup>
-                        <col style={{ width: '7%' }} />
-                        <col style={{ width: '9%' }} />
-                        <col style={{ width: '17%' }} />
-                        <col style={{ width: '18%' }} />
-                        <col style={{ width: '18%' }} />
-                        <col style={{ width: '11%' }} />
-                        <col style={{ width: '20%' }} />
-                      </colgroup>
-                      <thead>
-                        <tr style={{ color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                          <th style={{ textAlign: 'left', padding: '0 4px 5px' }}>#</th>
-                          <th style={{ textAlign: 'left', padding: '0 4px 5px' }}>Cur</th>
-                          <th title="Điểm Power" style={{ textAlign: 'left', padding: '0 4px 5px' }}>Power</th>
-                          <th title="Price Trend (C-VWMA)" style={{ textAlign: 'left', padding: '0 4px 5px' }}>Trend</th>
-                          <th title="Money Flow (Động lượng)" style={{ textAlign: 'left', padding: '0 4px 5px' }}>Flow</th>
-                          <th title="Thanh khoản" style={{ textAlign: 'left', padding: '0 4px 5px' }}>Vol %</th>
-                          <th style={{ textAlign: 'right', padding: '0 4px 5px' }}>Trạng thái</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                      {longComposite.map((item, idx) => {
-                        const shortItem = shortComposite.find(x => x.currency === item.currency);
-
-                        const powerColor = item.powerScore > 0 ? '#4ade80' : (item.powerScore < 0 ? '#f87171' : '#e2e8f0');
-                        const valueColor = value => value > 0 ? '#00e5ff' : (value < 0 ? '#ff4d5e' : '#e2e8f0');
-                        const formatValue = (value, suffix = '') => `${value > 0 ? '+' : ''}${value.toFixed(0)}${suffix}`;
-                        const formatPower = value => `${value > 0 ? '+' : ''}${value.toFixed(1)}`;
-
-                        let volColor = '#38bdf8';
-                        if (item.vol_percentile >= 75) volColor = '#4ade80';
-                        else if (item.vol_percentile <= 20) volColor = '#f87171';
-
-                        let shortVolColor = '#7dd3fc';
-                        if (shortItem?.vol_percentile >= 75) shortVolColor = '#4ade80';
-                        else if (shortItem?.vol_percentile <= 20) shortVolColor = '#f87171';
-
-                        return (
-                          <tr key={item.currency} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                            <td style={{ padding: '6px 4px', overflow: 'hidden', whiteSpace: 'nowrap' }}>{idx + 1}</td>
-                            <td style={{ padding: '6px 4px', overflow: 'hidden', whiteSpace: 'nowrap', fontWeight: 'bold' }}>{item.currency}</td>
-                            <td style={{ padding: '6px 4px', overflow: 'hidden' }}>
-                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                <span style={{ color: powerColor, fontWeight: 'bold' }}>{formatPower(item.powerScore)}</span>
-                                {shortItem && <span style={{ fontSize: '10px', color: valueColor(shortItem.powerScore) }}>({formatPower(shortItem.powerScore)})</span>}
-                              </div>
-                              <MatrixBubbleBar value={item.powerScore} color={powerColor} label="Điểm Power" />
-                            </td>
-                            <td style={{ padding: '6px 4px', overflow: 'hidden' }}>
-                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                <span style={{ color: valueColor(item.momTrend), fontWeight: 'bold' }}>{formatValue(item.momTrend, '%')}</span>
-                                {shortItem && <span style={{ fontSize: '10px', color: valueColor(shortItem.momTrend) }}>({formatValue(shortItem.momTrend, '%')})</span>}
-                              </div>
-                              <MatrixBubbleBar value={item.momTrend} color={valueColor(item.momTrend)} label="Price Trend" />
-                            </td>
-                            <td style={{ padding: '6px 4px', overflow: 'hidden' }}>
-                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                <span style={{ color: valueColor(item.momFlow), fontWeight: 'bold' }}>{formatValue(item.momFlow, '%')}</span>
-                                {shortItem && <span style={{ fontSize: '10px', color: valueColor(shortItem.momFlow) }}>({formatValue(shortItem.momFlow, '%')})</span>}
-                              </div>
-                              <MatrixBubbleBar value={item.momFlow} color={valueColor(item.momFlow)} label="Money Flow" />
-                            </td>
-                            <td style={{ padding: '6px 4px', overflow: 'hidden' }}>
-                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                <span style={{ color: volColor, fontWeight: '600' }}>{item.vol_percentile.toFixed(0)}%</span>
-                                {shortItem && <span style={{ fontSize: '10px', color: shortVolColor }}>({shortItem.vol_percentile.toFixed(0)}%)</span>}
-                              </div>
-                              <MatrixBubbleBar value={item.vol_percentile} color={volColor} label="Thanh khoản" />
-                            </td>
-                            <td style={{ padding: '6px 4px', textAlign: 'right', overflow: 'hidden' }}>
-                              <span style={{
-                                display: 'inline-block',
-                                maxWidth: '100%',
-                                boxSizing: 'border-box',
-                                fontSize: '10px',
-                                padding: '2px 5px',
-                                borderRadius: '4px',
-                                color: item.statusColor,
-                                backgroundColor: `${item.statusColor}22`,
-                                border: `1px solid ${item.statusColor}44`,
-                                fontWeight: '600',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                verticalAlign: 'middle'
-                              }} title={item.status}>
-                                {item.status}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            };
-
-            return (
-              <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'hidden', minWidth: 0, paddingRight: '5px' }}>
-                {renderCompositeTable()}
+          {showMatrixBubble && (
+            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)', minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap', marginBottom: '5px' }}>
+                <strong style={{ color: '#fbbf24', fontSize: '13px' }}>⚡ Sức Mạnh Theo Phiên</strong>
+                {bubbleSessionMatrix && <span style={{ color: '#94a3b8', fontSize: '10px' }}>{bubbleSessionMatrix.long_hours}h / {bubbleSessionMatrix.short_hours}h · Vol {bubbleSessionMatrix.vol_days} ngày</span>}
               </div>
-            );
-          })()}
+              <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '7px' }}>Trend · Flow · tick volume trung bình (phân vị)</div>
+              <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'hidden', minWidth: 0, paddingRight: '3px' }}>
+                {bubbleSessionMatrix
+                  ? <SessionMatrixTable data={bubbleSessionMatrix} compact />
+                  : <div style={{ padding: '10px 2px', color: '#94a3b8', fontSize: '12px' }}>Đang chờ dữ liệu Matrix theo phiên…</div>}
+              </div>
+            </div>
+          )}
         </div>
       )}
       <div 

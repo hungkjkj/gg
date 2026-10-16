@@ -823,10 +823,330 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
 MATRIX_PROGRESS = {"currency": 0.0, "crypto": 0.0, "metals": 0.0}
 _MATRIX_CACHE = {}
 _MATRIX_CACHE_TIME = {}
+_SESSION_MATRIX_CACHE = {}
+_SESSION_MATRIX_CACHE_TIME = {}
 
 @app.get("/api/v1/matrix/progress")
 def get_matrix_progress(matrix_type: str = "currency"):
     return {"progress": MATRIX_PROGRESS.get(matrix_type, 0.0)}
+
+
+@app.get("/api/v1/matrix/session-stats")
+def get_session_currency_matrix(
+    short_hours: int = 24,
+    long_hours: int = 89,
+    vol_days: int = 30,
+    matrix_type: str = "fx",
+    end_time: int = 0,
+    brokerTimezone: str = "Europe/Athens",
+    browserOffsetHours: Optional[float] = None,
+    autoDst: Optional[bool] = None,
+    asiaStart: Optional[str] = None,
+    asiaEnd: Optional[str] = None,
+    euroStart: Optional[str] = None,
+    euroEnd: Optional[str] = None,
+    preUsStart: Optional[str] = None,
+    preUsEnd: Optional[str] = None,
+    usStart: Optional[str] = None,
+    usEnd: Optional[str] = None,
+):
+    """Calculate session-based trend, flow and tick-volume statistics for Matrix."""
+    try:
+        with open(CONFIG_FILE, "r") as config_file:
+            config = json.load(config_file)
+    except Exception:
+        config = {}
+
+    # Avoid unbounded history requests while retaining the configured volume baseline.
+    short_hours = max(1, min(int(short_hours), 24 * 30))
+    long_hours = max(short_hours, min(int(long_hours), 24 * 30))
+    vol_days = max(1, min(int(vol_days), 365))
+    offset_hours = float(browserOffsetHours if browserOffsetHours is not None else config.get("browserOffsetHours", 7.0))
+    use_dst = bool(autoDst if autoDst is not None else config.get("autoDst", True))
+    session_ranges = [
+        ("asia", "Á", asiaStart or config.get("asiaStart", "07:00"), asiaEnd or config.get("asiaEnd", "11:00"), "Asia/Tokyo", pd.Timedelta(hours=9)),
+        ("europe", "Âu", euroStart or config.get("euroStart", "07:00"), euroEnd or config.get("euroEnd", "09:00"), "Europe/London", pd.Timedelta(hours=1)),
+        ("pre_us", "Pre-US", preUsStart or config.get("preUsStart", "16:00"), preUsEnd or config.get("preUsEnd", "19:00"), "America/New_York", pd.Timedelta(hours=-4)),
+        ("us", "Mỹ", usStart or config.get("usStart", "07:30"), usEnd or config.get("usEnd", "11:00"), "America/New_York", pd.Timedelta(hours=-4)),
+    ]
+
+    cache_key = (
+        short_hours, long_hours, vol_days, matrix_type, end_time, brokerTimezone,
+        offset_hours, use_dst, tuple((key, start, end) for key, _, start, end, _, _ in session_ranges),
+    )
+    now = time.time()
+    if cache_key in _SESSION_MATRIX_CACHE and now - _SESSION_MATRIX_CACHE_TIME.get(cache_key, 0) < 15:
+        return _SESSION_MATRIX_CACHE[cache_key]
+
+    if matrix_type in ["fx", "currency"]:
+        currencies = ["EUR", "GBP", "AUD", "NZD", "JPY", "USD", "GI"]
+        pairs = [
+            "EURUSD", "GBPUSD", "AUDUSD", "NZDUSD", "USDJPY", "EURGBP", "EURAUD", "EURNZD", "EURJPY",
+            "GBPAUD", "GBPNZD", "GBPJPY", "AUDNZD", "AUDJPY", "NZDJPY", "GLOBAL_INDEX",
+        ]
+    else:
+        group_symbols = config.get("matrix_groups", {}).get(matrix_type, [])
+        if not group_symbols:
+            return {"progress": 100.0, "ranking": [], "corr_matrix": [], "currencies": [], "sessions": []}
+        gi_symbol = f"{matrix_type.upper()}_GI"
+        currencies = group_symbols + [gi_symbol]
+        pairs = group_symbols + [gi_symbol]
+
+    hours_per_day = 24 * 12  # M5 candles; matches the existing Matrix window and Volume days setting.
+    # The legacy Volume days control uses 1.5× calendar-day bars to cover market closures.
+    history_bars = max(long_hours * 12, int(vol_days * hours_per_day * 1.5)) + 24
+    period_configs = (("long", long_hours), ("short", short_hours))
+    currency_samples = {
+        currency: {session_key: {period: [] for period, _ in period_configs} for session_key, *_ in session_ranges}
+        for currency in currencies
+    }
+    return_series = []
+    MATRIX_PROGRESS[matrix_type] = 0.0
+
+    def parse_minutes(time_text):
+        try:
+            hours, minutes = map(int, time_text.split(":"))
+            return (hours % 24) * 60 + (minutes % 60)
+        except (AttributeError, TypeError, ValueError):
+            return 0
+
+    def volume_weighted_price(prices, volumes):
+        total_volume = float(np.sum(volumes))
+        if total_volume > 0:
+            return float(np.sum(prices * volumes) / total_volume)
+        return float(np.mean(prices)) if len(prices) else 0.0
+
+    def measure_session(df, positions, price_moves):
+        prices = df["hlc3"].to_numpy(dtype=float)[positions]
+        volumes = df["value"].fillna(0).to_numpy(dtype=float)[positions]
+        move_values = price_moves[positions]
+        split = max(1, len(positions) // 2)
+        first_price = volume_weighted_price(prices[:split], volumes[:split])
+        second_price = volume_weighted_price(prices[split:], volumes[split:]) if split < len(positions) else first_price
+        trend = ((second_price - first_price) / first_price * 100.0) if first_price > 0 else 0.0
+        total_volume = float(np.sum(volumes))
+        # Keep Matrix's flow scale (weighted average candle return × candle count),
+        # but calculate it from every candle in this session rather than a V-target block.
+        flow = (float(np.sum(move_values * volumes)) / total_volume * len(positions)) if total_volume > 0 else 0.0
+        return trend, flow, total_volume, len(positions)
+
+    def get_session_groups(df, local_times, session_config):
+        _, _, start_text, end_text, timezone_name, summer_offset = session_config
+        start_minute = parse_minutes(start_text)
+        end_minute = parse_minutes(end_text)
+        candle_minute = local_times.dt.hour.to_numpy() * 60 + local_times.dt.minute.to_numpy()
+        if use_dst:
+            zone_times = df["utc_time"].dt.tz_convert(timezone_name)
+            zone_naive = pd.Series(pd.DatetimeIndex(zone_times).tz_localize(None), index=df.index)
+            utc_naive = pd.Series(pd.DatetimeIndex(df["utc_time"]).tz_localize(None), index=df.index)
+            dst_shift = ((zone_naive - utc_naive - summer_offset).dt.total_seconds() / 60).to_numpy()
+        else:
+            dst_shift = np.zeros(len(df))
+        target_start = (start_minute - dst_shift) % 1440
+        target_end = (end_minute - dst_shift) % 1440
+        if start_minute == end_minute:
+            mask = np.zeros(len(df), dtype=bool)
+        else:
+            straight = (candle_minute >= target_start) & (candle_minute < target_end)
+            crosses_midnight = target_start > target_end
+            crossed = (candle_minute >= target_start) | (candle_minute < target_end)
+            mask = np.where(crosses_midnight, crossed, straight)
+
+        session_dates = local_times.dt.normalize()
+        early_crossing = (target_start > target_end) & (candle_minute < target_end)
+        session_dates = session_dates - pd.to_timedelta(early_crossing.astype(int), unit="D")
+        selected = np.flatnonzero(mask)
+        if not len(selected):
+            return []
+        date_series = pd.Series(session_dates.iloc[selected].astype(str).to_numpy(), index=selected)
+        return [np.asarray(indices, dtype=int) for _, indices in date_series.groupby(date_series, sort=True).groups.items()]
+
+    for pair_index, pair in enumerate(pairs):
+        try:
+            df = get_historical_data(pair, "M5", history_bars, end_time, brokerTimezone, fallback_ea=False)
+            if df is None or df.empty or not {"time", "high", "low", "close", "value"}.issubset(df.columns):
+                MATRIX_PROGRESS[matrix_type] = round((pair_index + 1) / len(pairs) * 100, 2)
+                continue
+            df = df.copy().sort_values("time").reset_index(drop=True)
+            broker_naive = pd.to_datetime(df["time"], unit="s")
+            try:
+                broker_aware = broker_naive.dt.tz_localize(brokerTimezone, nonexistent="shift_forward", ambiguous="NaT")
+            except Exception:
+                broker_aware = broker_naive.dt.tz_localize("UTC")
+            df["utc_time"] = broker_aware.dt.tz_convert("UTC")
+            df = df.dropna(subset=["utc_time"]).reset_index(drop=True)
+            if df.empty:
+                MATRIX_PROGRESS[matrix_type] = round((pair_index + 1) / len(pairs) * 100, 2)
+                continue
+
+            df["value"] = pd.to_numeric(df["value"], errors="coerce").fillna(0).clip(lower=0)
+            df["hlc3"] = (df["high"] + df["low"] + df["close"]) / 3.0
+            hlc3_previous = df["hlc3"].shift(1).fillna(df["hlc3"])
+            price_moves = np.where(hlc3_previous.to_numpy() > 0, (df["hlc3"].to_numpy() - hlc3_previous.to_numpy()) / hlc3_previous.to_numpy() * 100.0, 0.0)
+            local_times = df["utc_time"] + pd.to_timedelta(offset_hours, unit="h")
+
+            groups_by_session = {}
+            for session_config in session_ranges:
+                groups_by_session[session_config[0]] = get_session_groups(df, local_times, session_config)
+
+            pair_volume_history_start = max(0, len(df) - vol_days * hours_per_day)
+            historical_volumes = {}
+            for session_config in session_ranges:
+                session_key = session_config[0]
+                historical_volumes[session_key] = [
+                    (int(positions.max()), float(df["value"].to_numpy()[positions[positions >= pair_volume_history_start]].sum()))
+                    for positions in groups_by_session[session_key]
+                    if np.any(positions >= pair_volume_history_start)
+                ]
+
+            if pair == "GLOBAL_INDEX":
+                base_currency, quote_currency = "GI", None
+            elif matrix_type not in ["fx", "currency"]:
+                base_currency, quote_currency = pair, None
+            else:
+                base_currency, quote_currency = pair[:3], pair[3:]
+
+            for period_key, period_hours in period_configs:
+                window_start = max(0, len(df) - period_hours * 12)
+                for session_config in session_ranges:
+                    session_key = session_config[0]
+                    selected_samples = []
+                    for positions in groups_by_session[session_key]:
+                        window_positions = positions[positions >= window_start]
+                        if not len(window_positions):
+                            continue
+                        selected_samples.append(measure_session(df, window_positions, price_moves))
+                    if not selected_samples:
+                        continue
+
+                    trends, flows, volumes, bar_counts = map(list, zip(*selected_samples))
+                    average_volume = float(np.mean(volumes))
+                    baseline = [volume for last_position, volume in historical_volumes[session_key] if last_position < window_start and volume > 0]
+                    volume_percentiles = [float(np.mean(np.asarray(baseline) <= value) * 100.0) for value in volumes] if baseline else []
+                    contribution = {
+                        "trend_pct": float(np.mean(trends)),
+                        "flow_pct": float(np.mean(flows)),
+                        "average_volume": average_volume,
+                        "volume_percentile": float(np.mean(volume_percentiles)) if volume_percentiles else None,
+                        "samples": len(selected_samples),
+                        "bars": float(np.mean(bar_counts)),
+                    }
+                    if base_currency in currency_samples:
+                        currency_samples[base_currency][session_key][period_key].append((contribution, 1.0))
+                    if quote_currency in currency_samples:
+                        currency_samples[quote_currency][session_key][period_key].append((contribution, -1.0))
+
+            # Correlation matrix remains based on M30 log returns, using the same fetched bars.
+            m30_close = df.assign(datetime=df["utc_time"]).set_index("datetime").resample("30min")["close"].last().dropna()
+            returns = np.log(m30_close / m30_close.shift(1)).dropna()
+            returns.name = pair
+            if not returns.empty:
+                return_series.append(returns)
+        except Exception as error:
+            print(f"Session Matrix failed for {pair}: {error}")
+        MATRIX_PROGRESS[matrix_type] = round((pair_index + 1) / len(pairs) * 100, 2)
+
+    def average_contributions(contributions):
+        if not contributions:
+            return None
+        result = {}
+        for field in ("trend_pct", "flow_pct", "average_volume", "volume_percentile", "samples", "bars"):
+            values = [item[field] * (sign if field in ("trend_pct", "flow_pct") else 1.0) for item, sign in contributions if item.get(field) is not None]
+            result[field] = float(np.mean(values)) if values else None
+        return result
+
+    session_labels = [{"key": key, "label": label} for key, label, *_ in session_ranges]
+    ranking = []
+    for currency in currencies:
+        session_values = {}
+        for session_key, *_ in session_ranges:
+            session_values[session_key] = {}
+            for period_key, _ in period_configs:
+                value = average_contributions(currency_samples[currency][session_key][period_key])
+                if value:
+                    value["samples"] = int(round(value["samples"]))
+                    value["bars"] = round(value["bars"], 1)
+                    value["trend_pct"] = round(value["trend_pct"], 4)
+                    value["flow_pct"] = round(value["flow_pct"], 4)
+                    value["average_volume"] = round(value["average_volume"], 2)
+                    value["volume_percentile"] = round(value["volume_percentile"], 1) if value["volume_percentile"] is not None else None
+                session_values[session_key][period_key] = value
+
+        period_summary = {}
+        for period_key, _ in period_configs:
+            available = [session_values[key][period_key] for key, *_ in session_ranges if session_values[key][period_key]]
+            if available:
+                trend = float(np.mean([item["trend_pct"] for item in available]))
+                flow = float(np.mean([item["flow_pct"] for item in available]))
+                vol_values = [item["volume_percentile"] for item in available if item["volume_percentile"] is not None]
+                volume_percentile = float(np.mean(vol_values)) if vol_values else 50.0
+                power = ((1 / np.e) * trend + (1 - 1 / np.e) * flow) * (0.5 + 0.5 * volume_percentile / 100.0)
+            else:
+                trend, flow, volume_percentile, power = 0.0, 0.0, 50.0, 0.0
+            period_summary[period_key] = {"trend_pct": round(trend, 4), "flow_pct": round(flow, 4), "volume_percentile": round(volume_percentile, 1), "power_score": round(power, 4)}
+
+        long_summary = period_summary["long"]
+        if long_summary["trend_pct"] > 0 and long_summary["flow_pct"] > 0:
+            status, status_color = "Dẫn dắt", "#4ade80"
+        elif long_summary["trend_pct"] <= 0 and long_summary["flow_pct"] > 0:
+            status, status_color = "Tích lũy", "#38bdf8"
+        elif long_summary["trend_pct"] > 0 and long_summary["flow_pct"] <= 0:
+            status, status_color = "Suy yếu", "#fbbf24"
+        else:
+            status, status_color = "Tụt hậu", "#f87171"
+        ranking.append({
+            "currency": currency,
+            "power_score": period_summary["long"]["power_score"],
+            "short_power_score": period_summary["short"]["power_score"],
+            "long_summary": period_summary["long"],
+            "short_summary": period_summary["short"],
+            "sessions": session_values,
+            "status": status,
+            "status_color": status_color,
+        })
+    ranking.sort(key=lambda item: (item["power_score"], item["currency"]), reverse=True)
+
+    corr_matrix = []
+    if len(currencies) > 1 and return_series:
+        df_returns = pd.concat(return_series, axis=1).sort_index().ffill().dropna()
+        index_returns = {currency: pd.Series(0.0, index=df_returns.index) for currency in currencies}
+        for pair in df_returns.columns:
+            if pair == "GLOBAL_INDEX":
+                base, quote = "GI", None
+            elif matrix_type not in ["fx", "currency"]:
+                base, quote = pair, "USD"
+            else:
+                base, quote = pair[:3], pair[3:6]
+            if base in index_returns:
+                index_returns[base] = index_returns[base] + df_returns[pair]
+            if quote in index_returns:
+                index_returns[quote] = index_returns[quote] - df_returns[pair]
+        correlation = pd.DataFrame(index_returns).corr()
+        for c1 in correlation.index:
+            row = {"currency": c1}
+            for c2 in correlation.columns:
+                value = correlation.loc[c1, c2]
+                row[c2] = float(round(value, 2)) if not pd.isna(value) else 0.0
+            corr_matrix.append(row)
+
+    result = {
+        "progress": 100.0,
+        "matrix_type": matrix_type,
+        "long_hours": long_hours,
+        "short_hours": short_hours,
+        "vol_days": vol_days,
+        "sessions": session_labels,
+        "ranking": ranking,
+        "corr_matrix": corr_matrix,
+        "currencies": currencies,
+    }
+    if len(_SESSION_MATRIX_CACHE) > 100:
+        _SESSION_MATRIX_CACHE.clear()
+        _SESSION_MATRIX_CACHE_TIME.clear()
+    _SESSION_MATRIX_CACHE[cache_key] = result
+    _SESSION_MATRIX_CACHE_TIME[cache_key] = now
+    MATRIX_PROGRESS[matrix_type] = 100.0
+    return result
 
 @app.get("/api/v1/matrix")
 def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str = "fx", end_time: int = 0, brokerTimezone: str = "Europe/Athens", matrix_mode: str = "money_flow"):

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import axios from 'axios';
 import { AssistiveTouch, MomFlipChartComponent } from './components/MomFlip';
-import { computeCompositeRanking } from './utils/matrixUtils';
+import { SessionMatrixTable } from './components/SessionMatrixTable';
 import StrategyBuilderTab from './components/StrategyBuilderTab';
 import RrTool from './components/RrTool';
 import TradingLogPanel from './components/TradingLogPanel';
@@ -2597,45 +2597,8 @@ useEffect(() => {
   );
 };
 
-const MATRIX_BAR_THRESHOLDS = [50, 75, 85];
-
-const MatrixThresholdBar = ({ value, color, maxWidth, height = 5, label }) => {
-  const normalizedValue = Math.min(Math.max(Math.abs(value), 0), 100);
-
-  return (
-    <div
-      role="img"
-      aria-label={`${label} ${normalizedValue.toFixed(1)} trên 100; các mốc 50, 75 và 85`}
-      style={{ width: '100%', maxWidth: `${maxWidth}px`, height: `${height}px`, background: 'rgba(255,255,255,0.08)', borderRadius: '3px', marginTop: '6px', position: 'relative' }}
-    >
-      <div style={{ width: `${normalizedValue}%`, height: '100%', background: color, borderRadius: '3px' }} />
-      {MATRIX_BAR_THRESHOLDS.map(threshold => (
-        <span
-          key={threshold}
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            left: `${threshold}%`,
-            top: '-2px',
-            width: '2px',
-            height: '9px',
-            transform: 'translateX(-1px)',
-            borderRadius: '2px',
-            background: '#4ade80',
-            boxShadow: '0 0 4px rgba(74, 222, 128, 0.9)',
-            zIndex: 1
-          }}
-        />
-      ))}
-    </div>
-  );
-};
-
-const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, initialMatrixVolDays, onSaveMatrixSettings, symbol }) => {
-  const [matrixData, setMatrixData] = useState(null);
-  const [matrixDataLong, setMatrixDataLong] = useState(null);
-  const [matrixDataTrend, setMatrixDataTrend] = useState(null);
-  const [matrixDataTrendLong, setMatrixDataTrendLong] = useState(null);
+const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, initialMatrixVolDays, onSaveMatrixSettings, symbol, sessionSettings }) => {
+  const [sessionMatrixData, setSessionMatrixData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [matrixHours, setMatrixHours] = useState(initialMatrixHours || Number(localStorage.getItem('currencyMatrixHours')) || 24);
@@ -2677,21 +2640,30 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     if (force && onSaveMatrixSettings) {
       onSaveMatrixSettings(matrixHours, matrixVolDays);
     }
+    const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
+    const sessionParams = {
+      asiaStart: sessionSettings?.asiaStart || '07:00',
+      asiaEnd: sessionSettings?.asiaEnd || '11:00',
+      euroStart: sessionSettings?.euroStart || '07:00',
+      euroEnd: sessionSettings?.euroEnd || '09:00',
+      preUsStart: sessionSettings?.preUsStart || '16:00',
+      preUsEnd: sessionSettings?.preUsEnd || '19:00',
+      usStart: sessionSettings?.usStart || '07:30',
+      usEnd: sessionSettings?.usEnd || '11:00',
+      autoDst: sessionSettings?.autoDst ?? true,
+      browserOffsetHours
+    };
+    const cacheSignature = JSON.stringify({ matrixHours, matrixHoursLong, matrixVolDays, brokerTimezone, ...sessionParams });
+
     // Không dùng cache nếu đang ở chế độ backtest
     if (!force && !simulatedTime) {
       const cached = localStorage.getItem(`matrixCache_${matrixType}`);
       const cachedTime = localStorage.getItem(`matrixCacheTime_${matrixType}`);
-      const cachedHours = localStorage.getItem(`matrixCacheHours_${matrixType}`);
-      const cachedHoursLong = localStorage.getItem(`matrixCacheHoursLong_${matrixType}`);
-      const cachedVolDays = localStorage.getItem(`matrixCacheVolDays_${matrixType}`);
-      if (cached && cachedTime && cachedHours == matrixHours && cachedHoursLong == matrixHoursLong && cachedVolDays == matrixVolDays) {
+      const cachedSignature = localStorage.getItem(`matrixCacheSignature_${matrixType}`);
+      if (cached && cachedTime && cachedSignature === cacheSignature) {
         const age = Date.now() - parseInt(cachedTime);
         if (age < 60 * 1000) {
-          const parsed = JSON.parse(cached);
-          setMatrixData(parsed.short);
-          setMatrixDataLong(parsed.long);
-          setMatrixDataTrend(parsed.trendShort);
-          setMatrixDataTrendLong(parsed.trendLong);
+          setSessionMatrixData(JSON.parse(cached));
           return;
         }
       }
@@ -2699,27 +2671,23 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     
     setLoading(true);
     try {
-      const [resFlowShort, resFlowLong, resTrendShort, resTrendLong] = await Promise.all([
-        axios.get(`${API_BASE}/api/v1/matrix`, { params: { n_hours: matrixHours, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone, matrix_mode: 'money_flow' } }),
-        axios.get(`${API_BASE}/api/v1/matrix`, { params: { n_hours: matrixHoursLong, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone, matrix_mode: 'money_flow' } }),
-        axios.get(`${API_BASE}/api/v1/matrix`, { params: { n_hours: matrixHours, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone, matrix_mode: 'trend' } }),
-        axios.get(`${API_BASE}/api/v1/matrix`, { params: { n_hours: matrixHoursLong, vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone, matrix_mode: 'trend' } })
-      ]);
-      setMatrixData(resFlowShort.data);
-      setMatrixDataLong(resFlowLong.data);
-      setMatrixDataTrend(resTrendShort.data);
-      setMatrixDataTrendLong(resTrendLong.data);
+      const response = await axios.get(`${API_BASE}/api/v1/matrix/session-stats`, {
+        params: {
+          short_hours: matrixHours,
+          long_hours: matrixHoursLong,
+          vol_days: matrixVolDays,
+          matrix_type: matrixType,
+          end_time: simulatedTime || 0,
+          brokerTimezone,
+          ...sessionParams
+        }
+      });
+      setSessionMatrixData(response.data);
       
       if (!simulatedTime) {
-          const combo = { 
-            short: resFlowShort.data, long: resFlowLong.data,
-            trendShort: resTrendShort.data, trendLong: resTrendLong.data 
-          };
-          localStorage.setItem(`matrixCache_${matrixType}`, JSON.stringify(combo));
+          localStorage.setItem(`matrixCache_${matrixType}`, JSON.stringify(response.data));
           localStorage.setItem(`matrixCacheTime_${matrixType}`, Date.now().toString());
-          localStorage.setItem(`matrixCacheHours_${matrixType}`, matrixHours.toString());
-          localStorage.setItem(`matrixCacheHoursLong_${matrixType}`, matrixHoursLong.toString());
-          localStorage.setItem(`matrixCacheVolDays_${matrixType}`, matrixVolDays.toString());
+          localStorage.setItem(`matrixCacheSignature_${matrixType}`, cacheSignature);
       }
       localStorage.setItem('currencyMatrixHours', matrixHours.toString());
       localStorage.setItem('currencyMatrixHoursLong', matrixHoursLong.toString());
@@ -2735,15 +2703,15 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
   useEffect(() => {
     fetchMatrix(false);
     
-    // Tự động làm mới Ma trận mỗi 15 phút
+    // Tự động làm mới Ma trận mỗi 5 phút
     const intervalId = setInterval(() => {
       fetchMatrix(true);
     }, 5 * 60 * 1000);
     
     return () => clearInterval(intervalId);
-  }, [matrixType]);
+  }, [matrixType, sessionSettings?.asiaStart, sessionSettings?.asiaEnd, sessionSettings?.euroStart, sessionSettings?.euroEnd, sessionSettings?.preUsStart, sessionSettings?.preUsEnd, sessionSettings?.usStart, sessionSettings?.usEnd, sessionSettings?.autoDst]);
 
-  if (!matrixData) {
+  if (!sessionMatrixData) {
     if (loading) {
       return (
         <div style={{ padding: '50px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'white' }}>
@@ -2839,283 +2807,62 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         </span>
       </div>
 
-      {(matrixData && matrixDataLong && matrixDataTrend && matrixDataTrendLong) && (() => {
-        const renderCompositeTable = () => {
-          const longComposite = computeCompositeRanking(matrixDataLong?.ranking, matrixDataTrendLong?.ranking);
-          const shortComposite = computeCompositeRanking(matrixData?.ranking, matrixDataTrend?.ranking);
-
-          const topLeader = longComposite.length > 0 ? longComposite[0] : null;
-          const topLaggard = longComposite.length > 0 ? longComposite[longComposite.length - 1] : null;
-          const leadersCount = longComposite.filter(x => x.status === 'Dẫn dắt').length;
-          const accumCount = longComposite.filter(x => x.status === 'Tích lũy').length;
-          const exhaustCount = longComposite.filter(x => x.status === 'Suy yếu').length;
-          const lagCount = longComposite.filter(x => x.status === 'Tụt hậu').length;
-
-          return (
-            <div style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-panel)', padding: '24px', borderRadius: '12px', border: '1px solid rgba(251, 191, 36, 0.25)', boxShadow: '0 0 25px rgba(251, 191, 36, 0.05)', overflowX: 'auto' }}>
-              {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-                <div>
-                  <h2 style={{ margin: 0, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.25rem' }}>
-                    ⚡ Sức Mạnh Hợp Nhất ({matrixHoursLong}H / {matrixHours}H)
-                  </h2>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                    Mô hình Euler kết hợp Price Trend và Money Flow theo trọng số tự nhiên, nhân hệ số thanh khoản Volume
-                  </div>
-                </div>
-                <span style={{ fontSize: '11px', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.1)', padding: '5px 10px', borderRadius: '6px', border: '1px solid rgba(251, 191, 36, 0.25)', fontWeight: '600', letterSpacing: '0.3px' }}>
-                  w₁=1/e · Trend | w₂=(1-1/e) · Flow | × Vol Factor
-                </span>
-              </div>
-
-              {/* Market Breadth Summary Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px', marginBottom: '24px' }}>
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(74, 222, 128, 0.2)', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ fontSize: '22px' }}>🏆</div>
-                  <div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Mạnh Nhất (Top Leader)</div>
-                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#4ade80' }}>
-                      {topLeader ? `${topLeader.currency} (${topLeader.powerScore > 0 ? '+' : ''}${topLeader.powerScore.toFixed(1)})` : 'N/A'}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(248, 113, 113, 0.2)', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ fontSize: '22px' }}>🔻</div>
-                  <div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Yếu Nhất (Top Laggard)</div>
-                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#f87171' }}>
-                      {topLaggard ? `${topLaggard.currency} (${topLaggard.powerScore > 0 ? '+' : ''}${topLaggard.powerScore.toFixed(1)})` : 'N/A'}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(251, 191, 36, 0.2)', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ fontSize: '22px' }}>🧭</div>
-                  <div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Phân Bổ 4 Pha Thị Trường</div>
-                    <div style={{ fontSize: '12px', fontWeight: '600', display: 'flex', gap: '10px', marginTop: '2px', flexWrap: 'wrap' }}>
-                      <span style={{ color: '#4ade80' }}>🟢 {leadersCount} Dẫn dắt</span>
-                      <span style={{ color: '#38bdf8' }}>🔵 {accumCount} Tích lũy</span>
-                      <span style={{ color: '#fbbf24' }}>🟡 {exhaustCount} Suy yếu</span>
-                      <span style={{ color: '#f87171' }}>🔴 {lagCount} Tụt hậu</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Main Table */}
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', fontSize: '12px' }}>
-                    <th style={{ padding: '12px 8px', whiteSpace: 'nowrap', width: '70px' }}>Hạng</th>
-                    <th style={{ padding: '12px 14px', whiteSpace: 'nowrap', width: '120px' }}>Tài sản</th>
-                    <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Điểm Power ({matrixHoursLong}H / {matrixHours}H)</th>
-                    <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Price Trend (C-VWMA)</th>
-                    <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Money Flow (Động lượng)</th>
-                    <th style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>Thanh khoản (Vol %)</th>
-                    <th style={{ padding: '12px 14px', textAlign: 'right', whiteSpace: 'nowrap', width: '140px' }}>Trạng thái</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {longComposite.map((item, index) => {
-                    const shortItem = shortComposite.find(x => x.currency === item.currency);
-
-                    const powerColor = item.powerScore > 0 ? 'var(--up-color)' : (item.powerScore < 0 ? 'var(--down-color)' : 'var(--text-primary)');
-                    const shortPowerColor = shortItem?.powerScore > 0 ? 'var(--up-color)' : (shortItem?.powerScore < 0 ? 'var(--down-color)' : '#9ca3af');
-
-                    let volColor = '#38bdf8';
-                    if (item.vol_percentile >= 75) volColor = '#4ade80';
-                    else if (item.vol_percentile <= 20) volColor = '#f87171';
-
-                    let shortVolColor = '#7dd3fc';
-                    if (shortItem?.vol_percentile >= 75) shortVolColor = '#4ade80';
-                    else if (shortItem?.vol_percentile <= 20) shortVolColor = '#f87171';
-
-                    const rankStyle = index === 0 ? { bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.35), rgba(217, 119, 6, 0.15))', border: '#f59e0b', color: '#fbbf24' }
-                                    : index === 1 ? { bg: 'linear-gradient(135deg, rgba(148, 163, 184, 0.3), rgba(100, 116, 139, 0.15))', border: '#94a3b8', color: '#e2e8f0' }
-                                    : index === 2 ? { bg: 'linear-gradient(135deg, rgba(180, 83, 9, 0.3), rgba(146, 64, 14, 0.15))', border: '#b45309', color: '#fcd34d' }
-                                    : { bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)' };
-
-                    return (
-                      <tr 
-                        key={item.currency} 
-                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background-color 0.15s ease' }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.03)'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                      >
-                        {/* Hạng */}
-                        <td style={{ padding: '14px 8px', whiteSpace: 'nowrap' }}>
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            minWidth: '34px',
-                            height: '24px',
-                            padding: '0 6px',
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            fontWeight: 'bold',
-                            background: rankStyle.bg,
-                            border: `1px solid ${rankStyle.border}`,
-                            color: rankStyle.color
-                          }}>
-                            #{index + 1}
-                          </span>
-                        </td>
-
-                        {/* Ticker / Cur */}
-                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                          <span style={{
-                            display: 'inline-block',
-                            padding: '4px 10px',
-                            borderRadius: '6px',
-                            background: 'rgba(255,255,255,0.06)',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            fontWeight: '700',
-                            fontSize: '13px',
-                            color: '#f8fafc',
-                            letterSpacing: '0.3px'
-                          }}>
-                            {item.currency}
-                          </span>
-                        </td>
-
-                        {/* Điểm Power + Power Bar */}
-                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                            <span style={{ color: powerColor, fontWeight: 'bold', fontSize: '14px' }}>
-                              {(item.powerScore > 0 ? '+' : '') + item.powerScore.toFixed(1)}
-                            </span>
-                            {shortItem && (
-                              <span style={{ fontSize: '12px', color: shortPowerColor, fontWeight: 'normal' }}>
-                                ({(shortItem.powerScore > 0 ? '+' : '') + shortItem.powerScore.toFixed(1)})
-                              </span>
-                            )}
-                          </div>
-                          <MatrixThresholdBar
-                            value={item.powerScore}
-                            color={item.powerScore >= 0 ? 'var(--up-color)' : 'var(--down-color)'}
-                            maxWidth={160}
-                            label="Điểm Power"
-                          />
-                        </td>
-
-                        {/* Price Trend (C-VWMA) */}
-                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: item.momTrend > 0 ? 'var(--up-color)' : (item.momTrend < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
-                              {item.momTrend > 0 ? '+' : ''}{item.momTrend.toFixed(0)}%
-                            </span>
-                            {shortItem && (
-                              <span style={{ fontSize: '12px', color: shortItem.momTrend > 0 ? 'var(--up-color)' : (shortItem.momTrend < 0 ? 'var(--down-color)' : '#9ca3af') }}>
-                                ({shortItem.momTrend > 0 ? '+' : ''}{shortItem.momTrend.toFixed(0)}%)
-                              </span>
-                            )}
-                          </div>
-                          <MatrixThresholdBar
-                            value={item.momTrend}
-                            color={item.momTrend >= 0 ? 'var(--up-color)' : 'var(--down-color)'}
-                            maxWidth={120}
-                            height={4}
-                            label="Price Trend"
-                          />
-                        </td>
-
-                        {/* Money Flow (Động lượng) */}
-                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: item.momFlow > 0 ? 'var(--up-color)' : (item.momFlow < 0 ? 'var(--down-color)' : 'var(--text-primary)') }}>
-                              {item.momFlow > 0 ? '+' : ''}{item.momFlow.toFixed(0)}%
-                            </span>
-                            {shortItem && (
-                              <span style={{ fontSize: '12px', color: shortItem.momFlow > 0 ? 'var(--up-color)' : (shortItem.momFlow < 0 ? 'var(--down-color)' : '#9ca3af') }}>
-                                ({shortItem.momFlow > 0 ? '+' : ''}{shortItem.momFlow.toFixed(0)}%)
-                              </span>
-                            )}
-                          </div>
-                          <MatrixThresholdBar
-                            value={item.momFlow}
-                            color={item.momFlow >= 0 ? 'var(--up-color)' : 'var(--down-color)'}
-                            maxWidth={120}
-                            height={4}
-                            label="Money Flow"
-                          />
-                        </td>
-
-                        {/* Volume (Thanh khoản) */}
-                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                            <span style={{ fontSize: '13px', fontWeight: item.vol_percentile >= 75 ? 'bold' : 'normal', color: volColor }}>
-                              {item.vol_percentile.toFixed(0)}%
-                            </span>
-                            {shortItem && (
-                              <span style={{ fontSize: '12px', color: shortVolColor }}>
-                                ({shortItem.vol_percentile.toFixed(0)}%)
-                              </span>
-                            )}
-                          </div>
-                          <MatrixThresholdBar
-                            value={item.vol_percentile}
-                            color={volColor}
-                            maxWidth={120}
-                            label="Thanh khoản"
-                          />
-                        </td>
-
-                        {/* Trạng thái 4 Pha */}
-                        <td style={{ padding: '14px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            padding: '4px 10px',
-                            borderRadius: '6px',
-                            fontSize: '11px',
-                            fontWeight: '600',
-                            color: item.statusColor,
-                            backgroundColor: `${item.statusColor}18`,
-                            border: `1px solid ${item.statusColor}33`,
-                            boxShadow: `0 0 10px ${item.statusColor}22`
-                          }}>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: item.statusColor, boxShadow: `0 0 6px ${item.statusColor}` }} />
-                            {item.status}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          );
-        };
-
+      {sessionMatrixData && (() => {
+        const ranking = sessionMatrixData.ranking || [];
+        const topLeader = ranking[0] || null;
+        const topLaggard = ranking[ranking.length - 1] || null;
+        const counts = ranking.reduce((result, item) => {
+          result[item.status] = (result[item.status] || 0) + 1;
+          return result;
+        }, {});
         return (
-          <div style={{ marginBottom: '40px' }}>
-            {renderCompositeTable()}
+          <div style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-panel)', padding: '24px', borderRadius: '12px', border: '1px solid rgba(34, 211, 238, 0.24)', boxShadow: '0 0 25px rgba(34, 211, 238, 0.05)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h2 style={{ margin: 0, color: '#fbbf24', fontSize: '1.25rem' }}>⚡ Sức Mạnh Theo Phiên ({sessionMatrixData.long_hours}H / {sessionMatrixData.short_hours}H)</h2>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '5px' }}>Trend = dịch chuyển C-VWMA giữa nửa đầu và nửa sau phiên · Flow = biến động giá có trọng số tick volume trên toàn bộ nến phiên.</div>
+              </div>
+              <span style={{ color: '#7dd3fc', background: 'rgba(14,165,233,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: '7px', padding: '6px 9px', fontSize: '11px', whiteSpace: 'nowrap' }}>Tick volume trung bình mỗi phiên · phân vị so với các phiên trước trong {sessionMatrixData.vol_days} ngày</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '10px', marginBottom: '14px' }}>
+              <div style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(74,222,128,0.18)', background: 'rgba(255,255,255,0.02)' }}>
+                <div style={{ color: '#94a3b8', fontSize: '10px' }}>Dẫn đầu · {sessionMatrixData.long_hours}h</div>
+                <strong style={{ color: '#4ade80', fontSize: '14px' }}>{topLeader ? topLeader.currency + ' (' + (topLeader.power_score > 0 ? '+' : '') + topLeader.power_score.toFixed(1) + ')' : '—'}</strong>
+              </div>
+              <div style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.18)', background: 'rgba(255,255,255,0.02)' }}>
+                <div style={{ color: '#94a3b8', fontSize: '10px' }}>Yếu nhất · {sessionMatrixData.long_hours}h</div>
+                <strong style={{ color: '#fb7185', fontSize: '14px' }}>{topLaggard ? topLaggard.currency + ' (' + (topLaggard.power_score > 0 ? '+' : '') + topLaggard.power_score.toFixed(1) + ')' : '—'}</strong>
+              </div>
+              <div style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(251,191,36,0.18)', background: 'rgba(255,255,255,0.02)', color: '#cbd5e1', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '9px', flexWrap: 'wrap' }}>
+                <span style={{ color: '#4ade80' }}>● {counts['Dẫn dắt'] || 0} Dẫn dắt</span>
+                <span style={{ color: '#38bdf8' }}>● {counts['Tích lũy'] || 0} Tích lũy</span>
+                <span style={{ color: '#fbbf24' }}>● {counts['Suy yếu'] || 0} Suy yếu</span>
+                <span style={{ color: '#f87171' }}>● {counts['Tụt hậu'] || 0} Tụt hậu</span>
+              </div>
+            </div>
+            <SessionMatrixTable data={sessionMatrixData} />
           </div>
         );
       })()}
       
       {/* Ma trận Tương quan */}
-      {matrixData.corr_matrix && matrixData.corr_matrix.length > 0 && (
+      {sessionMatrixData.corr_matrix && sessionMatrixData.corr_matrix.length > 0 && (
         <div style={{ marginTop: '40px', background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', overflowX: 'auto' }}>
           <h2 style={{ marginBottom: '20px', color: '#f472b6' }}>Ma trận Tương quan (M30 Log Returns)</h2>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.9rem' }}>
             <thead>
               <tr>
                 <th style={{ padding: '10px', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}></th>
-                {matrixData.currencies.map(c => (
+                {sessionMatrixData.currencies.map(c => (
                   <th key={c} style={{ padding: '10px', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>{c}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {matrixData.corr_matrix.map(row => (
+              {sessionMatrixData.corr_matrix.map(row => (
                 <tr key={row.currency}>
                   <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontWeight: 'bold', textAlign: 'left', color: 'var(--text-secondary)' }}>{row.currency}</td>
-                  {matrixData.currencies.map(c => {
+                  {sessionMatrixData.currencies.map(c => {
                     const val = row[c];
                     let bgColor = 'transparent';
                     if (val === 1 || row.currency === c) {
@@ -3751,10 +3498,7 @@ function App() {
   const [showVolChart, setShowVolChart] = useState(localStorage.getItem('showVolChart') !== 'false');
   const [showMomChart, setShowMomChart] = useState(localStorage.getItem('showMomChart') !== 'false');
   const [showMatrixBubble, setShowMatrixBubble] = useState(localStorage.getItem('showMatrixBubble') === 'true');
-  const [bubbleMatrixData, setBubbleMatrixData] = useState(null);
-  const [bubbleMatrixDataLong, setBubbleMatrixDataLong] = useState(null);
-  const [bubbleMatrixDataTrend, setBubbleMatrixDataTrend] = useState(null);
-  const [bubbleMatrixDataTrendLong, setBubbleMatrixDataTrendLong] = useState(null);
+  const [bubbleSessionMatrix, setBubbleSessionMatrix] = useState(null);
 
   
   const [configs, setConfigs] = useState(() => ({
@@ -3813,33 +3557,29 @@ function App() {
     let isFetching = false;
     const fetchBubbleMatrix = () => {
       if (isFetching) return;
-      
-      const bTime = configs.brokerTimezone || 'Europe/Athens';
-      const mHours = Number(localStorage.getItem('currencyMatrixHours')) || 24;
-      const mHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || 89;
-      const mVolDays = configs.matrixVolDays || 30;
-      const mType = getMatrixTypeForSymbol(symbol);
-      let urlShortFlow = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}&matrix_mode=money_flow`;
-      let urlLongFlow = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHoursLong}&vol_days=${mVolDays}&matrix_type=${mType}&matrix_mode=money_flow`;
-      let urlShortTrend = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHours}&vol_days=${mVolDays}&matrix_type=${mType}&matrix_mode=trend`;
-      let urlLongTrend = `${API_BASE}/api/v1/matrix?brokerTimezone=${encodeURIComponent(bTime)}&n_hours=${mHoursLong}&vol_days=${mVolDays}&matrix_type=${mType}&matrix_mode=trend`;
-      
-      if (viewMode === 'backtest' && window.currentSimulatedTime) {
-        urlShortFlow += `&end_time=${window.currentSimulatedTime}`;
-        urlLongFlow += `&end_time=${window.currentSimulatedTime}`;
-        urlShortTrend += `&end_time=${window.currentSimulatedTime}`;
-        urlLongTrend += `&end_time=${window.currentSimulatedTime}`;
-      }
-      
+
+      const matrixType = getMatrixTypeForSymbol(symbol);
+      const sessionSettings = {
+        asiaStart: configs.asiaStart || '07:00', asiaEnd: configs.asiaEnd || '11:00',
+        euroStart: configs.euroStart || '07:00', euroEnd: configs.euroEnd || '09:00',
+        preUsStart: configs.preUsStart || '16:00', preUsEnd: configs.preUsEnd || '19:00',
+        usStart: configs.usStart || '07:30', usEnd: configs.usEnd || '11:00',
+        autoDst: configs.autoDst ?? true,
+        browserOffsetHours: -new Date().getTimezoneOffset() / 60
+      };
+      const params = {
+        short_hours: Number(localStorage.getItem('currencyMatrixHours')) || configs.matrixHours || 24,
+        long_hours: Number(localStorage.getItem('currencyMatrixHoursLong')) || 89,
+        vol_days: configs.matrixVolDays || 30,
+        matrix_type: matrixType,
+        brokerTimezone: configs.brokerTimezone || 'Europe/Athens',
+        ...sessionSettings
+      };
+      if (viewMode === 'backtest' && window.currentSimulatedTime) params.end_time = window.currentSimulatedTime;
+
       isFetching = true;
-      Promise.all([
-          axios.get(urlShortFlow), axios.get(urlLongFlow),
-          axios.get(urlShortTrend), axios.get(urlLongTrend)
-      ]).then(res => {
-          setBubbleMatrixData(res[0].data?.ranking);
-          setBubbleMatrixDataLong(res[1].data?.ranking);
-          setBubbleMatrixDataTrend(res[2].data?.ranking);
-          setBubbleMatrixDataTrendLong(res[3].data?.ranking);
+      axios.get(`${API_BASE}/api/v1/matrix/session-stats`, { params }).then(response => {
+          setBubbleSessionMatrix(response.data);
           if (viewMode === 'backtest') {
               setTimeout(() => { isFetching = false; }, 1000);
           } else {
@@ -3864,7 +3604,7 @@ function App() {
       clearInterval(interval);
       window.removeEventListener('simulatedTimeChanged', fetchBubbleMatrix);
     };
-  }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixVolDays, symbol]);
+  }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixVolDays, configs.asiaStart, configs.asiaEnd, configs.euroStart, configs.euroEnd, configs.preUsStart, configs.preUsEnd, configs.usStart, configs.usEnd, configs.autoDst, symbol]);
 
   useEffect(() => {
     axios.get(`${API_BASE}/api/v1/symbols`)
@@ -3929,10 +3669,7 @@ function App() {
         setShowMomChart={setShowMomChart}
         showMatrixBubble={showMatrixBubble}
         setShowMatrixBubble={setShowMatrixBubble}
-        bubbleMatrixData={bubbleMatrixData}
-        bubbleMatrixDataLong={bubbleMatrixDataLong}
-        bubbleMatrixDataTrend={bubbleMatrixDataTrend}
-        bubbleMatrixDataTrendLong={bubbleMatrixDataTrendLong}
+        bubbleSessionMatrix={bubbleSessionMatrix}
         volMode={configs.volMode}
         handleVolModeToggle={(checked) => setConfigs(prev => ({ ...prev, volMode: checked ? 'mean_vol' : 'normal' }))}
       />
@@ -4224,6 +3961,7 @@ function App() {
                 initialMatrixVolDays={configs.matrixVolDays} 
                 onSaveMatrixSettings={handleSaveMatrixSettings}
                 symbol={symbol}
+                sessionSettings={configs}
               />
             ) : viewMode === 'catalyst' ? (
               <CatalystTab configs={configs} />
