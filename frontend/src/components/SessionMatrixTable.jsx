@@ -54,6 +54,9 @@ export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [
 
   const fontSize = compact ? '11px' : '12px';
   const cellPadding = compact ? '4px 3px' : '7px 5px';
+  const maxAssetLength = ranking.reduce((max, item) => Math.max(max, String(item.currency || '').length), 0);
+  const assetColumnWidth = compact ? 44 : Math.min(150, Math.max(58, maxAssetLength * 8 + 12));
+  const fixedColumnWidth = 455 + assetColumnWidth;
   const longLabel = `${data.long_hours || 89}h`;
   const shortLabel = `${data.short_hours || 24}h`;
 
@@ -62,12 +65,12 @@ export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [
       <table style={{ width: '100%', minWidth: compact ? '900px' : '1120px', tableLayout: 'fixed', borderCollapse: 'collapse', color: '#e2e8f0', fontSize }}>
         <colgroup>
           <col style={{ width: compact ? '28px' : '34px' }} />
-          <col style={{ width: compact ? '44px' : '58px' }} />
+          <col style={{ width: `${assetColumnWidth}px` }} />
           <col style={{ width: compact ? '110px' : '112px' }} />
           {!compact && <col style={{ width: '85px' }} />}
           {!compact && <col style={{ width: '85px' }} />}
           {!compact && <col style={{ width: '75px' }} />}
-          {sessions.map(session => <col key={session.key} style={{ width: compact ? '165px' : `calc((100% - 513px) / ${Math.max(sessions.length, 1)})` }} />)}
+          {sessions.map(session => <col key={session.key} style={{ width: compact ? '165px' : `calc((100% - ${fixedColumnWidth}px) / ${Math.max(sessions.length, 1)})` }} />)}
           <col style={{ width: compact ? '54px' : '64px' }} />
         </colgroup>
         <thead>
@@ -106,7 +109,7 @@ export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [
             return (
               <tr key={item.currency} style={{ borderBottom: '1px solid rgba(148,163,184,0.09)' }}>
                 <td style={{ padding: cellPadding, color: index < 3 ? '#fbbf24' : '#94a3b8', fontWeight: 700 }}>{index + 1}</td>
-                <td style={{ padding: cellPadding, fontWeight: 700, color: '#f8fafc' }}>{item.currency}</td>
+                <td title={item.currency} style={{ padding: cellPadding, fontWeight: 700, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.currency}</td>
                 <td style={{ padding: cellPadding, whiteSpace: 'nowrap' }}>
                   <span style={{ color: powerColor, fontWeight: 700 }}>{powerValue == null ? '—' : `${powerValue > 0 ? '+' : ''}${powerValue.toFixed(1)}`}</span>
                   <span style={{ color: shortPowerColor, fontSize: compact ? '9px' : '10px', fontWeight: 700 }}> ({shortPowerValue == null ? '—' : `${shortPowerValue > 0 ? '+' : ''}${shortPowerValue.toFixed(1)}`})</span>
