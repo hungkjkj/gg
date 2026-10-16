@@ -1145,6 +1145,31 @@ useEffect(() => {
           const barSpacing = timeScale.options().barSpacing || 6;
           const sessionBarSeconds = ({ M1: 60, M2: 120, M3: 180, M4: 240, M5: 300, M15: 900, M30: 1800, H1: 3600, H2: 7200, H4: 14400, H8: 28800, D1: 86400 })[timeframe] || 3600;
           const maxSessionGap = sessionBarSeconds * 1.5;
+          const sessionSchedules = {
+            'Á': [configs.asiaStart || '07:00', configs.asiaEnd || '11:00'],
+            'Âu': [configs.euroStart || '07:00', configs.euroEnd || '09:00'],
+            'Pre-US': [configs.preUsStart || '16:00', configs.preUsEnd || '19:00'],
+            'Mỹ': [configs.usStart || '07:30', configs.usEnd || '11:00']
+          };
+          const sessionScheduleByColor = {
+            '139, 69, 19': sessionSchedules['Á'],
+            '139, 0, 139': sessionSchedules['Âu'],
+            '255, 193, 7': sessionSchedules['Pre-US'],
+            '0, 0, 139': sessionSchedules['Mỹ']
+          };
+          const getSessionDurationSeconds = session => {
+            const schedule = sessionSchedules[session.name] || sessionScheduleByColor[session.color.match(/\d+\s*,\s*\d+\s*,\s*\d+/)?.[0]];
+            if (!schedule) return 0;
+            const toMinutes = value => {
+              const [hours, minutes] = String(value).split(':').map(Number);
+              return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : NaN;
+            };
+            const start = toMinutes(schedule[0]);
+            const end = toMinutes(schedule[1]);
+            if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+            const durationMinutes = (end - start + 1440) % 1440;
+            return durationMinutes * 60;
+          };
           const sessions = sessionDataRef.current;
           for (let i = 0; i < sessions.length;) {
              const first = sessions[i];
@@ -1158,12 +1183,17 @@ useEffect(() => {
                next++;
              }
 
-             if (last.time >= minTime && first.time <= maxTime) {
+             const configuredDuration = getSessionDurationSeconds(first);
+             const sessionEndTime = Math.max(
+               last.time + sessionBarSeconds,
+               first.time + configuredDuration
+             );
+             if (sessionEndTime >= minTime && first.time <= maxTime) {
                const startX = timeScale.timeToCoordinate(first.time);
-               const endX = timeScale.timeToCoordinate(last.time);
+               const endX = timeScale.timeToCoordinate(sessionEndTime);
                if (startX !== null || endX !== null) {
                  const left = Math.max(0, (startX ?? 0) - barSpacing / 2);
-                 const right = Math.min(canvas.width, (endX ?? canvas.width) + barSpacing / 2);
+                 const right = Math.min(canvas.width, (endX ?? canvas.width) - barSpacing / 2);
                  const width = Math.max(barSpacing, right - left);
                  ctx.fillStyle = first.color;
                  ctx.fillRect(left, 0, width, canvas.height);
