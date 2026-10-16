@@ -385,6 +385,11 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   // Apply News Markers and Future Timeline (for v_lines and news)
   const applyTimelineAndMarkers = () => {
     if (newsSeriesRef.current) {
+      let visibleTimeRange = null;
+      try {
+        visibleTimeRange = chartRef.current?.timeScale().getVisibleRange() || null;
+      } catch (e) {}
+
       const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
 
       // Align news to timeframe grid to prevent blank gaps in chart
@@ -433,6 +438,11 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
           if (newsSeriesRef.current) newsSeriesRef.current.setData(finalFullData);
           if (momentumDummySeriesRef.current) momentumDummySeriesRef.current.setData(finalFullData);
           if (volumeDummySeriesRef.current) volumeDummySeriesRef.current.setData(finalFullData);
+          // Updating the dummy timeline can shift the chart by logical bar index.
+          // Restore the actual time range so a backtest stays anchored to its loaded date.
+          if (visibleTimeRange && chartRef.current) {
+            chartRef.current.timeScale().setVisibleRange(visibleTimeRange);
+          }
 
           // Group events by time
           const eventsByTime = {};
@@ -1319,7 +1329,7 @@ useEffect(() => {
   const isPollingRef = useRef(false);
 
   // Fetch data từ FastAPI backend
-  const fetchData = async (isPolling = false, targetEndTime = 0, skipLoadingUI = false) => {
+  const fetchData = async (isPolling = false, targetEndTime = 0, skipLoadingUI = false, resetViewport = false) => {
     // Không cho phép gửi Polling request nếu hệ thống đang bận tải Full Load
     if (isPolling && (loadingRef.current || isPollingRef.current)) return;
     if (isPolling) isPollingRef.current = true;
@@ -1351,8 +1361,11 @@ useEffect(() => {
     }
     
     if (!isPolling && !skipLoadingUI) {
-        // Lưu lại Viewport hiện tại trước khi fetch dữ liệu mới
-        if (chartRef.current) {
+        // Khi tải mốc backtest mới, bỏ viewport cũ để neo chart vào dữ liệu vừa tải.
+        if (resetViewport) {
+            savedTimeRangeRef.current = null;
+        // Các lần tải khác tiếp tục giữ viewport người dùng đang xem.
+        } else if (chartRef.current) {
             try {
                 const currentRange = chartRef.current.timeScale().getVisibleRange();
                 if (currentRange) {
@@ -1738,6 +1751,7 @@ useEffect(() => {
         bandwidthHistoryRef.current = bandwidthHistory.slice(-10); // Keep last 10
         
                             if (candlestickSeriesRef.current && chartRef.current) {
+            let viewportFutureTimes = [];
             const oldLastTime = lastUpdateTimeRef.current || 0;
             const safeUpdate = (series, d) => {
               if (d.time >= oldLastTime) {
@@ -1805,6 +1819,7 @@ useEffect(() => {
                 
                 const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
                 const futureTimes = generateFutureTimeline(cTime, tfSec, 1500, isCrypto, configs.timeShiftHours || 0);
+                viewportFutureTimes = futureTimes;
                 
                 const allTimesMap = new Map();
                 formattedData.forEach(d => allTimesMap.set(d.time, { time: d.time, value: 0 }));
@@ -1900,8 +1915,19 @@ useEffect(() => {
             if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 200);
             
             const totalCandles = formattedData.length;
-            
-            if (savedTimeRangeRef.current) {
+            if (resetViewport && totalCandles > 0) {
+                const visibleBars = 50;
+                const halfBars = Math.floor(visibleBars / 2);
+                const startIndex = Math.max(0, totalCandles - 1 - halfBars);
+                const from = formattedData[startIndex].time;
+                const lastCandleTime = formattedData[totalCandles - 1].time;
+                const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
+                const to = viewportFutureTimes[halfBars - 1]?.time || lastCandleTime + tfSec * halfBars;
+                const range = { from, to: Math.max(to, lastCandleTime + 1) };
+                chartRef.current.timeScale().setVisibleRange(range);
+                if (momentumChartRef.current) momentumChartRef.current.timeScale().setVisibleRange(range);
+                if (volumeChartRef.current) volumeChartRef.current.timeScale().setVisibleRange(range);
+            } else if (savedTimeRangeRef.current) {
                 try {
                     chartRef.current.timeScale().setVisibleRange(savedTimeRangeRef.current);
                     if (momentumChartRef.current) momentumChartRef.current.timeScale().setVisibleRange(savedTimeRangeRef.current);
@@ -2197,7 +2223,7 @@ useEffect(() => {
     newsDataRef.current = []; // Clear stale news data so futureTimes aligns properly before new news arrives
     setNewsData([]);
     setBacktestNewsStatus('Đang tải tin...');
-    fetchData(false, targetTimestamp);
+    fetchData(false, targetTimestamp, false, true);
     
     // Tải tin tức lịch sử cho backtest
     try {
