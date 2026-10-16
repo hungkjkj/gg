@@ -10,14 +10,10 @@ const SessionPeriodCell = ({ period, label }) => {
   const volumeColor = volumePercentile == null ? '#94a3b8'
     : volumePercentile >= 75 ? '#4ade80'
       : volumePercentile <= 20 ? '#f87171' : '#7dd3fc';
-  const percentileSign = volumePercentile == null ? ''
-    : volumePercentile > 50 ? '+'
-      : volumePercentile < 50 ? '-'
-        : '=';
   const powerScore = period.power_score;
 
   return (
-    <div title={`${label}: trung bình ${period.samples} phiên, ${period.bars} nến mỗi phiên. V là phân vị volume so với lịch sử; dấu +/− so với mốc 50%. P là Power kết hợp T/F và được điều chỉnh theo phân vị volume.`} style={{ display: 'grid', gridTemplateColumns: '27px minmax(0, 1fr)', alignItems: 'start', columnGap: '5px', rowGap: '1px', margin: '2px 0' }}>
+    <div title={`${label}: trung bình ${period.samples} phiên, ${period.bars} nến mỗi phiên. V là phân vị volume so với lịch sử. P là Power kết hợp T/F và được điều chỉnh theo phân vị volume.`} style={{ display: 'grid', gridTemplateColumns: '27px minmax(0, 1fr)', alignItems: 'start', columnGap: '5px', rowGap: '1px', margin: '2px 0' }}>
       <span style={{ color: '#94a3b8', fontSize: '9px', fontWeight: 700, paddingTop: '1px' }}>{label}</span>
       <span style={{ minWidth: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', rowGap: '1px', fontSize: '10px', lineHeight: 1.25 }}>
         <span style={{ whiteSpace: 'nowrap' }}>
@@ -27,7 +23,7 @@ const SessionPeriodCell = ({ period, label }) => {
         </span>
         <span style={{ display: 'flex', justifyContent: 'space-between', gap: '4px', whiteSpace: 'nowrap', fontSize: '9px' }}>
           <span style={{ color: volumeColor, fontWeight: 700 }}>
-            V {volumePercentile == null ? '—' : `${Math.round(volumePercentile)}% (${percentileSign})`}
+            V {volumePercentile == null ? '—' : `${Math.round(volumePercentile)}%`}
           </span>
           <span style={{ color: powerScore == null ? '#94a3b8' : metricColor(powerScore), fontWeight: 700 }}>
             P {powerScore == null ? '—' : signedPower(powerScore)}
