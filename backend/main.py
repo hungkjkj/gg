@@ -1070,6 +1070,8 @@ def get_session_currency_matrix(
                     value["flow_pct"] = round(value["flow_pct"], 4)
                     value["average_volume"] = round(value["average_volume"], 2)
                     value["volume_percentile"] = round(value["volume_percentile"], 1) if value["volume_percentile"] is not None else None
+                    volume_factor = 0.5 + 0.5 * (value["volume_percentile"] if value["volume_percentile"] is not None else 50.0) / 100.0
+                    value["power_score"] = round(((1 / np.e) * value["trend_pct"] + (1 - 1 / np.e) * value["flow_pct"]) * volume_factor, 4)
                 session_values[session_key][period_key] = value
 
         period_summary = {}

@@ -2,22 +2,17 @@ import React from 'react';
 
 const metricColor = value => value > 0 ? '#22d3ee' : value < 0 ? '#fb7185' : '#cbd5e1';
 const signed = value => `${value > 0 ? '+' : ''}${Number(value || 0).toFixed(2)}%`;
+const signedPower = value => `${value > 0 ? '+' : ''}${Number(value || 0).toFixed(2)}`;
 const compactVolume = value => value == null
   ? '—'
   : new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 
 const SessionPeriodCell = ({ period, label }) => {
   if (!period) return <div style={{ color: '#64748b', fontSize: '11px' }}>{label}: —</div>;
-  const volumePercentile = period.volume_percentile;
-  const volumeColor = volumePercentile == null ? '#94a3b8'
-    : volumePercentile >= 75 ? '#4ade80'
-      : volumePercentile <= 20 ? '#f87171' : '#7dd3fc';
-  const percentileSign = volumePercentile == null ? ''
-    : volumePercentile > 50 ? '+'
-      : volumePercentile < 50 ? '-' : '=';
+  const powerScore = period.power_score;
 
   return (
-    <div title={`${label}: trung bình ${period.samples} phiên, ${period.bars} nến mỗi phiên. Dấu +/− của P so với trung vị 50%.`} style={{ display: 'grid', gridTemplateColumns: '27px minmax(0, 1fr)', alignItems: 'start', columnGap: '5px', rowGap: '1px', margin: '2px 0' }}>
+    <div title={`${label}: trung bình ${period.samples} phiên, ${period.bars} nến mỗi phiên. P là Power kết hợp T/F và được điều chỉnh theo phân vị volume.`} style={{ display: 'grid', gridTemplateColumns: '27px minmax(0, 1fr)', alignItems: 'start', columnGap: '5px', rowGap: '1px', margin: '2px 0' }}>
       <span style={{ color: '#94a3b8', fontSize: '9px', fontWeight: 700, paddingTop: '1px' }}>{label}</span>
       <span style={{ minWidth: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', rowGap: '1px', fontSize: '10px', lineHeight: 1.25 }}>
         <span style={{ whiteSpace: 'nowrap' }}>
@@ -27,8 +22,8 @@ const SessionPeriodCell = ({ period, label }) => {
         </span>
         <span style={{ display: 'flex', justifyContent: 'space-between', gap: '4px', whiteSpace: 'nowrap', fontSize: '9px' }}>
           <span style={{ color: '#cbd5e1' }}>V {compactVolume(period.average_volume)}</span>
-          <span style={{ color: volumeColor, fontWeight: 700 }}>
-            P {volumePercentile == null ? '—' : `${Math.round(volumePercentile)}% (${percentileSign})`}
+          <span style={{ color: powerScore == null ? '#94a3b8' : metricColor(powerScore), fontWeight: 700 }}>
+            P {powerScore == null ? '—' : signedPower(powerScore)}
           </span>
         </span>
       </span>
