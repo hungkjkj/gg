@@ -1065,8 +1065,8 @@ def get_session_currency_matrix(
                 session_groups.sort(key=lambda group: group["start_time"])
                 groups_by_session[session_key] = session_groups
 
-            # Match historical samples at a daily cadence. Each reference window
-            # has the same calendar-hour duration as the current 24h/89h window.
+            # Match historical samples at a daily cadence. Their windows use the
+            # configured number of candles, so weekends/closures do not shorten them.
             historical_endpoints = []
             used_endpoint_indices = set()
             for day_offset in range(1, vol_days + 1):
@@ -1108,8 +1108,9 @@ def get_session_currency_matrix(
                 base_currency, quote_currency = pair[:3], pair[3:]
 
             for period_key, period_hours in period_configs:
-                period_seconds = period_hours * 3600
-                window_start_time = latest_time - period_seconds
+                period_candles = period_hours * 12
+                current_start_index = max(0, len(df) - period_candles)
+                window_start_time = int(df_times[current_start_index])
                 for session_config in session_ranges:
                     session_key = session_config[0]
                     session_groups = groups_by_session[session_key]
@@ -1145,7 +1146,8 @@ def get_session_currency_matrix(
                     for day_offset, endpoint_index, endpoint_time in historical_endpoints:
                         if endpoint_time >= window_start_time:
                             continue
-                        historical_start_time = endpoint_time - period_seconds
+                        historical_start_index = max(0, endpoint_index - period_candles + 1)
+                        historical_start_time = int(df_times[historical_start_index])
                         historical_positions = groups_intersecting_window(
                             session_groups, historical_start_time, endpoint_time, endpoint_index
                         )
