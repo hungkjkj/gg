@@ -1,7 +1,7 @@
 import React from 'react';
 
 const metricColor = value => value > 0 ? '#22d3ee' : value < 0 ? '#fb7185' : '#cbd5e1';
-const signed = value => `${value > 0 ? '+' : ''}${Number(value || 0).toFixed(2)}%`;
+const signedPercentile = value => `${value > 0 ? '+' : ''}${Math.round(Number(value || 0))}%`;
 const signedPower = value => `${value > 0 ? '+' : ''}${Number(value || 0).toFixed(2)}`;
 const volumePercentileColor = value => value == null ? '#94a3b8'
   : value >= 75 ? '#4ade80'
@@ -12,14 +12,16 @@ const SessionPeriodCell = ({ period, label }) => {
   const volumePercentile = period.volume_percentile;
   const volumeColor = volumePercentileColor(volumePercentile);
   const powerScore = period.power_score;
+  const trendPercentile = period.trend_percentile;
+  const flowPercentile = period.flow_percentile;
 
   return (
-    <div title={`${label}: trung bình ${period.samples} phiên, ${period.bars} nến mỗi phiên. V là phân vị volume so với lịch sử của cùng phiên. P là Power kết hợp T/F và được điều chỉnh theo phân vị volume.`} style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', alignItems: 'start', columnGap: '4px', rowGap: '1px', margin: '2px 0', minWidth: 0 }}>
+    <div title={`${label}: trung bình ${period.samples} phiên, ${period.bars} nến mỗi phiên. T/F là phân vị có dấu so với các cửa sổ cùng độ dài trong Vol days. P = (0.368 × T + 0.632 × F) × hệ số V.`} style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', alignItems: 'start', columnGap: '4px', rowGap: '1px', margin: '2px 0', minWidth: 0 }}>
       <span style={{ color: '#94a3b8', fontSize: '9px', fontWeight: 700, paddingTop: '1px' }}>{label}</span>
       <span style={{ minWidth: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', rowGap: '1px', fontSize: '9px', lineHeight: 1.25 }}>
         <span style={{ display: 'flex', flexWrap: 'wrap', columnGap: '5px', minWidth: 0 }}>
-          <span style={{ color: metricColor(period.trend_pct), whiteSpace: 'nowrap' }}>T{signed(period.trend_pct)}</span>
-          <span style={{ color: metricColor(period.flow_pct), whiteSpace: 'nowrap' }}>F{signed(period.flow_pct)}</span>
+          <span style={{ color: trendPercentile == null ? '#94a3b8' : metricColor(trendPercentile), whiteSpace: 'nowrap' }}>T{trendPercentile == null ? '—' : signedPercentile(trendPercentile)}</span>
+          <span style={{ color: flowPercentile == null ? '#94a3b8' : metricColor(flowPercentile), whiteSpace: 'nowrap' }}>F{flowPercentile == null ? '—' : signedPercentile(flowPercentile)}</span>
         </span>
         <span style={{ display: 'flex', justifyContent: 'space-between', gap: '3px', whiteSpace: 'nowrap', fontSize: '9px' }}>
           <span style={{ color: volumeColor, fontWeight: 700 }}>

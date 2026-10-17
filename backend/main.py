@@ -527,14 +527,20 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         
         cond_straight = (candle_min >= target_start) & (candle_min < target_end)
         cond_cross = (candle_min >= target_start) | (candle_min < target_end)
-        
-        result = np.where(target_start <= target_end, cond_straight, cond_cross)
-        return result
+        crosses_midnight = target_start > target_end
+        result = np.where(crosses_midnight, cond_cross, cond_straight)
+        result = np.where(start_min == end_min, False, result)
 
-    in_asia = get_session_mask(asiaStart, asiaEnd, 'Asia/Tokyo')
-    in_euro = get_session_mask(euroStart, euroEnd, 'Europe/London')
-    in_pre_us = get_session_mask(preUsStart, preUsEnd, 'America/New_York')
-    in_us = get_session_mask(usStart, usEnd, 'America/New_York')
+        session_dates = user_local_series.dt.normalize()
+        early_crossing = crosses_midnight & (candle_min < target_end)
+        session_dates = session_dates - pd.to_timedelta(early_crossing.astype(int), unit='D')
+        session_keys = session_dates.dt.strftime('%Y-%m-%d').to_numpy()
+        return result, session_keys
+
+    in_asia, asia_session_keys = get_session_mask(asiaStart, asiaEnd, 'Asia/Tokyo')
+    in_euro, euro_session_keys = get_session_mask(euroStart, euroEnd, 'Europe/London')
+    in_pre_us, pre_us_session_keys = get_session_mask(preUsStart, preUsEnd, 'America/New_York')
+    in_us, us_session_keys = get_session_mask(usStart, usEnd, 'America/New_York')
     
     df['session_color'] = None
     df['session_name'] = None
@@ -546,6 +552,58 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df.loc[in_pre_us, 'session_name'] = 'Pre-US'
     df.loc[in_us, 'session_color'] = 'rgba(0, 0, 139, 0.18)' # Dark Blue
     df.loc[in_us, 'session_name'] = 'Mỹ'
+
+    # Recalculate each session VWAP on every candle. If any candle from a
+    # session intersects the trailing window, include that whole session
+    # (up to the current candle for an in-progress session).
+    # Global VWAP and SD calculations remain unchanged.
+    session_windows = {
+        'vwap_asia': (in_asia, asia_session_keys),
+        'vwap_europe': (in_euro, euro_session_keys),
+        'vwap_pre_us': (in_pre_us, pre_us_session_keys),
+        'vwap_us': (in_us, us_session_keys),
+    }
+    session_window_seconds = max(1, int(vwapLength)) * 3600
+    session_times = df['time'].to_numpy(dtype=np.int64)
+    session_volumes = df['value'].fillna(0).to_numpy(dtype=float)
+    session_price_volumes = df['vwap_vol'].fillna(0).to_numpy(dtype=float)
+
+    for column, (session_mask, session_keys) in session_windows.items():
+        result = np.full(len(df), np.nan, dtype=float)
+        selected = np.flatnonzero(session_mask)
+        if len(selected):
+            grouped_keys = pd.Series(session_keys[selected], index=selected)
+            session_groups = []
+            for _, group_indices in grouped_keys.groupby(grouped_keys, sort=True).groups.items():
+                positions = np.asarray(group_indices, dtype=int)
+                session_groups.append({
+                    'positions': positions,
+                    'start_time': int(session_times[positions[0]]),
+                    'end_time': int(session_times[positions[-1]]),
+                    'volume_prefix': np.concatenate(([0.0], np.cumsum(session_volumes[positions]))),
+                    'price_volume_prefix': np.concatenate(([0.0], np.cumsum(session_price_volumes[positions]))),
+                })
+            session_groups.sort(key=lambda group: group['start_time'])
+            group_cursor = 0
+
+            for index, current_time in enumerate(session_times):
+                cutoff_time = int(current_time) - session_window_seconds
+                while group_cursor < len(session_groups) and session_groups[group_cursor]['end_time'] < cutoff_time:
+                    group_cursor += 1
+                volume_sum = 0.0
+                price_volume_sum = 0.0
+                for group_index in range(group_cursor, len(session_groups)):
+                    group = session_groups[group_index]
+                    if group['start_time'] > current_time:
+                        break
+                    candle_count = int(np.searchsorted(group['positions'], index, side='right'))
+                    if candle_count == 0:
+                        continue
+                    volume_sum += group['volume_prefix'][candle_count]
+                    price_volume_sum += group['price_volume_prefix'][candle_count]
+                if volume_sum > 0:
+                    result[index] = price_volume_sum / volume_sum
+        df[column] = result
     
     # --- Thá»‘ng kÃª Äá»‰nh/ÄÃ¡y Vol theo Phase ---
     try:
@@ -789,7 +847,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         # Nếu backtest (có end_time) thì lấy 100 nến để đề phòng trường hợp nhảy tốc độ cao (100x).
         df = df.tail(2 if end_time == 0 else 100)
         
-    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'stdev', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_percent_rank', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mean_ma_vol', 'mean_vol_lvl1', 'mean_vol_lvl2', 'mean_vol_lvl3', 'mean_vol_lvl4', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'session_name', 'spread']
+    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'vwap_asia', 'vwap_europe', 'vwap_pre_us', 'vwap_us', 'stdev', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_percent_rank', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mean_ma_vol', 'mean_vol_lvl1', 'mean_vol_lvl2', 'mean_vol_lvl3', 'mean_vol_lvl4', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'session_name', 'spread']
     existing_cols = [c for c in cols_to_keep if c in df.columns]
     df = df[existing_cols]
         
@@ -900,6 +958,10 @@ def get_session_currency_matrix(
         currency: {session_key: {period: [] for period, _ in period_configs} for session_key, *_ in session_ranges}
         for currency in currencies
     }
+    currency_history_samples = {
+        currency: {session_key: {period: {} for period, _ in period_configs} for session_key, *_ in session_ranges}
+        for currency in currencies
+    }
     return_series = []
     MATRIX_PROGRESS[matrix_type] = 0.0
 
@@ -984,20 +1046,59 @@ def get_session_currency_matrix(
             hlc3_previous = df["hlc3"].shift(1).fillna(df["hlc3"])
             price_moves = np.where(hlc3_previous.to_numpy() > 0, (df["hlc3"].to_numpy() - hlc3_previous.to_numpy()) / hlc3_previous.to_numpy() * 100.0, 0.0)
             local_times = df["utc_time"] + pd.to_timedelta(offset_hours, unit="h")
+            df_times = df["time"].to_numpy(dtype=np.int64)
+            volume_values = df["value"].to_numpy(dtype=float)
+            latest_time = int(df_times[-1])
+            history_start_time = latest_time - vol_days * 86400
 
             groups_by_session = {}
             for session_config in session_ranges:
-                groups_by_session[session_config[0]] = get_session_groups(df, local_times, session_config)
-
-            pair_volume_history_start = max(0, len(df) - vol_days * hours_per_day)
-            historical_volumes = {}
-            for session_config in session_ranges:
                 session_key = session_config[0]
-                historical_volumes[session_key] = [
-                    (int(positions.max()), float(df["value"].to_numpy()[positions[positions >= pair_volume_history_start]].sum()))
-                    for positions in groups_by_session[session_key]
-                    if np.any(positions >= pair_volume_history_start)
-                ]
+                session_groups = []
+                for positions in get_session_groups(df, local_times, session_config):
+                    session_groups.append({
+                        "positions": positions,
+                        "start_time": int(df_times[positions[0]]),
+                        "end_time": int(df_times[positions[-1]]),
+                        "volume": float(np.sum(volume_values[positions])),
+                    })
+                session_groups.sort(key=lambda group: group["start_time"])
+                groups_by_session[session_key] = session_groups
+
+            # Match historical samples at a daily cadence. Each reference window
+            # has the same calendar-hour duration as the current 24h/89h window.
+            historical_endpoints = []
+            used_endpoint_indices = set()
+            for day_offset in range(1, vol_days + 1):
+                target_time = latest_time - day_offset * 86400
+                endpoint_index = int(np.searchsorted(df_times, target_time, side="right") - 1)
+                if endpoint_index < 0:
+                    continue
+                endpoint_time = int(df_times[endpoint_index])
+                # Skip weekends/closures instead of reusing one old candle for
+                # several daily samples.
+                if target_time - endpoint_time > 8 * 3600 or endpoint_index in used_endpoint_indices:
+                    continue
+                used_endpoint_indices.add(endpoint_index)
+                historical_endpoints.append((day_offset, endpoint_index, endpoint_time))
+
+            def groups_intersecting_window(session_groups, window_start_time, window_end_time, end_index):
+                if not session_groups:
+                    return []
+                group_starts = [group["start_time"] for group in session_groups]
+                group_ends = [group["end_time"] for group in session_groups]
+                first_group = int(np.searchsorted(group_ends, window_start_time, side="left"))
+                past_last_group = int(np.searchsorted(group_starts, window_end_time, side="right"))
+                selected = []
+                for group in session_groups[first_group:past_last_group]:
+                    positions = group["positions"]
+                    available_count = int(np.searchsorted(positions, end_index, side="right"))
+                    if available_count == 0:
+                        continue
+                    available_positions = positions[:available_count]
+                    if df_times[available_positions[-1]] >= window_start_time:
+                        selected.append(available_positions)
+                return selected
 
             if pair == "GLOBAL_INDEX":
                 base_currency, quote_currency = "GI", None
@@ -1007,21 +1108,24 @@ def get_session_currency_matrix(
                 base_currency, quote_currency = pair[:3], pair[3:]
 
             for period_key, period_hours in period_configs:
-                window_start = max(0, len(df) - period_hours * 12)
+                period_seconds = period_hours * 3600
+                window_start_time = latest_time - period_seconds
                 for session_config in session_ranges:
                     session_key = session_config[0]
-                    selected_samples = []
-                    for positions in groups_by_session[session_key]:
-                        window_positions = positions[positions >= window_start]
-                        if not len(window_positions):
-                            continue
-                        selected_samples.append(measure_session(df, window_positions, price_moves))
+                    session_groups = groups_by_session[session_key]
+                    selected_positions = groups_intersecting_window(
+                        session_groups, window_start_time, latest_time, len(df) - 1
+                    )
+                    selected_samples = [measure_session(df, positions, price_moves) for positions in selected_positions]
                     if not selected_samples:
                         continue
 
                     trends, flows, volumes, bar_counts = map(list, zip(*selected_samples))
                     average_volume = float(np.mean(volumes))
-                    baseline = [volume for last_position, volume in historical_volumes[session_key] if last_position < window_start and volume > 0]
+                    baseline = [
+                        group["volume"] for group in session_groups
+                        if history_start_time <= group["end_time"] < window_start_time and group["volume"] > 0
+                    ]
                     volume_percentiles = [float(np.mean(np.asarray(baseline) <= value) * 100.0) for value in volumes] if baseline else []
                     contribution = {
                         "trend_pct": float(np.mean(trends)),
@@ -1035,6 +1139,27 @@ def get_session_currency_matrix(
                         currency_samples[base_currency][session_key][period_key].append((contribution, 1.0))
                     if quote_currency in currency_samples:
                         currency_samples[quote_currency][session_key][period_key].append((contribution, -1.0))
+
+                    # Build matching historical session-window movement samples
+                    # so the session momentum can be ranked against Vol days.
+                    for day_offset, endpoint_index, endpoint_time in historical_endpoints:
+                        if endpoint_time >= window_start_time:
+                            continue
+                        historical_start_time = endpoint_time - period_seconds
+                        historical_positions = groups_intersecting_window(
+                            session_groups, historical_start_time, endpoint_time, endpoint_index
+                        )
+                        if not historical_positions:
+                            continue
+                        historical_metrics = [measure_session(df, positions, price_moves) for positions in historical_positions]
+                        historical_contribution = {
+                            "trend_pct": float(np.mean([item[0] for item in historical_metrics])),
+                            "flow_pct": float(np.mean([item[1] for item in historical_metrics])),
+                        }
+                        if base_currency in currency_history_samples:
+                            currency_history_samples[base_currency][session_key][period_key].setdefault(day_offset, []).append((historical_contribution, 1.0))
+                        if quote_currency in currency_history_samples:
+                            currency_history_samples[quote_currency][session_key][period_key].setdefault(day_offset, []).append((historical_contribution, -1.0))
 
             # Correlation matrix remains based on M30 log returns, using the same fetched bars.
             m30_close = df.assign(datetime=df["utc_time"]).set_index("datetime").resample("30min")["close"].last().dropna()
@@ -1071,7 +1196,33 @@ def get_session_currency_matrix(
                     value["average_volume"] = round(value["average_volume"], 2)
                     value["volume_percentile"] = round(value["volume_percentile"], 1) if value["volume_percentile"] is not None else None
                     volume_factor = 0.5 + 0.5 * (value["volume_percentile"] if value["volume_percentile"] is not None else 50.0) / 100.0
-                    value["power_score"] = round(((1 / np.e) * value["trend_pct"] + (1 - 1 / np.e) * value["flow_pct"]) * volume_factor, 4)
+
+                    # Rank T and F independently against historical windows of
+                    # the same duration, then use those signed percentiles for P.
+                    historical_trends = []
+                    historical_flows = []
+                    for history_contributions in currency_history_samples[currency][session_key][period_key].values():
+                        signed_trends = [item["trend_pct"] * sign for item, sign in history_contributions]
+                        signed_flows = [item["flow_pct"] * sign for item, sign in history_contributions]
+                        if signed_trends and signed_flows:
+                            historical_trend = float(np.mean(signed_trends))
+                            historical_flow = float(np.mean(signed_flows))
+                            historical_trends.append(historical_trend)
+                            historical_flows.append(historical_flow)
+                    if historical_trends and historical_flows:
+                        trend_rank = float(np.mean(np.abs(historical_trends) <= abs(value["trend_pct"])) * 100.0)
+                        flow_rank = float(np.mean(np.abs(historical_flows) <= abs(value["flow_pct"])) * 100.0)
+                        value["trend_percentile"] = round(trend_rank * float(np.sign(value["trend_pct"])), 1)
+                        value["flow_percentile"] = round(flow_rank * float(np.sign(value["flow_pct"])), 1)
+                        value["power_score"] = round(
+                            ((1 / np.e) * value["trend_percentile"] + (1 - 1 / np.e) * value["flow_percentile"])
+                            * volume_factor,
+                            4,
+                        )
+                    else:
+                        value["trend_percentile"] = None
+                        value["flow_percentile"] = None
+                        value["power_score"] = None
                 session_values[session_key][period_key] = value
 
         period_summary = {}

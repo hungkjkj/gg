@@ -95,6 +95,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const [momFlipData, setMomFlipData] = useState([]);
   const [currentSdPosition, setCurrentSdPosition] = useState(null);
   const chartContainerRef = useRef(null);
+  const sessionVwapTooltipRef = useRef(null);
   const momentumChartContainerRef = useRef(null);
   const volumeChartContainerRef = useRef();
   const momentumChartRef = useRef(null);
@@ -109,10 +110,10 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const lineLowSeriesRef = useRef(null);
   const sessionDataRef = useRef([]);
   const vwapSeriesRef = useRef(null);
+  const sessionVwapSeriesRef = useRef({});
   const fairValueSeriesRef = useRef(null);
   const upperBandSeriesRef = useRef(null);
   const lowerBandSeriesRef = useRef(null);
-  const sdFillSeriesRef = useRef(null);
   const momentumSeriesRef = useRef(null);
   
   // Các đường xác suất Momentum
@@ -233,7 +234,6 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const [backtestNewsStatus, setBacktestNewsStatus] = useState('Chưa tải');
   const simulatedTimeRef = useRef(0);
   const isPlayingRef = useRef(false);
-  const lastVwapColorRef = useRef(null);
   const lastMaVolColorRef = useRef(null);
   const lastHl2ColorRef = useRef(null);
   const lastBandwidthRef = useRef(null);
@@ -696,7 +696,7 @@ useEffect(() => {
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
-        rightOffset: 20,
+        rightOffset: 5,
         tickMarkFormatter: customTickMarkFormatter,
       },
     });
@@ -730,20 +730,6 @@ useEffect(() => {
       color: 'rgba(16, 185, 129, 0.8)',
       lineWidth: 2,
       lineStyle: 2, // 2 = Dashed
-      priceLineVisible: false,
-      lastValueVisible: false,
-      priceFormat: {
-        type: 'price',
-        precision: precision,
-        minMove: minMove,
-      },
-    });
-
-    const sdFillSeries = chart.addCandlestickSeries({
-      upColor: 'rgba(128, 128, 128, 0.15)',
-      downColor: 'rgba(128, 128, 128, 0.15)',
-      borderVisible: false,
-      wickVisible: false,
       priceLineVisible: false,
       lastValueVisible: false,
       priceFormat: {
@@ -795,8 +781,27 @@ useEffect(() => {
     });
     
     const vwapSeries = chart.addLineSeries({
+        color: '#f8fafc',
         lineWidth: 2,
+        priceFormat: {
+          type: 'price',
+          precision: precision,
+          minMove: minMove,
+        },
       });
+
+    const sessionVwapSeries = {
+      asia: chart.addLineSeries({ color: '#f97316', lineWidth: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+      europe: chart.addLineSeries({ color: '#d946ef', lineWidth: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+      preUs: chart.addLineSeries({ color: '#facc15', lineWidth: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+      us: chart.addLineSeries({ color: '#3b82f6', lineWidth: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+    };
+    const sessionVwapHoverTargets = [
+      { key: 'asia', name: 'VWAP Phiên Á', color: '#f97316' },
+      { key: 'europe', name: 'VWAP Phiên Âu', color: '#d946ef' },
+      { key: 'preUs', name: 'VWAP Phiên Pre-US', color: '#facc15' },
+      { key: 'us', name: 'VWAP Phiên Mỹ', color: '#3b82f6' },
+    ];
       
     const fairValueSeries = chart.addLineSeries({
         lineWidth: 2,
@@ -828,7 +833,7 @@ useEffect(() => {
         timeScale: {
           timeVisible: true,
           secondsVisible: false,
-          rightOffset: 20,
+        rightOffset: 5,
           tickMarkFormatter: customTickMarkFormatter,
         },
       });
@@ -865,7 +870,7 @@ useEffect(() => {
         timeScale: {
           timeVisible: true,
           secondsVisible: false,
-          rightOffset: 20,
+        rightOffset: 5,
           tickMarkFormatter: customTickMarkFormatter,
         },
       });
@@ -945,6 +950,45 @@ useEffect(() => {
         });
       };
 
+      const handleSessionVwapHover = (param) => {
+        const tooltip = sessionVwapTooltipRef.current;
+        const bounds = chartContainerRef.current;
+        if (!tooltip || !bounds || !param?.point || !param.time || !param.seriesData) {
+          if (tooltip) tooltip.style.display = 'none';
+          return;
+        }
+
+        let nearest = null;
+        sessionVwapHoverTargets.forEach(target => {
+          const series = sessionVwapSeries[target.key];
+          const dataPoint = param.seriesData.get(series);
+          const value = dataPoint?.value;
+          if (!Number.isFinite(value)) return;
+          const y = series.priceToCoordinate(value);
+          if (!Number.isFinite(y)) return;
+          const distance = Math.abs(param.point.y - y);
+          if (distance <= 9 && (!nearest || distance < nearest.distance)) {
+            nearest = { ...target, value, distance };
+          }
+        });
+
+        if (!nearest) {
+          tooltip.style.display = 'none';
+          return;
+        }
+
+        tooltip.textContent = `${nearest.name} · ${nearest.value.toFixed(precision)}`;
+        tooltip.style.color = nearest.color;
+        tooltip.style.borderColor = nearest.color;
+        tooltip.style.boxShadow = `0 3px 14px ${nearest.color}35`;
+        tooltip.style.display = 'block';
+        const padding = 8;
+        const left = Math.max(padding, Math.min(param.point.x + 12, bounds.clientWidth - tooltip.offsetWidth - padding));
+        const top = Math.max(padding, Math.min(param.point.y + 12, bounds.clientHeight - tooltip.offsetHeight - padding));
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      };
+
       chart.subscribeClick((param) => {
         // Xử lý click cho quả bóng tin tức
         if (param.time && newsDataRef.current) {
@@ -964,6 +1008,7 @@ useEffect(() => {
       });
 
       chart.subscribeCrosshairMove(param => handleCrosshairMove(param, [momentumChart, volumeChart], [momentumSeries, normVolSeries]));
+      chart.subscribeCrosshairMove(handleSessionVwapHover);
       momentumChart.subscribeCrosshairMove(param => handleCrosshairMove(param, [chart, volumeChart], [candlestickSeries, normVolSeries]));
       volumeChart.subscribeCrosshairMove(param => handleCrosshairMove(param, [chart, momentumChart], [candlestickSeries, momentumSeries]));
     
@@ -1015,10 +1060,10 @@ useEffect(() => {
     lineLowSeriesRef.current = lineLowSeries;
     newsSeriesRef.current = newsSeries;
     vwapSeriesRef.current = vwapSeries;
+    sessionVwapSeriesRef.current = sessionVwapSeries;
     fairValueSeriesRef.current = fairValueSeries;
     upperBandSeriesRef.current = upperBandSeries;
     lowerBandSeriesRef.current = lowerBandSeries;
-    sdFillSeriesRef.current = sdFillSeries;
     momentumSeriesRef.current = momentumSeries;
     momentumChartRef.current = momentumChart;
     volumeChartRef.current = volumeChart;
@@ -1095,6 +1140,8 @@ useEffect(() => {
       volumeChartRef.current = null;
       candlestickSeriesRef.current = null;
       newsSeriesRef.current = null;
+      vwapSeriesRef.current = null;
+      sessionVwapSeriesRef.current = {};
 
       bidPriceLineRef.current = null;
       askPriceLineRef.current = null;
@@ -1117,7 +1164,6 @@ useEffect(() => {
     if (fairValueSeriesRef.current) fairValueSeriesRef.current.applyOptions({ visible: chartType === 'money_flow' });
     if (upperBandSeriesRef.current) upperBandSeriesRef.current.applyOptions({ visible: showSdBands });
     if (lowerBandSeriesRef.current) lowerBandSeriesRef.current.applyOptions({ visible: showSdBands });
-    if (sdFillSeriesRef.current) sdFillSeriesRef.current.applyOptions({ visible: showSdBands });
   }, [chartType, showSdBands]);
 
   useEffect(() => {
@@ -1415,18 +1461,21 @@ useEffect(() => {
 
   const handleGoToLatest = () => {
     if (chartRef.current && candlestickSeriesRef.current) {
-        const data = candlestickSeriesRef.current.data();
-        if (data && data.length > 0) {
-            const totalCandles = data.length;
-            const visibleBars = 50; // Zoom in to 50 candles
-            const halfBars = Math.floor(visibleBars / 2);
-            const startLogical = Math.max(0, totalCandles - 1 - halfBars);
-            const endLogical = totalCandles - 1 + halfBars;
-            const range = { from: startLogical, to: endLogical };
+        const data = (candlestickSeriesRef.current.data() || []).filter(item => Number.isFinite(item.close));
+        if (data.length > 0) {
+            const visibleBars = 50;
+            const futureBars = 5;
+            const timeframeSeconds = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
+            const startIndex = Math.max(0, data.length - visibleBars + futureBars);
+            const latestTime = data[data.length - 1].time;
+            const range = {
+                from: data[startIndex].time,
+                to: latestTime + timeframeSeconds * futureBars,
+            };
 
-            chartRef.current.timeScale().setVisibleLogicalRange(range);
-            if (momentumChartRef.current) momentumChartRef.current.timeScale().setVisibleLogicalRange(range);
-            if (volumeChartRef.current) volumeChartRef.current.timeScale().setVisibleLogicalRange(range);
+            chartRef.current.timeScale().setVisibleRange(range);
+            if (momentumChartRef.current) momentumChartRef.current.timeScale().setVisibleRange(range);
+            if (volumeChartRef.current) volumeChartRef.current.timeScale().setVisibleRange(range);
         }
     }
   };
@@ -1440,6 +1489,24 @@ useEffect(() => {
     if (isPolling) isPollingRef.current = true;
     
     const currentSymbol = symbol;
+    if (!isPolling && !skipLoadingUI) {
+        const previousCandles = candlestickSeriesRef.current?.data?.() || [];
+        const hasPreviousCandles = previousCandles.some(item => Number.isFinite(item.close));
+        if (resetViewport) {
+            savedTimeRangeRef.current = null;
+        } else if (hasPreviousCandles && chartRef.current) {
+            try {
+                savedTimeRangeRef.current = chartRef.current.timeScale().getVisibleRange();
+            } catch (e) {
+                console.error("Không thể lấy Viewport hiện tại:", e);
+                savedTimeRangeRef.current = null;
+            }
+        } else {
+            // Không khôi phục viewport rỗng của chart khi app vừa mở.
+            savedTimeRangeRef.current = null;
+        }
+    }
+
     if (!isPolling && !skipLoadingUI && candlestickSeriesRef.current) {
         candlestickSeriesRef.current.setData([]);
         if (vwapSeriesRef.current) vwapSeriesRef.current.setData([]);
@@ -1448,7 +1515,7 @@ useEffect(() => {
         if (projectedVolSeriesRef.current) projectedVolSeriesRef.current.setData([]);
         if (maVolSeriesRef.current) maVolSeriesRef.current.setData([]);
         rawCandlesRef.current = [];
-        lastVwapColorRef.current = null;
+        Object.values(sessionVwapSeriesRef.current).forEach(series => series?.setData([]));
         lastMaVolColorRef.current = null;
         lastHl2ColorRef.current = null;
         lastBandwidthRef.current = null;
@@ -1466,20 +1533,6 @@ useEffect(() => {
     }
     
     if (!isPolling && !skipLoadingUI) {
-        // Khi tải mốc backtest mới, bỏ viewport cũ để neo chart vào dữ liệu vừa tải.
-        if (resetViewport) {
-            savedTimeRangeRef.current = null;
-        // Các lần tải khác tiếp tục giữ viewport người dùng đang xem.
-        } else if (chartRef.current) {
-            try {
-                const currentRange = chartRef.current.timeScale().getVisibleRange();
-                if (currentRange) {
-                    savedTimeRangeRef.current = currentRange;
-                }
-            } catch (e) {
-                console.error("Không thể lấy Viewport hiện tại:", e);
-            }
-        }
         setLoading(true);
         loadingRef.current = true;
     }
@@ -1636,19 +1689,20 @@ useEffect(() => {
         
         // Format VWAP & Bands
         const sortedRawForVwap = rawData.filter(d => d.vwap != null && !isNaN(d.vwap)).sort((a,b)=>a.time-b.time);
-        const vwapData = sortedRawForVwap.map((item, index, arr) => {
-            let col = '#39ff14'; // Mặc định xanh
-            if (index > 0) {
-              if (item.vwap >= arr[index - 1].vwap) col = '#39ff14';
-              else col = '#ff073a';
-            } else if (lastVwapColorRef.current !== null) {
-              col = lastVwapColorRef.current;
-            }
-            return { time: item.time, value: item.vwap, color: col };
-          });
-        if (vwapData.length > 0) {
-          lastVwapColorRef.current = vwapData[vwapData.length - 1].color;
-        }
+        const vwapData = sortedRawForVwap.map(item => ({ time: item.time, value: item.vwap, color: '#f8fafc' }));
+        const sessionVwapFields = {
+          asia: 'vwap_asia',
+          europe: 'vwap_europe',
+          preUs: 'vwap_pre_us',
+          us: 'vwap_us',
+        };
+        const sessionVwapData = Object.fromEntries(Object.entries(sessionVwapFields).map(([session, field]) => [
+          session,
+          rawData
+            .filter(item => item[field] != null && Number.isFinite(Number(item[field])))
+            .map(item => ({ time: item.time, value: Number(item[field]) }))
+            .sort((a, b) => a.time - b.time)
+        ]));
           
           const isSunsetMom = chartTheme === 'sunset';
           const momentumData = rawData.filter(d => d.mom_raw != null && !isNaN(d.mom_raw)).map(item => {
@@ -1796,14 +1850,11 @@ useEffect(() => {
 
         const upperBandData = [];
         const lowerBandData = [];
-        const sdFillData = [];
         const bandwidthHistory = [...bandwidthHistoryRef.current];
         
         const isSunset = chartTheme === 'sunset';
         const colUp = isSunset ? "rgba(255, 255, 255, 0.9)" : "rgba(0, 230, 118, 0.9)";
         const colDn = isSunset ? "rgba(31, 41, 55, 0.9)" : "rgba(255, 23, 68, 0.9)";
-        const fillUp = isSunset ? "rgba(255, 255, 255, 0.25)" : "rgba(0, 230, 118, 0.25)";
-        const fillDn = isSunset ? "rgba(31, 41, 55, 0.25)" : "rgba(255, 23, 68, 0.15)";
         
         const sortedRawForSD = rawData.filter(d => d.upper_band != null && d.lower_band != null && !isNaN(d.upper_band)).sort((a,b)=>a.time-b.time);
         sortedRawForSD.forEach((item, index, arr) => {
@@ -1827,10 +1878,6 @@ useEffect(() => {
                 }
             }
             
-            let fillColor = "rgba(128, 128, 128, 0.15)";
-            if (col === colUp) fillColor = fillUp;
-            else if (col === colDn) fillColor = fillDn;
-            
             upperBandData.push({ 
                 time: item.time, 
                 value: item.upper_band, 
@@ -1840,14 +1887,6 @@ useEffect(() => {
                 time: item.time, 
                 value: item.lower_band, 
                 color: col
-            });
-            sdFillData.push({
-                time: item.time,
-                open: item.upper_band,
-                high: Math.max(item.upper_band, item.lower_band),
-                low: Math.min(item.upper_band, item.lower_band),
-                close: item.lower_band,
-                color: fillColor
             });
         });
         if (upperBandData.length > 0) {
@@ -1871,10 +1910,13 @@ useEffect(() => {
                 if (alertsSeriesRef.current) safeUpdate(alertsSeriesRef.current, { time: d.time, value: d.close });
             });
             vwapData.forEach(d => safeUpdate(vwapSeriesRef.current, d));
+            Object.entries(sessionVwapData).forEach(([session, points]) => {
+              const series = sessionVwapSeriesRef.current[session];
+              if (series) points.forEach(d => safeUpdate(series, d));
+            });
             if (fairValueSeriesRef.current) fairValueData.forEach(d => safeUpdate(fairValueSeriesRef.current, d));
             upperBandData.forEach(d => safeUpdate(upperBandSeriesRef.current, d));
             lowerBandData.forEach(d => safeUpdate(lowerBandSeriesRef.current, d));
-            sdFillData.forEach(d => safeUpdate(sdFillSeriesRef.current, d));
             momentumData.forEach(d => safeUpdate(momentumSeriesRef.current, d));
             
             if (mom85UpRef.current) {
@@ -1942,10 +1984,13 @@ useEffect(() => {
             lineHighSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.high })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             lineLowSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.low })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             vwapSeriesRef.current.setData(vwapData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            Object.entries(sessionVwapData).forEach(([session, points]) => {
+              const series = sessionVwapSeriesRef.current[session];
+              if (series) series.setData(points.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            });
             if (fairValueSeriesRef.current) fairValueSeriesRef.current.setData(fairValueData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             upperBandSeriesRef.current.setData(upperBandData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             lowerBandSeriesRef.current.setData(lowerBandData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-            sdFillSeriesRef.current.setData(sdFillData.filter(d => d && Number.isFinite(d.high) && Number.isFinite(d.time)));
             momentumSeriesRef.current.setData(momentumData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             
             // Cập nhật đường Spread (Bid / Ask)
@@ -2019,14 +2064,28 @@ useEffect(() => {
             
             if (updateOverlaysRef.current) setTimeout(() => updateOverlaysRef.current(), 200);
             
-            const totalCandles = formattedData.length;
+            const candlePoints = formattedData.filter(item => Number.isFinite(item.close));
+            const totalCandles = candlePoints.length;
+            const visibleBars = 50;
+            const futureBars = 5;
+            const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
+            const getLatestViewportRange = (futureCount = futureBars) => {
+                if (totalCandles === 0) return null;
+                const startIndex = Math.max(0, totalCandles - visibleBars + futureCount);
+                const latestCandleTime = candlePoints[totalCandles - 1].time;
+                const futureTime = viewportFutureTimes[futureCount - 1]?.time || latestCandleTime + tfSec * futureCount;
+                return {
+                    from: candlePoints[startIndex].time,
+                    to: Math.max(futureTime, latestCandleTime + 1),
+                };
+            };
+
             if (resetViewport && totalCandles > 0) {
-                const visibleBars = 50;
+                // Backtest mới mở quanh thời điểm replay để vẫn còn chỗ quan sát phía sau nến.
                 const halfBars = Math.floor(visibleBars / 2);
                 const startIndex = Math.max(0, totalCandles - 1 - halfBars);
-                const from = formattedData[startIndex].time;
-                const lastCandleTime = formattedData[totalCandles - 1].time;
-                const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
+                const from = candlePoints[startIndex].time;
+                const lastCandleTime = candlePoints[totalCandles - 1].time;
                 const to = viewportFutureTimes[halfBars - 1]?.time || lastCandleTime + tfSec * halfBars;
                 const range = { from, to: Math.max(to, lastCandleTime + 1) };
                 chartRef.current.timeScale().setVisibleRange(range);
@@ -2045,26 +2104,18 @@ useEffect(() => {
                 } catch (e) {
                     // Log dạng thông báo bình thường vì đây là cơ chế bảo vệ hợp lệ
                     console.log("Đã kích hoạt cơ chế Hủy Neo Trục Y (Do vùng thời gian cũ không có dữ liệu ở tài sản mới). Trở về Viewport mặc định.");
-                    const visibleBars = 50; // Zoom in to 50 candles
-                    const halfBars = Math.floor(visibleBars / 2);
-                    const startLogical = Math.max(0, totalCandles - 1 - halfBars);
-                    const endLogical = totalCandles - 1 + halfBars; // Adds blank space to the right
-                    const range = { from: startLogical, to: endLogical };
-
-                    chartRef.current.timeScale().setVisibleLogicalRange(range);
-                    if (momentumChartRef.current) momentumChartRef.current.timeScale().setVisibleLogicalRange(range);
-                    if (volumeChartRef.current) volumeChartRef.current.timeScale().setVisibleLogicalRange(range);
+                    const range = getLatestViewportRange();
+                    if (range) {
+                        chartRef.current.timeScale().setVisibleRange(range);
+                        if (momentumChartRef.current) momentumChartRef.current.timeScale().setVisibleRange(range);
+                        if (volumeChartRef.current) volumeChartRef.current.timeScale().setVisibleRange(range);
+                    }
                 }
-            } else {
-                const visibleBars = 50; // Zoom in to 50 candles
-                const halfBars = Math.floor(visibleBars / 2);
-                const startLogical = Math.max(0, totalCandles - 1 - halfBars);
-                const endLogical = totalCandles - 1 + halfBars; // Adds blank space to the right
-                const range = { from: startLogical, to: endLogical };
-
-                chartRef.current.timeScale().setVisibleLogicalRange(range);
-                if (momentumChartRef.current) momentumChartRef.current.timeScale().setVisibleLogicalRange(range);
-                if (volumeChartRef.current) volumeChartRef.current.timeScale().setVisibleLogicalRange(range);
+            } else if (totalCandles > 0) {
+                const range = getLatestViewportRange();
+                chartRef.current.timeScale().setVisibleRange(range);
+                if (momentumChartRef.current) momentumChartRef.current.timeScale().setVisibleRange(range);
+                if (volumeChartRef.current) volumeChartRef.current.timeScale().setVisibleRange(range);
             }
             
             // Đưa vào setTimeout để tránh race condition với hàm setData() của Lightweight Charts
@@ -2115,6 +2166,7 @@ useEffect(() => {
         if (!isPolling && candlestickSeriesRef.current) {
             candlestickSeriesRef.current.setData([]);
             if (vwapSeriesRef.current) vwapSeriesRef.current.setData([]);
+            Object.values(sessionVwapSeriesRef.current).forEach(series => series?.setData([]));
             if (momentumSeriesRef.current) momentumSeriesRef.current.setData([]);
             if (normVolSeriesRef.current) normVolSeriesRef.current.setData([]);
             if (projectedVolSeriesRef.current) projectedVolSeriesRef.current.setData([]);
@@ -2452,6 +2504,7 @@ useEffect(() => {
         {/* Main Chart */}
         <div style={{ flex: 3, position: 'relative', width: '100%', overflow: 'hidden' }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
+          <div ref={sessionVwapTooltipRef} style={{ display: 'none', position: 'absolute', zIndex: 12, pointerEvents: 'none', padding: '5px 8px', border: '1px solid', borderRadius: '6px', background: 'rgba(2, 6, 23, 0.94)', fontSize: '11px', fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }} />
           {currentSdPosition !== null && (viewMode !== 'backtest' || simulatedTimeRef.current > 0) && (
             <div style={{
               position: 'absolute', top: '10px', left: '10px', zIndex: 8, pointerEvents: 'none',
@@ -2787,7 +2840,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       autoDst: sessionSettings?.autoDst ?? true,
       browserOffsetHours
     };
-    const cacheSignature = JSON.stringify({ matrixHours, matrixHoursLong, matrixVolDays, brokerTimezone, ...sessionParams });
+    const cacheSignature = JSON.stringify({ matrixMetricVersion: 3, matrixHours, matrixHoursLong, matrixVolDays, brokerTimezone, ...sessionParams });
 
     // Không dùng cache nếu đang ở chế độ backtest
     if (!force && !simulatedTime) {
@@ -2970,9 +3023,9 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <h2 style={{ margin: 0, color: '#fbbf24', fontSize: '1.25rem' }}>⚡ Sức Mạnh Hợp Nhất V-target ({matrixHoursLong}H / {matrixHours}H) + Động Lượng Theo Phiên</h2>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '5px' }}>Vol % là phân vị volume của toàn cửa sổ {matrixHoursLong}h / {matrixHours}h trong Vol days · V ở từng phiên là phân vị riêng theo phiên.</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '5px' }}>T/F là phân vị động lượng có dấu so với cửa sổ cùng độ dài trong Vol days · V phiên là phân vị volume · P = (0.368 × T + 0.632 × F) × hệ số V.</div>
               </div>
-              <span style={{ color: '#7dd3fc', background: 'rgba(14,165,233,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: '7px', padding: '6px 9px', fontSize: '11px', whiteSpace: 'nowrap' }}>Vol %: phân vị cửa sổ {sessionMatrixData.long_hours}h / {sessionMatrixData.short_hours}h trong {sessionMatrixData.vol_days} ngày · V phiên: phân vị riêng · P: Power T/F × hệ số V</span>
+              <span style={{ color: '#7dd3fc', background: 'rgba(14,165,233,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: '7px', padding: '6px 9px', fontSize: '11px', whiteSpace: 'nowrap' }}>T/F: phân vị động lượng có dấu · Vol: phân vị volume · P = (0.368 × T + 0.632 × F) × hệ số V</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '10px', marginBottom: '14px' }}>
               <div style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(74,222,128,0.18)', background: 'rgba(255,255,255,0.02)' }}>
@@ -3126,8 +3179,8 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
         <details style={styleGroup}>
           <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#34d399' }}>Chỉ báo VWAP & SD</summary>
           <div style={{ marginTop: '10px' }}>
-            <label style={styleLabel}>Chu kỳ VWAP (vwapLength)</label>
-            <input type="number" value={local.vwapLength} onChange={e => handleChange('vwapLength', Number(e.target.value))} style={styleInput} />
+            <label style={styleLabel}>Cửa sổ VWAP chung & theo phiên (Giờ)</label>
+            <input type="number" min="1" value={local.vwapLength} onChange={e => handleChange('vwapLength', Number(e.target.value))} style={styleInput} title="VWAP chung dùng mọi nến; VWAP từng phiên chỉ dùng nến thuộc phiên đó trong cửa sổ giờ này. Công thức dải SD được giữ nguyên." />
           </div>
           <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Hệ số Band (vwapMult)</label>
