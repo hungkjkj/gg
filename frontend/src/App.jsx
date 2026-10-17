@@ -2657,7 +2657,7 @@ useEffect(() => {
                 closeContextMenu();
               }}
             >
-              ⚡ Thêm cảnh báo bùng nổ động lượng...
+              ⚡ Thêm cảnh báo TKH...
             </div>
             
             <div 
@@ -2711,7 +2711,7 @@ useEffect(() => {
               display: 'flex', flexDirection: 'column', gap: '15px'
             }}>
               <h3 style={{ margin: 0, color: 'white' }}>
-                {customAlertModal.type === 'mom' ? 'Thêm cảnh báo bùng nổ động lượng' : 'Thêm cảnh báo giá'}
+                {customAlertModal.type === 'mom' ? 'Thêm cảnh báo TKH' : 'Thêm cảnh báo giá'}
               </h3>
               
               <div>
@@ -4109,11 +4109,11 @@ function App() {
                 style={{ padding: '6px', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'white', maxWidth: '170px', fontSize: '0.8rem' }}
               >
                 <option value="price">Giá</option>
-                <option value="mom">% Bùng nổ động lượng</option>
+                <option value="mom">% TKH</option>
               </select>
               <input 
                 type="number" 
-                placeholder={newAlertType === 'price' ? "Giá" : "% Bùng nổ động lượng"}
+                placeholder={newAlertType === 'price' ? "Giá" : "% TKH"}
                 value={newAlertPrice}
                 onChange={e => setNewAlertPrice(e.target.value)}
                 style={{ flex: 1, padding: '6px', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', color: 'white', minWidth: 0 }}

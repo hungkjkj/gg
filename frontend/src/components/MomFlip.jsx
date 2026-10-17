@@ -77,7 +77,7 @@ export const AssistiveTouch = ({
       onChange: checked => { setShowSdBands(checked); localStorage.setItem('showSdBands', checked); }
     },
     {
-      id: 'momentum-flip', label: 'Bùng nổ động lượng', description: 'Phân vị theo hướng mua/bán', checked: showMomFlip,
+      id: 'momentum-flip', label: 'TKH', description: 'Phân vị theo hướng mua/bán', checked: showMomFlip,
       onChange: setShowMomFlip
     },
     {
@@ -431,7 +431,7 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
         style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.05)', cursor: 'grab', userSelect: 'none', fontSize: '12px', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#c084fc', display: 'flex', flexDirection: 'column', gap: '6px' }}
       >
         <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-          <span>⚡ Bùng Nổ Động Lượng (%)</span>
+          <span>⚡ TKH (%)</span>
           <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 'normal' }}>Kéo giãn ở góc phải dưới</span>
         </div>
       </div>

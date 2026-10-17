@@ -101,8 +101,8 @@ def send_email(symbol, price, note, direction, alert_type="price"):
     receiver_email = config['emailReceiver']
     
     val_str = f"{price}%" if alert_type == "mom" else str(price)
-    subject_type = "% Bùng nổ động lượng" if alert_type == "mom" else "giá"
-    body_type = "mức % Bùng nổ động lượng" if alert_type == "mom" else "mức giá"
+    subject_type = "% TKH" if alert_type == "mom" else "giá"
+    body_type = "mức % TKH" if alert_type == "mom" else "mức giá"
     
     try:
         msg = MIMEMultipart()

@@ -50,8 +50,8 @@ const conditionTypes = [
   { id: 'mf_exit_dvp', label: 'Money Flow nằm NGOÀI D-VP (Thoát)' },
   { id: 'mom_lt', label: 'Động lượng (Mom) <= X %', hasValue: true },
   { id: 'mom_gt', label: 'Động lượng (Mom) >= X %', hasValue: true },
-  { id: 'mom_flip_gt', label: 'Bùng nổ động lượng >= X %', hasValue: true },
-  { id: 'mom_flip_lt', label: 'Bùng nổ động lượng <= X %', hasValue: true },
+  { id: 'mom_flip_gt', label: 'TKH >= X %', hasValue: true },
+  { id: 'mom_flip_lt', label: 'TKH <= X %', hasValue: true },
   { id: 'rvol_gt', label: 'RVol >= X', hasValue: true }
 ];
 
