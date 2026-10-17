@@ -72,6 +72,25 @@ const generateFutureTimeline = (cTime, tfSec, count, isCrypto = false, timeShift
     return futureTimes;
 };
 
+const getTimeZoneOffsetMinutes = (timestamp, timeZone) => {
+    try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hourCycle: 'h23'
+        }).formatToParts(new Date(timestamp * 1000));
+        const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+        const localAsUtc = Date.UTC(
+            Number(values.year), Number(values.month) - 1, Number(values.day),
+            Number(values.hour), Number(values.minute), Number(values.second)
+        );
+        return (localAsUtc - Math.floor(timestamp) * 1000) / 60000;
+    } catch (e) {
+        return 0;
+    }
+};
+
 const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
   const [momFlipData, setMomFlipData] = useState([]);
   const [currentSdPosition, setCurrentSdPosition] = useState(null);
@@ -1141,15 +1160,16 @@ useEffect(() => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         // --- DRAW SESSION BACKGROUNDS FIRST ---
-        if (sessionDataRef.current && sessionDataRef.current.length > 0) {
+        if ((sessionDataRef.current && sessionDataRef.current.length > 0) || (rawCandlesRef.current && rawCandlesRef.current.length > 0)) {
           const barSpacing = timeScale.options().barSpacing || 6;
           const sessionBarSeconds = ({ M1: 60, M2: 120, M3: 180, M4: 240, M5: 300, M15: 900, M30: 1800, H1: 3600, H2: 7200, H4: 14400, H8: 28800, D1: 86400 })[timeframe] || 3600;
           const maxSessionGap = sessionBarSeconds * 1.5;
+          const sessionConfig = configsRef.current || {};
           const sessionSchedules = {
-            'Á': [configs.asiaStart || '07:00', configs.asiaEnd || '11:00'],
-            'Âu': [configs.euroStart || '07:00', configs.euroEnd || '09:00'],
-            'Pre-US': [configs.preUsStart || '16:00', configs.preUsEnd || '19:00'],
-            'Mỹ': [configs.usStart || '07:30', configs.usEnd || '11:00']
+            'Á': [sessionConfig.asiaStart || '07:00', sessionConfig.asiaEnd || '11:00'],
+            'Âu': [sessionConfig.euroStart || '07:00', sessionConfig.euroEnd || '09:00'],
+            'Pre-US': [sessionConfig.preUsStart || '16:00', sessionConfig.preUsEnd || '19:00'],
+            'Mỹ': [sessionConfig.usStart || '07:30', sessionConfig.usEnd || '11:00']
           };
           const sessionScheduleByColor = {
             '139, 69, 19': sessionSchedules['Á'],
@@ -1170,7 +1190,62 @@ useEffect(() => {
             const durationMinutes = (end - start + 1440) % 1440;
             return durationMinutes * 60;
           };
-          const sessions = sessionDataRef.current;
+          const sessions = [...(sessionDataRef.current || [])];
+          const latestCandle = rawCandlesRef.current && rawCandlesRef.current.length > 0
+            ? rawCandlesRef.current[rawCandlesRef.current.length - 1]
+            : null;
+          if (latestCandle && Number.isFinite(Number(latestCandle.time))) {
+            const timeShiftSeconds = (Number(sessionConfig.timeShiftHours) || 0) * 3600;
+            const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
+            const latestUtc = Number(latestCandle.time) - timeShiftSeconds;
+            const latestLocal = new Date((latestUtc + browserOffsetHours * 3600) * 1000);
+            const localDayStart = Date.UTC(
+              latestLocal.getUTCFullYear(), latestLocal.getUTCMonth(), latestLocal.getUTCDate()
+            ) / 1000;
+            const minuteOfDay = value => {
+              const [hours, minutes] = String(value).split(':').map(Number);
+              return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : NaN;
+            };
+            const configuredSessions = [
+              { name: 'Á', startKey: 'asiaStart', endKey: 'asiaEnd', fallback: ['07:00', '11:00'], color: 'rgba(139, 69, 19, 0.18)', timezone: 'Asia/Tokyo', summerOffset: 540 },
+              { name: 'Âu', startKey: 'euroStart', endKey: 'euroEnd', fallback: ['07:00', '09:00'], color: 'rgba(139, 0, 139, 0.18)', timezone: 'Europe/London', summerOffset: 60 },
+              { name: 'Pre-US', startKey: 'preUsStart', endKey: 'preUsEnd', fallback: ['16:00', '19:00'], color: 'rgba(255, 193, 7, 0.20)', timezone: 'America/New_York', summerOffset: -240 },
+              { name: 'Mỹ', startKey: 'usStart', endKey: 'usEnd', fallback: ['07:30', '11:00'], color: 'rgba(0, 0, 139, 0.18)', timezone: 'America/New_York', summerOffset: -240 }
+            ];
+            for (const definition of configuredSessions) {
+              const startText = sessionConfig[definition.startKey] || definition.fallback[0];
+              const endText = sessionConfig[definition.endKey] || definition.fallback[1];
+              const startMinutes = minuteOfDay(startText);
+              const endMinutes = minuteOfDay(endText);
+              if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) continue;
+
+              const approximateStartUtc = localDayStart + startMinutes * 60 - browserOffsetHours * 3600;
+              const dstShiftMinutes = sessionConfig.autoDst === false
+                ? 0
+                : getTimeZoneOffsetMinutes(approximateStartUtc, definition.timezone) - definition.summerOffset;
+              const adjustedStartMinutes = (startMinutes - dstShiftMinutes + 1440) % 1440;
+              const adjustedEndMinutes = (endMinutes - dstShiftMinutes + 1440) % 1440;
+              const durationMinutes = (endMinutes - startMinutes + 1440) % 1440;
+              if (durationMinutes <= 0) continue;
+
+              const startUtc = localDayStart + adjustedStartMinutes * 60 - browserOffsetHours * 3600;
+              let endUtc = localDayStart + adjustedEndMinutes * 60 - browserOffsetHours * 3600;
+              if (endUtc <= startUtc) endUtc += 24 * 3600;
+              if (endUtc <= latestUtc) continue;
+
+              const chartStart = startUtc + timeShiftSeconds;
+              const chartEnd = endUtc + timeShiftSeconds;
+              const hasExistingSession = sessions.some(session =>
+                session.name === definition.name && session.time >= chartStart && session.time < chartEnd
+              );
+              if (startUtc <= latestUtc && hasExistingSession) continue;
+
+              // A synthetic start lets the same renderer draw the whole configured
+              // session before its first candle arrives, for live and backtest.
+              sessions.push({ time: chartStart, color: definition.color, name: definition.name });
+            }
+          }
+          sessions.sort((a, b) => a.time - b.time);
           for (let i = 0; i < sessions.length;) {
              const first = sessions[i];
              let last = first;
@@ -1336,7 +1411,7 @@ useEffect(() => {
 
   useEffect(() => {
     updateOverlaysRef.current = updateOverlays;
-  }, [vpBoxes, chartType, showSdBands, volStats]);
+  }, [vpBoxes, chartType, showSdBands, volStats, configs, timeframe]);
 
   const handleGoToLatest = () => {
     if (chartRef.current && candlestickSeriesRef.current) {
