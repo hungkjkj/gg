@@ -13,6 +13,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
   latestPropsRef.current = { tool, chart, series, onUpdate };
 
   const [isDragging, setIsDragging] = useState(null);
+  const [isHovered, setIsHovered] = useState(false);
 
   const updateCoordinates = useCallback(() => {
     if (!chart || !series || !tool || !containerRef.current) return;
@@ -215,6 +216,8 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
         visibility: 'hidden',
         zIndex: 50
       }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* TARGET BOX (Green) */}
       <div
@@ -232,7 +235,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
         onMouseDown={event => { event.stopPropagation(); setIsDragging('target'); }}
         onContextMenu={event => { event.preventDefault(); onDelete(); }}
       >
-        <div style={{ position: 'absolute', top: '-25px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(8, 153, 129, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap' }}>
+        <div style={{ position: 'absolute', top: '-25px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(8, 153, 129, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap', opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', pointerEvents: 'none', transition: 'opacity 100ms ease' }}>
           Target: {tool.targetPrice.toFixed(5)}
         </div>
       </div>
@@ -251,7 +254,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
         onContextMenu={event => { event.preventDefault(); onDelete(); }}
       >
         <div style={{ position: 'absolute', top: 2, left: 0, width: '100%', height: '1px', background: 'rgba(120, 123, 134, 1)' }} />
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(30, 34, 45, 0.9)', color: 'white', border: '1px solid #787b86', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap', zIndex: 52 }}>
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(30, 34, 45, 0.9)', color: 'white', border: '1px solid #787b86', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap', zIndex: 52, opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', pointerEvents: 'none', transition: 'opacity 100ms ease' }}>
           RR: {rrRatio} | Risk: {risk.toFixed(5)}
         </div>
       </div>
@@ -272,7 +275,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
         onMouseDown={event => { event.stopPropagation(); setIsDragging('stop'); }}
         onContextMenu={event => { event.preventDefault(); onDelete(); }}
       >
-        <div style={{ position: 'absolute', bottom: '-25px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(242, 54, 69, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap' }}>
+        <div style={{ position: 'absolute', bottom: '-25px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(242, 54, 69, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap', opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', pointerEvents: 'none', transition: 'opacity 100ms ease' }}>
           Stop: {tool.stopPrice.toFixed(5)}
         </div>
       </div>
@@ -295,7 +298,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
         <div style={{ position: 'absolute', top: '50%', left: '50%', width: '4px', height: '28px', transform: 'translate(-50%, -50%)', borderRadius: '3px', background: '#38bdf8', boxShadow: '0 0 8px rgba(56,189,248,0.9)', pointerEvents: 'none' }} />
       </div>
 
-      <div ref={deleteHintRef} style={{ position: 'absolute', right: 0, background: 'rgba(0,0,0,0.5)', color: '#ccc', fontSize: '9px', padding: '1px 3px', pointerEvents: 'none' }}>
+      <div ref={deleteHintRef} style={{ position: 'absolute', right: 0, background: 'rgba(0,0,0,0.5)', color: '#ccc', fontSize: '9px', padding: '1px 3px', pointerEvents: 'none', opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', transition: 'opacity 100ms ease' }}>
         Right-click to delete
       </div>
     </div>
