@@ -3,6 +3,7 @@ import { createChart, ColorType } from 'lightweight-charts';
 import axios from 'axios';
 import { AssistiveTouch, MomFlipChartComponent } from './components/MomFlip';
 import { SessionMatrixTable } from './components/SessionMatrixTable';
+import MarketFlowMatrix from './components/MarketFlowMatrix';
 import { computeCompositeRanking } from './utils/matrixUtils';
 import StrategyBuilderTab from './components/StrategyBuilderTab';
 import RrTool from './components/RrTool';
@@ -2786,6 +2787,11 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
   const [sessionMatrixData, setSessionMatrixData] = useState(null);
   const [legacyPowerLong, setLegacyPowerLong] = useState(null);
   const [legacyPowerShort, setLegacyPowerShort] = useState(null);
+  const [matrixView, setMatrixView] = useState('groups');
+  const [marketFlowData, setMarketFlowData] = useState(null);
+  const [marketFlowLoading, setMarketFlowLoading] = useState(false);
+  const [marketFlowProgress, setMarketFlowProgress] = useState(0);
+  const [marketFlowError, setMarketFlowError] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [matrixHours, setMatrixHours] = useState(initialMatrixHours || Number(localStorage.getItem('currencyMatrixHours')) || 24);
@@ -2809,7 +2815,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
 
   useEffect(() => {
     let interval;
-    if (loading) {
+    if (loading && matrixView === 'groups') {
       interval = setInterval(async () => {
         try {
           const res = await axios.get(`${API_BASE}/api/v1/matrix/progress?matrix_type=${matrixType}`);
@@ -2820,7 +2826,22 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       setProgress(0);
     }
     return () => clearInterval(interval);
-  }, [loading, matrixType]);
+  }, [loading, matrixType, matrixView]);
+
+  useEffect(() => {
+    let interval;
+    if (marketFlowLoading) {
+      interval = setInterval(async () => {
+        try {
+          const res = await axios.get(`${API_BASE}/api/v1/matrix/progress?matrix_type=market_flows`);
+          setMarketFlowProgress(res.data.progress || 0);
+        } catch (e) {}
+      }, 500);
+    } else {
+      setMarketFlowProgress(0);
+    }
+    return () => clearInterval(interval);
+  }, [marketFlowLoading]);
 
 
   const fetchMatrix = async (force = false) => {
@@ -2903,7 +2924,32 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     }
   };
 
+  const fetchMarketFlow = async (force = false) => {
+    if (force && onSaveMatrixSettings) onSaveMatrixSettings(matrixHours, matrixVolDays);
+    setMarketFlowLoading(true);
+    setMarketFlowError('');
+    try {
+      const res = await axios.get(`${API_BASE}/api/v1/matrix/market-flows`, {
+        params: {
+          short_hours: matrixHours,
+          long_hours: matrixHoursLong,
+          vol_days: matrixVolDays,
+          end_time: simulatedTime || 0,
+          brokerTimezone,
+          force
+        }
+      });
+      setMarketFlowData(res.data);
+    } catch (err) {
+      console.error('Error fetching market flow matrix:', err);
+      setMarketFlowError('Không tải được dữ liệu GI. Hãy thử làm mới hoặc kiểm tra kết nối MT5.');
+    } finally {
+      setMarketFlowLoading(false);
+    }
+  };
+
   useEffect(() => {
+    if (matrixView !== 'groups') return undefined;
     fetchMatrix(false);
     
     // Tự động làm mới Ma trận mỗi 5 phút
@@ -2912,30 +2958,24 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     }, 5 * 60 * 1000);
     
     return () => clearInterval(intervalId);
-  }, [matrixType, sessionSettings?.asiaStart, sessionSettings?.asiaEnd, sessionSettings?.euroStart, sessionSettings?.euroEnd, sessionSettings?.preUsStart, sessionSettings?.preUsEnd, sessionSettings?.usStart, sessionSettings?.usEnd, sessionSettings?.autoDst]);
+  }, [matrixType, matrixView, sessionSettings?.asiaStart, sessionSettings?.asiaEnd, sessionSettings?.euroStart, sessionSettings?.euroEnd, sessionSettings?.preUsStart, sessionSettings?.preUsEnd, sessionSettings?.usStart, sessionSettings?.usEnd, sessionSettings?.autoDst]);
 
-  if (!sessionMatrixData) {
-    if (loading) {
-      return (
-        <div style={{ padding: '50px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'white' }}>
-          <div style={{ fontSize: '1.2rem', marginBottom: '15px', color: '#60a5fa', fontWeight: 'bold' }}>
-            Đang tính toán ma trận... {progress}%
-          </div>
-          <div style={{ width: '300px', height: '10px', background: '#374151', borderRadius: '5px', overflow: 'hidden' }}>
-            <div style={{ width: `${progress}%`, height: '100%', background: '#3b82f6', transition: 'width 0.3s ease' }}></div>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  }
+  useEffect(() => {
+    if (matrixView !== 'market_flows') return undefined;
+    const initialFetchTimer = setTimeout(() => fetchMarketFlow(false), 350);
+    const intervalId = setInterval(() => fetchMarketFlow(false), 5 * 60 * 1000);
+    return () => {
+      clearTimeout(initialFetchTimer);
+      clearInterval(intervalId);
+    };
+  }, [matrixView, matrixHours, matrixHoursLong, matrixVolDays, brokerTimezone]);
 
   return (
     <div style={{ padding: '20px', display: 'flex', gap: '40px', color: 'var(--text-primary)', flexDirection: 'column', position: 'relative' }}>
       
-      {loading && (
+      {loading && matrixView === 'groups' && (
         <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          position: 'absolute', top: '60px', left: 0, right: 0, bottom: 0,
           background: 'rgba(15, 23, 42, 0.7)', zIndex: 10,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           backdropFilter: 'blur(4px)', borderRadius: '12px'
@@ -2949,9 +2989,22 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         </div>
       )}
 
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        {[
+          { key: 'groups', label: 'Currency Matrix' },
+          { key: 'market_flows', label: 'Dòng tiền thị trường' }
+        ].map(tab => (
+          <button key={tab.key} onClick={() => setMatrixView(tab.key)} style={{
+            padding: '8px 14px', borderRadius: '8px', border: `1px solid ${matrixView === tab.key ? 'rgba(34,211,238,0.55)' : 'rgba(148,163,184,0.2)'}`,
+            background: matrixView === tab.key ? 'rgba(8,145,178,0.28)' : 'var(--bg-panel)', color: matrixView === tab.key ? '#67e8f9' : 'var(--text-secondary)',
+            cursor: 'pointer', fontWeight: matrixView === tab.key ? 700 : 500
+          }}>{tab.label}</button>
+        ))}
+      </div>
+
       {/* Header điều khiển */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '15px', background: 'var(--bg-panel)', padding: '15px 20px', borderRadius: '12px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: '10px', marginRight: '15px', borderRight: '1px solid #4b5563', paddingRight: '15px' }}>
+        {matrixView === 'groups' && <div style={{ display: 'flex', gap: '10px', marginRight: '15px', borderRight: '1px solid #4b5563', paddingRight: '15px', flexWrap: 'wrap' }}>
           {['fx', 'us_stocks', 'commodities', 'crypto', 'usd_assets'].map(type => (
             <button
               key={type}
@@ -2970,7 +3023,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
               {type === 'fx' ? 'Forex' : type === 'us_stocks' ? 'Cổ phiếu Mỹ' : type === 'commodities' ? 'Hàng hóa' : type === 'crypto' ? 'Crypto' : 'USD vs Assets'}
             </button>
           ))}
-        </div>
+        </div>}
         
         <div style={{ display: 'flex', gap: '10px', marginRight: '15px', borderRight: '1px solid #4b5563', paddingRight: '15px' }}>
           {/* matrix mode toggle removed as both are shown */}
@@ -3000,17 +3053,19 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '70px' }}
         />
         <button 
-          onClick={() => fetchMatrix(true)}
+          onClick={() => matrixView === 'groups' ? fetchMatrix(true) : fetchMarketFlow(true)}
           style={{ padding: '5px 15px', borderRadius: '5px', background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
         >
           🔄 Tính lại / Làm mới
         </button>
         <span style={{ fontSize: '12px', color: '#9ca3af', marginLeft: 'auto' }}>
-          *Dữ liệu tự động lưu đệm (cache) trong 1 phút để tránh kẹt API.
+          {matrixView === 'groups' ? '*Dữ liệu tự động lưu đệm (cache) trong 1 phút để tránh kẹt API.' : '*So sánh GI theo cùng cửa sổ và Vol days; dữ liệu tự làm mới mỗi 5 phút.'}
         </span>
       </div>
 
-      {sessionMatrixData && (() => {
+      {matrixView === 'market_flows' ? (
+        <MarketFlowMatrix data={marketFlowData} loading={marketFlowLoading} error={marketFlowError} progress={marketFlowProgress} onRefresh={() => fetchMarketFlow(true)} />
+      ) : sessionMatrixData ? (() => {
         const ranking = legacyPowerLong || [];
         const topLeader = ranking[0] || null;
         const topLaggard = ranking[ranking.length - 1] || null;
@@ -3046,10 +3101,14 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
             <SessionMatrixTable data={sessionMatrixData} longPowerRanking={legacyPowerLong} shortPowerRanking={legacyPowerShort} />
           </div>
         );
-      })()}
+      })() : loading ? (
+        <div style={{ padding: '24px', color: '#7dd3fc', background: 'var(--bg-panel)', borderRadius: '10px' }}>Đang tải Currency Matrix… {progress}%</div>
+      ) : (
+        <div style={{ padding: '24px', color: '#94a3b8', background: 'var(--bg-panel)', borderRadius: '10px' }}>Chưa có dữ liệu Currency Matrix.</div>
+      )}
       
       {/* Ma trận Tương quan */}
-      {sessionMatrixData.corr_matrix && sessionMatrixData.corr_matrix.length > 0 && (
+      {matrixView === 'groups' && sessionMatrixData?.corr_matrix && sessionMatrixData.corr_matrix.length > 0 && (
         <div style={{ marginTop: '40px', background: 'var(--bg-panel)', padding: '20px', borderRadius: '12px', overflowX: 'auto' }}>
           <h2 style={{ marginBottom: '20px', color: '#f472b6' }}>Ma trận Tương quan (M30 Log Returns)</h2>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.9rem' }}>

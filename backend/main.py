@@ -1596,6 +1596,228 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
     _MATRIX_CACHE_TIME[cache_key] = current_time
     return result
 
+
+_MARKET_FLOW_CACHE = {}
+_MARKET_FLOW_CACHE_TIME = {}
+
+
+@app.get("/api/v1/matrix/market-flows")
+def get_market_flow_matrix(
+    short_hours: int = 24,
+    long_hours: int = 89,
+    vol_days: int = 30,
+    end_time: int = 0,
+    brokerTimezone: str = "Europe/Athens",
+    force: bool = False,
+):
+    """Compare each market's own GI using the same V-target momentum logic as Currency Matrix."""
+    short_hours = max(1, min(int(short_hours), 24 * 30))
+    long_hours = max(short_hours, min(int(long_hours), 24 * 30))
+    vol_days = max(1, min(int(vol_days), 365))
+    cache_key = (short_hours, long_hours, vol_days, int(end_time or 0), brokerTimezone)
+    now = time.time()
+    if not force and cache_key in _MARKET_FLOW_CACHE and now - _MARKET_FLOW_CACHE_TIME.get(cache_key, 0) < 30:
+        return _MARKET_FLOW_CACHE[cache_key]
+
+    try:
+        with open(CONFIG_FILE, "r") as config_file:
+            config = json.load(config_file)
+    except Exception:
+        config = {}
+
+    markets = [
+        {"key": "fx", "label": "Forex", "gi_symbol": "GLOBAL_INDEX"},
+        {"key": "us_stocks", "label": "Cổ phiếu Mỹ", "gi_symbol": "US_STOCKS_GI"},
+        {"key": "commodities", "label": "Hàng hóa", "gi_symbol": "COMMODITIES_GI"},
+        {"key": "crypto", "label": "Crypto", "gi_symbol": "CRYPTO_GI"},
+        {"key": "usd_assets", "label": "USD vs Assets", "gi_symbol": "USD_ASSETS_GI"},
+    ]
+    candles_per_hour = 12  # Matrix history uses M5 candles.
+    history_bars = max(long_hours * candles_per_hour + 25, int(vol_days * 24 * candles_per_hour * 1.5))
+    lookback_candles = int(vol_days * 24 * candles_per_hour)
+    target_pct = float(config.get("mfTargetPct", 75)) / 100.0
+
+    def calculate_mode(df, window_size, mode, prepared_by_window):
+        if len(df) <= window_size:
+            return None
+
+        prepared = prepared_by_window.get(window_size)
+        if prepared is None:
+            values = df["value"].to_numpy(dtype=float)
+            prices = df["hlc3"].to_numpy(dtype=float)
+            vol_rolling = pd.Series(values).rolling(window=window_size, min_periods=1).sum()
+            v_series = np.maximum(
+                vol_rolling.rolling(window=lookback_candles, min_periods=1)
+                .quantile(target_pct).fillna(1.0).to_numpy(dtype=float),
+                1.0,
+            )
+            prepared = {
+                "values": values,
+                "prices": prices,
+                "vol_rolling": vol_rolling,
+                "v_series": v_series,
+                "cum_vol": np.cumsum(values),
+                "cum_vwap_vol": np.cumsum(prices * values),
+            }
+            prepared_by_window[window_size] = prepared
+        values = prepared["values"]
+        prices = prepared["prices"]
+        vol_rolling = prepared["vol_rolling"]
+        v_series = prepared["v_series"]
+        cum_vol = prepared["cum_vol"]
+        cum_vwap_vol = prepared["cum_vwap_vol"]
+        n = len(df)
+        i_arr = np.arange(n)
+
+        target_current = cum_vol - v_series
+        j_current = np.searchsorted(cum_vol, target_current, side="right")
+        j_cur_m1 = np.where(j_current > 0, j_current - 1, 0)
+        has_j_cur = j_current > 0
+        vol_before_current = np.where(has_j_cur, cum_vol[j_cur_m1], 0.0)
+
+        if mode == "flow":
+            previous = np.roll(prices, 1)
+            previous[0] = prices[0]
+            returns_pct = np.where(previous > 0, (prices - previous) / previous * 100.0, 0.0)
+            cumulative_momentum = np.cumsum(returns_pct * values)
+            net_momentum = cumulative_momentum - np.where(has_j_cur, cumulative_momentum[j_cur_m1], 0.0)
+            diff_pct = np.where(v_series > 0, (net_momentum / v_series) * window_size, 0.0)
+        else:
+            half_volume = v_series / 2.0
+            target_mid = np.maximum(cum_vol - half_volume, 0.0)
+            j_mid = np.searchsorted(cum_vol, target_mid, side="right")
+            j_mid_m1 = np.where(j_mid > 0, j_mid - 1, 0)
+            has_j_mid = j_mid > 0
+            vol_before_mid = np.where(has_j_mid, cum_vol[j_mid_m1], 0.0)
+            vol_after = cum_vol - vol_before_mid
+            vwap_vol_after = cum_vwap_vol - np.where(has_j_mid, cum_vwap_vol[j_mid_m1], 0.0)
+            vwap_after = np.where(vol_after > 0, vwap_vol_after / np.maximum(vol_after, 1e-9), prices)
+            earlier_vol = vol_before_mid - vol_before_current
+            earlier_vwap_vol = np.where(has_j_mid, cum_vwap_vol[j_mid_m1], 0.0) - np.where(has_j_cur, cum_vwap_vol[j_cur_m1], 0.0)
+            vwap_before = np.where(earlier_vol > 0, earlier_vwap_vol / np.maximum(earlier_vol, 1e-9), prices)
+            distance_pct = np.where(vwap_before > 0, (vwap_after - vwap_before) / vwap_before * 100.0, 0.0)
+            bars_after = np.maximum(i_arr - j_mid + 1, 1.0)
+            diff_pct = (distance_pct / bars_after) * window_size
+
+        history_length = min(lookback_candles, len(df))
+        score_series = pd.Series(diff_pct[-history_length:]).replace([np.inf, -np.inf], np.nan).fillna(0.0).to_numpy()
+        volume_series = vol_rolling.to_numpy(dtype=float)[-history_length:]
+        current_score = float(np.mean(diff_pct[-window_size:]))
+        if not np.isfinite(current_score):
+            return None
+
+        volume_window = min(window_size, len(volume_series))
+        current_volume = float(np.mean(volume_series[-volume_window:])) if volume_window else 0.0
+        volume_rolling_means = pd.Series(volume_series).rolling(
+            volume_window, min_periods=max(1, volume_window // 2)
+        ).mean().dropna().to_numpy()
+        volume_percentile = float(np.mean(volume_rolling_means < current_volume) * 100.0) if len(volume_rolling_means) else 0.0
+
+        mean_volume = float(np.mean(volume_series)) if len(volume_series) else 0.0
+        relative_volume = volume_series / mean_volume if mean_volume > 0 else np.ones_like(volume_series)
+        weighted_scores = score_series * relative_volume
+        current_weighted = float(np.mean(weighted_scores[-volume_window:])) if volume_window else 0.0
+        rolling_means = pd.Series(weighted_scores).rolling(
+            volume_window, min_periods=max(1, volume_window // 2)
+        ).mean().dropna().to_numpy()
+        if len(rolling_means):
+            momentum_percentile = float(np.mean(np.abs(rolling_means) <= abs(current_weighted)) * 100.0)
+            if current_weighted < 0:
+                momentum_percentile = -momentum_percentile
+        else:
+            momentum_percentile = 0.0
+        return {
+            "score": current_score,
+            "momentum_pct": momentum_percentile,
+            "volume_pct": volume_percentile,
+        }
+
+    market_rows = []
+    gi_return_series = []
+    MATRIX_PROGRESS["market_flows"] = 0.0
+    for market_index, market in enumerate(markets):
+        try:
+            df = get_historical_data(market["gi_symbol"], "M5", history_bars, end_time, brokerTimezone, fallback_ea=False)
+            if df is None or df.empty or not {"time", "high", "low", "close", "value"}.issubset(df.columns):
+                market_rows.append({**market, "long": None, "short": None})
+                MATRIX_PROGRESS["market_flows"] = round((market_index + 1) / len(markets) * 100, 2)
+                continue
+
+            df = df.copy().sort_values("time").reset_index(drop=True)
+            for column in ("high", "low", "close", "value"):
+                df[column] = pd.to_numeric(df[column], errors="coerce")
+            df = df.dropna(subset=["high", "low", "close"]).reset_index(drop=True)
+            df["value"] = df["value"].fillna(0).clip(lower=0)
+            df["hlc3"] = (df["high"] + df["low"] + df["close"]) / 3.0
+
+            period_metrics = {}
+            prepared_by_window = {}
+            for period_key, hours in (("long", long_hours), ("short", short_hours)):
+                window_size = hours * candles_per_hour
+                trend = calculate_mode(df, window_size, "trend", prepared_by_window)
+                flow = calculate_mode(df, window_size, "flow", prepared_by_window)
+                if trend and flow:
+                    volume_pct = (trend["volume_pct"] + flow["volume_pct"]) / 2.0
+                    power_score = ((1.0 / np.e) * trend["momentum_pct"] + (1.0 - 1.0 / np.e) * flow["momentum_pct"]) * (0.5 + 0.5 * volume_pct / 100.0)
+                    if trend["momentum_pct"] > 0 and flow["momentum_pct"] > 0:
+                        status = "Dẫn dắt"
+                    elif trend["momentum_pct"] <= 0 and flow["momentum_pct"] > 0:
+                        status = "Tích lũy"
+                    elif trend["momentum_pct"] > 0 and flow["momentum_pct"] <= 0:
+                        status = "Suy yếu"
+                    else:
+                        status = "Tụt hậu"
+                    period_metrics[period_key] = {
+                        "trend": {"score": round(trend["score"], 4), "momentum_pct": round(trend["momentum_pct"], 2)},
+                        "flow": {"score": round(flow["score"], 4), "momentum_pct": round(flow["momentum_pct"], 2)},
+                        "volume_pct": round(volume_pct, 2),
+                        "power_score": round(float(power_score), 2),
+                        "status": status,
+                    }
+                else:
+                    period_metrics[period_key] = None
+            market_rows.append({**market, **period_metrics})
+
+            datetime_index = pd.to_datetime(df["time"], unit="s")
+            close_by_time = pd.Series(df["close"].to_numpy(dtype=float), index=datetime_index)
+            close_m30 = close_by_time.resample("30min").last()
+            gi_returns = np.log(close_m30 / close_m30.shift(1)).replace([np.inf, -np.inf], np.nan)
+            gi_returns.name = market["label"]
+            gi_return_series.append(gi_returns)
+        except Exception as error:
+            print(f"Market flow Matrix failed for {market['gi_symbol']}: {error}")
+            market_rows.append({**market, "long": None, "short": None})
+        MATRIX_PROGRESS["market_flows"] = round((market_index + 1) / len(markets) * 100, 2)
+
+    corr_matrix = []
+    if len(gi_return_series) > 1:
+        returns = pd.concat(gi_return_series, axis=1).sort_index().ffill().dropna()
+        if not returns.empty:
+            correlation = returns.corr()
+            for market_label in correlation.index:
+                row = {"market": market_label}
+                for other_market in correlation.columns:
+                    value = correlation.loc[market_label, other_market]
+                    row[other_market] = float(round(value, 2)) if not pd.isna(value) else None
+                corr_matrix.append(row)
+
+    result = {
+        "long_hours": long_hours,
+        "short_hours": short_hours,
+        "vol_days": vol_days,
+        "ranking_long": sorted(market_rows, key=lambda item: (item.get("long") or {}).get("power_score", -float("inf")), reverse=True),
+        "ranking_short": sorted(market_rows, key=lambda item: (item.get("short") or {}).get("power_score", -float("inf")), reverse=True),
+        "markets": [market["label"] for market in markets],
+        "corr_matrix": corr_matrix,
+    }
+    if len(_MARKET_FLOW_CACHE) > 50:
+        _MARKET_FLOW_CACHE.clear()
+        _MARKET_FLOW_CACHE_TIME.clear()
+    _MARKET_FLOW_CACHE[cache_key] = result
+    _MARKET_FLOW_CACHE_TIME[cache_key] = now
+    MATRIX_PROGRESS["market_flows"] = 100.0
+    return result
+
 # Serve Frontend SPA
 FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
 if os.path.exists(FRONTEND_DIST):
