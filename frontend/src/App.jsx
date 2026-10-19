@@ -4106,6 +4106,8 @@ function App() {
   const [bubbleSessionMatrix, setBubbleSessionMatrix] = useState(null);
   const [bubblePowerLong, setBubblePowerLong] = useState(null);
   const [bubblePowerShort, setBubblePowerShort] = useState(null);
+  const [bubbleMatrixLoading, setBubbleMatrixLoading] = useState(false);
+  const [bubbleMatrixError, setBubbleMatrixError] = useState('');
   const [bubbleDvpTrend, setBubbleDvpTrend] = useState(null);
   const [bubbleDvpTrendLoading, setBubbleDvpTrendLoading] = useState(false);
   const [bubbleDvpTrendError, setBubbleDvpTrendError] = useState('');
@@ -4172,6 +4174,7 @@ function App() {
     const finishBubbleFetch = () => {
       if (viewMode !== 'backtest') {
         isFetching = false;
+        setBubbleMatrixLoading(false);
         return;
       }
       unlockTimer = setTimeout(() => {
@@ -4180,6 +4183,8 @@ function App() {
         if (pendingBacktestRefresh) {
           pendingBacktestRefresh = false;
           fetchBubbleMatrix();
+        } else {
+          setBubbleMatrixLoading(false);
         }
       }, 1000);
     };
@@ -4246,6 +4251,8 @@ function App() {
       }
 
       isFetching = true;
+      setBubbleMatrixLoading(true);
+      setBubbleMatrixError('');
       Promise.all([
         axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...legacyParams, n_hours: shortHours, matrix_mode: 'money_flow' } }),
         axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...legacyParams, n_hours: longHours, matrix_mode: 'money_flow' } }),
@@ -4259,6 +4266,7 @@ function App() {
           finishBubbleFetch();
       }).catch(err => {
           console.error(err);
+          setBubbleMatrixError('Không cập nhật được Matrix; các số đang thấy là dữ liệu lần trước.');
           finishBubbleFetch();
       });
     };
@@ -4341,6 +4349,8 @@ function App() {
         bubbleSessionMatrix={bubbleSessionMatrix}
         bubblePowerLong={bubblePowerLong}
         bubblePowerShort={bubblePowerShort}
+        bubbleMatrixLoading={bubbleMatrixLoading}
+        bubbleMatrixError={bubbleMatrixError}
         bubbleDvpTrend={bubbleDvpTrend}
         bubbleDvpTrendLoading={bubbleDvpTrendLoading}
         bubbleDvpTrendError={bubbleDvpTrendError}
