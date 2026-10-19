@@ -1793,7 +1793,7 @@ def get_dvp_trend_ranking(
         return {"matrix_type": matrix_type, "vol_days": vol_days, "rows": [], "message": "Không có tài sản trong nhóm này."}
 
     key = (
-        matrix_type, vol_days, int(end_time or 0), brokerTimezone, lookback_days, vwap_length,
+        "trading-day-samples-v2", matrix_type, vol_days, int(end_time or 0), brokerTimezone, lookback_days, vwap_length,
         vwap_mult, pct1, grid_mode, fixed_pips, row_count, timeout_hours,
     )
     now = time.time()
@@ -1804,7 +1804,7 @@ def get_dvp_trend_ranking(
     max_profiles = vol_days
     history_bars = min(
         100_000,
-        max(240, int((max_profiles + lookback_days + (vwap_length / 24.0) + 2) * bars_per_day)),
+        max(240, int((max_profiles * 1.5 + lookback_days + (vwap_length / 24.0) + 2) * bars_per_day)),
     )
     MATRIX_PROGRESS["dvp_trend"] = 0.0
     rows = []
@@ -1842,10 +1842,15 @@ def get_dvp_trend_ranking(
             latest_time = int(times[-1])
             sample_indices = [len(df) - 1]
             seen_indices = {len(df) - 1}
-            for day in range(1, max_profiles + 1):
+            # Vol days represent distinct days with market data, not calendar
+            # days. Scan further back to replace weekends/holidays with actual
+            # trading-day snapshots until the requested sample count is filled.
+            for day in range(1, max_profiles * 2 + 8):
+                if len(sample_indices) >= max_profiles + 1:
+                    break
                 target_time = latest_time - day * 24 * 3600
                 candidate = int(np.searchsorted(times, target_time, side="right") - 1)
-                if candidate < 0 or latest_time - int(times[candidate]) > 72 * 3600:
+                if candidate < 0 or target_time - int(times[candidate]) > 72 * 3600:
                     continue
                 if candidate not in seen_indices:
                     sample_indices.append(candidate)
