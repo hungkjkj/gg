@@ -567,9 +567,19 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     session_times = df['time'].to_numpy(dtype=np.int64)
     session_volumes = df['value'].fillna(0).to_numpy(dtype=float)
     session_price_volumes = df['vwap_vol'].fillna(0).to_numpy(dtype=float)
+    session_squared_price_volumes = (df['hlc3'] * df['hlc3'] * df['value']).fillna(0).to_numpy(dtype=float)
+    session_band_fields = {
+        'vwap_asia': ('upper_band_asia', 'lower_band_asia'),
+        'vwap_europe': ('upper_band_europe', 'lower_band_europe'),
+        'vwap_pre_us': ('upper_band_pre_us', 'lower_band_pre_us'),
+        'vwap_us': ('upper_band_us', 'lower_band_us'),
+    }
 
     for column, (session_mask, session_keys) in session_windows.items():
         result = np.full(len(df), np.nan, dtype=float)
+        upper_result = np.full(len(df), np.nan, dtype=float)
+        lower_result = np.full(len(df), np.nan, dtype=float)
+        upper_field, lower_field = session_band_fields[column]
         selected = np.flatnonzero(session_mask)
         if len(selected):
             grouped_keys = pd.Series(session_keys[selected], index=selected)
@@ -582,6 +592,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                     'end_time': int(session_times[positions[-1]]),
                     'volume_prefix': np.concatenate(([0.0], np.cumsum(session_volumes[positions]))),
                     'price_volume_prefix': np.concatenate(([0.0], np.cumsum(session_price_volumes[positions]))),
+                    'squared_price_volume_prefix': np.concatenate(([0.0], np.cumsum(session_squared_price_volumes[positions]))),
                 })
             session_groups.sort(key=lambda group: group['start_time'])
             group_cursor = 0
@@ -592,6 +603,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                     group_cursor += 1
                 volume_sum = 0.0
                 price_volume_sum = 0.0
+                squared_price_volume_sum = 0.0
                 for group_index in range(group_cursor, len(session_groups)):
                     group = session_groups[group_index]
                     if group['start_time'] > current_time:
@@ -601,9 +613,21 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                         continue
                     volume_sum += group['volume_prefix'][candle_count]
                     price_volume_sum += group['price_volume_prefix'][candle_count]
+                    squared_price_volume_sum += group['squared_price_volume_prefix'][candle_count]
                 if volume_sum > 0:
-                    result[index] = price_volume_sum / volume_sum
+                    session_vwap = price_volume_sum / volume_sum
+                    result[index] = session_vwap
+                    # Weighted standard deviation around this session VWAP.
+                    # Bands are populated only while this session is active;
+                    # the session VWAP line itself remains available outside it.
+                    if session_mask[index]:
+                        variance = max(squared_price_volume_sum / volume_sum - session_vwap * session_vwap, 0.0)
+                        session_sd = np.sqrt(variance) * vwapMult
+                        upper_result[index] = session_vwap + session_sd
+                        lower_result[index] = session_vwap - session_sd
         df[column] = result
+        df[upper_field] = upper_result
+        df[lower_field] = lower_result
     
     # --- Thá»‘ng kÃª Äá»‰nh/ÄÃ¡y Vol theo Phase ---
     try:
@@ -847,7 +871,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         # Nếu backtest (có end_time) thì lấy 100 nến để đề phòng trường hợp nhảy tốc độ cao (100x).
         df = df.tail(2 if end_time == 0 else 100)
         
-    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'vwap_asia', 'vwap_europe', 'vwap_pre_us', 'vwap_us', 'stdev', 'upper_band', 'lower_band', 'hl2', 'mom_raw', 'mom_percent_rank', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mean_ma_vol', 'mean_vol_lvl1', 'mean_vol_lvl2', 'mean_vol_lvl3', 'mean_vol_lvl4', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'session_name', 'spread']
+    cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'value', 'vwap', 'vwap_asia', 'vwap_europe', 'vwap_pre_us', 'vwap_us', 'stdev', 'upper_band', 'lower_band', 'upper_band_asia', 'lower_band_asia', 'upper_band_europe', 'lower_band_europe', 'upper_band_pre_us', 'lower_band_pre_us', 'upper_band_us', 'lower_band_us', 'hl2', 'mom_raw', 'mom_percent_rank', 'mom_lvl1', 'mom_lvl2', 'mom_lvl3', 'norm_vol', 'rvol', 'ma_vol', 'mean_ma_vol', 'mean_vol_lvl1', 'mean_vol_lvl2', 'mean_vol_lvl3', 'mean_vol_lvl4', 'mom_ma', 'mom_flip', 'vol_lvl1', 'vol_lvl2', 'vol_lvl3', 'vol_lvl4', 'session_color', 'session_name', 'spread']
     existing_cols = [c for c in cols_to_keep if c in df.columns]
     df = df[existing_cols]
         

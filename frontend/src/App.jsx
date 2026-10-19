@@ -95,8 +95,9 @@ const getTimeZoneOffsetMinutes = (timestamp, timeZone) => {
 const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
   const [momFlipData, setMomFlipData] = useState([]);
   const [currentSdPosition, setCurrentSdPosition] = useState(null);
+  const [currentSessionSdPosition, setCurrentSessionSdPosition] = useState(null);
   const chartContainerRef = useRef(null);
-  const sessionVwapTooltipRef = useRef(null);
+  const sessionSdTooltipRef = useRef(null);
   const momentumChartContainerRef = useRef(null);
   const volumeChartContainerRef = useRef();
   const momentumChartRef = useRef(null);
@@ -111,7 +112,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const lineLowSeriesRef = useRef(null);
   const sessionDataRef = useRef([]);
   const vwapSeriesRef = useRef(null);
-  const sessionVwapSeriesRef = useRef({});
+  const sessionVwapBandSeriesRef = useRef({});
   const fairValueSeriesRef = useRef(null);
   const upperBandSeriesRef = useRef(null);
   const lowerBandSeriesRef = useRef(null);
@@ -137,6 +138,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
 
   useEffect(() => {
     setCurrentSdPosition(null);
+    setCurrentSessionSdPosition(null);
   }, [symbol, timeframe]);
   
   const [contextMenu, setContextMenu] = useState(null);
@@ -791,18 +793,33 @@ useEffect(() => {
         },
       });
 
-    const sessionVwapSeries = {
-      asia: chart.addLineSeries({ color: '#f97316', lineWidth: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
-      europe: chart.addLineSeries({ color: '#d946ef', lineWidth: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
-      preUs: chart.addLineSeries({ color: '#facc15', lineWidth: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
-      us: chart.addLineSeries({ color: '#3b82f6', lineWidth: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+    const sessionVwapBandSeries = {
+      asia: {
+        upper: chart.addLineSeries({ color: 'rgba(249, 115, 22, 0.72)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+        lower: chart.addLineSeries({ color: 'rgba(249, 115, 22, 0.72)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+      },
+      europe: {
+        upper: chart.addLineSeries({ color: 'rgba(217, 70, 239, 0.72)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+        lower: chart.addLineSeries({ color: 'rgba(217, 70, 239, 0.72)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+      },
+      preUs: {
+        upper: chart.addLineSeries({ color: 'rgba(250, 204, 21, 0.78)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+        lower: chart.addLineSeries({ color: 'rgba(250, 204, 21, 0.78)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+      },
+      us: {
+        upper: chart.addLineSeries({ color: 'rgba(59, 130, 246, 0.78)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+        lower: chart.addLineSeries({ color: 'rgba(59, 130, 246, 0.78)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+      },
     };
-    const sessionVwapHoverTargets = [
-      { key: 'asia', name: 'VWAP Phiên Á', color: '#f97316' },
-      { key: 'europe', name: 'VWAP Phiên Âu', color: '#d946ef' },
-      { key: 'preUs', name: 'VWAP Phiên Pre-US', color: '#facc15' },
-      { key: 'us', name: 'VWAP Phiên Mỹ', color: '#3b82f6' },
-    ];
+    const sessionSdHoverTargets = [
+      { key: 'asia', name: 'Phiên Á', color: '#f97316' },
+      { key: 'europe', name: 'Phiên Âu', color: '#d946ef' },
+      { key: 'preUs', name: 'Phiên Pre-US', color: '#facc15' },
+      { key: 'us', name: 'Phiên Mỹ', color: '#3b82f6' },
+    ].flatMap(target => ([
+      { ...target, side: 'upper', sideLabel: 'dải trên', series: sessionVwapBandSeries[target.key].upper },
+      { ...target, side: 'lower', sideLabel: 'dải dưới', series: sessionVwapBandSeries[target.key].lower },
+    ]));
       
     const fairValueSeries = chart.addLineSeries({
         lineWidth: 2,
@@ -951,8 +968,8 @@ useEffect(() => {
         });
       };
 
-      const handleSessionVwapHover = (param) => {
-        const tooltip = sessionVwapTooltipRef.current;
+      const handleSessionSdHover = (param) => {
+        const tooltip = sessionSdTooltipRef.current;
         const bounds = chartContainerRef.current;
         if (!tooltip || !bounds || !param?.point || !param.time || !param.seriesData) {
           if (tooltip) tooltip.style.display = 'none';
@@ -960,12 +977,11 @@ useEffect(() => {
         }
 
         let nearest = null;
-        sessionVwapHoverTargets.forEach(target => {
-          const series = sessionVwapSeries[target.key];
-          const dataPoint = param.seriesData.get(series);
+        sessionSdHoverTargets.forEach(target => {
+          const dataPoint = param.seriesData.get(target.series);
           const value = dataPoint?.value;
           if (!Number.isFinite(value)) return;
-          const y = series.priceToCoordinate(value);
+          const y = target.series.priceToCoordinate(value);
           if (!Number.isFinite(y)) return;
           const distance = Math.abs(param.point.y - y);
           if (distance <= 9 && (!nearest || distance < nearest.distance)) {
@@ -978,7 +994,9 @@ useEffect(() => {
           return;
         }
 
-        tooltip.textContent = `${nearest.name} · ${nearest.value.toFixed(precision)}`;
+        const multiplier = Number(configsRef.current?.vwapMult ?? 2);
+        const sdText = Number.isFinite(multiplier) ? multiplier.toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1') : 'SD';
+        tooltip.textContent = `${nearest.name} · ${nearest.sideLabel} (${nearest.side === 'upper' ? '+' : '−'}${sdText} SD) · ${nearest.value.toFixed(precision)}`;
         tooltip.style.color = nearest.color;
         tooltip.style.borderColor = nearest.color;
         tooltip.style.boxShadow = `0 3px 14px ${nearest.color}35`;
@@ -1009,7 +1027,7 @@ useEffect(() => {
       });
 
       chart.subscribeCrosshairMove(param => handleCrosshairMove(param, [momentumChart, volumeChart], [momentumSeries, normVolSeries]));
-      chart.subscribeCrosshairMove(handleSessionVwapHover);
+      chart.subscribeCrosshairMove(handleSessionSdHover);
       momentumChart.subscribeCrosshairMove(param => handleCrosshairMove(param, [chart, volumeChart], [candlestickSeries, normVolSeries]));
       volumeChart.subscribeCrosshairMove(param => handleCrosshairMove(param, [chart, momentumChart], [candlestickSeries, momentumSeries]));
     
@@ -1038,8 +1056,11 @@ useEffect(() => {
         const data = candlestickSeriesRef.current.data();
         if (data && data.length > 0) {
           const totalCandles = data.length;
-          // Nếu mép phải của màn hình cách hiện tại quá 5 nến, coi như là đã kéo về quá khứ
-          if (logicalRange.to < totalCandles - 5) {
+          // Hiện nút khi nến mới nhất đã ra khỏi viewport về cả hai phía:
+          // mép phải ở quá khứ hoặc mép trái đã vượt qua nến mới nhất.
+          const scrolledBeforeLatest = logicalRange.to < totalCandles - 5;
+          const scrolledPastLatest = logicalRange.from > totalCandles - 1;
+          if (scrolledBeforeLatest || scrolledPastLatest) {
             if (!isScrolledRef.current) {
               isScrolledRef.current = true;
               setIsScrolled(true);
@@ -1061,7 +1082,7 @@ useEffect(() => {
     lineLowSeriesRef.current = lineLowSeries;
     newsSeriesRef.current = newsSeries;
     vwapSeriesRef.current = vwapSeries;
-    sessionVwapSeriesRef.current = sessionVwapSeries;
+    sessionVwapBandSeriesRef.current = sessionVwapBandSeries;
     fairValueSeriesRef.current = fairValueSeries;
     upperBandSeriesRef.current = upperBandSeries;
     lowerBandSeriesRef.current = lowerBandSeries;
@@ -1142,7 +1163,7 @@ useEffect(() => {
       candlestickSeriesRef.current = null;
       newsSeriesRef.current = null;
       vwapSeriesRef.current = null;
-      sessionVwapSeriesRef.current = {};
+      sessionVwapBandSeriesRef.current = {};
 
       bidPriceLineRef.current = null;
       askPriceLineRef.current = null;
@@ -1165,6 +1186,10 @@ useEffect(() => {
     if (fairValueSeriesRef.current) fairValueSeriesRef.current.applyOptions({ visible: chartType === 'money_flow' });
     if (upperBandSeriesRef.current) upperBandSeriesRef.current.applyOptions({ visible: showSdBands });
     if (lowerBandSeriesRef.current) lowerBandSeriesRef.current.applyOptions({ visible: showSdBands });
+    Object.values(sessionVwapBandSeriesRef.current).forEach(bands => {
+      bands?.upper?.applyOptions({ visible: showSdBands });
+      bands?.lower?.applyOptions({ visible: showSdBands });
+    });
   }, [chartType, showSdBands]);
 
   useEffect(() => {
@@ -1238,6 +1263,33 @@ useEffect(() => {
             return durationMinutes * 60;
           };
           const sessions = [...(sessionDataRef.current || [])];
+          // The invisible news timeline includes historical candles and future
+          // bars, so session boundaries between candle timestamps can be placed
+          // by interpolating between their neighboring chart times.
+          const axisTimeline = newsSeriesRef.current?.data?.() || candlestickSeriesRef.current.data() || [];
+          const coordinateForSessionTime = timestamp => {
+            const exact = timeScale.timeToCoordinate(timestamp);
+            if (Number.isFinite(exact)) return exact;
+
+            let low = 0;
+            let high = axisTimeline.length;
+            while (low < high) {
+              const middle = (low + high) >>> 1;
+              if (Number(axisTimeline[middle]?.time) < timestamp) low = middle + 1;
+              else high = middle;
+            }
+
+            const before = axisTimeline[low - 1];
+            const after = axisTimeline[low];
+            if (!before || !after) return null;
+            const beforeTime = Number(before.time);
+            const afterTime = Number(after.time);
+            const beforeX = timeScale.timeToCoordinate(before.time);
+            const afterX = timeScale.timeToCoordinate(after.time);
+            if (!Number.isFinite(beforeX) || !Number.isFinite(afterX) || afterTime <= beforeTime) return null;
+            const fraction = Math.max(0, Math.min(1, (timestamp - beforeTime) / (afterTime - beforeTime)));
+            return beforeX + (afterX - beforeX) * fraction;
+          };
           const latestCandle = rawCandlesRef.current && rawCandlesRef.current.length > 0
             ? rawCandlesRef.current[rawCandlesRef.current.length - 1]
             : null;
@@ -1311,11 +1363,11 @@ useEffect(() => {
                first.time + configuredDuration
              );
              if (sessionEndTime >= minTime && first.time <= maxTime) {
-               const startX = timeScale.timeToCoordinate(first.time);
-               const endX = timeScale.timeToCoordinate(sessionEndTime);
-               if (startX !== null || endX !== null) {
-                 const left = Math.max(0, (startX ?? 0) - barSpacing / 2);
-                 const right = Math.min(canvas.width, (endX ?? canvas.width) - barSpacing / 2);
+               const startX = coordinateForSessionTime(first.time);
+               const endX = coordinateForSessionTime(sessionEndTime);
+               if (Number.isFinite(startX) && Number.isFinite(endX)) {
+                 const left = Math.max(0, startX - barSpacing / 2);
+                 const right = Math.min(canvas.width, endX - barSpacing / 2);
                  const width = Math.max(barSpacing, right - left);
                  ctx.fillStyle = first.color;
                  ctx.fillRect(left, 0, width, canvas.height);
@@ -1516,7 +1568,10 @@ useEffect(() => {
         if (projectedVolSeriesRef.current) projectedVolSeriesRef.current.setData([]);
         if (maVolSeriesRef.current) maVolSeriesRef.current.setData([]);
         rawCandlesRef.current = [];
-        Object.values(sessionVwapSeriesRef.current).forEach(series => series?.setData([]));
+        Object.values(sessionVwapBandSeriesRef.current).forEach(bands => {
+          bands?.upper?.setData([]);
+          bands?.lower?.setData([]);
+        });
         lastMaVolColorRef.current = null;
         lastHl2ColorRef.current = null;
         lastBandwidthRef.current = null;
@@ -1590,6 +1645,12 @@ useEffect(() => {
           ? rawCandlesRef.current.filter(item => item.time <= targetEndTime)
           : rawCandlesRef.current;
         const configuredBandMultiplier = Number(configsRef.current?.vwapMult ?? 2);
+        const sessionSdConfigs = [
+          { label: 'Á', color: '#f97316', vwap: 'vwap_asia', upper: 'upper_band_asia', lower: 'lower_band_asia' },
+          { label: 'Âu', color: '#d946ef', vwap: 'vwap_europe', upper: 'upper_band_europe', lower: 'lower_band_europe' },
+          { label: 'Pre-US', color: '#facc15', vwap: 'vwap_pre_us', upper: 'upper_band_pre_us', lower: 'lower_band_pre_us' },
+          { label: 'Mỹ', color: '#3b82f6', vwap: 'vwap_us', upper: 'upper_band_us', lower: 'lower_band_us' },
+        ];
         let latestSdPosition = null;
         for (let i = sdSourceData.length - 1; i >= 0; i--) {
           const bar = sdSourceData[i];
@@ -1617,6 +1678,31 @@ useEffect(() => {
           // A bad/incomplete live candle should not hide the last valid readout
           // during polling; a fresh full load can still clear stale data.
           setCurrentSdPosition(null);
+        }
+
+        // Session bands are only valid while the latest available candle is
+        // inside that session. Do not carry the previous session's value into
+        // the next session or the quiet hours between them.
+        let latestSessionSdPosition = null;
+        const latestSessionBar = sdSourceData[sdSourceData.length - 1];
+        if (latestSessionBar && configuredBandMultiplier > 0) {
+          const toFiniteNumber = value => value == null || value === '' ? NaN : Number(value);
+          const close = toFiniteNumber(latestSessionBar.close);
+          for (const session of sessionSdConfigs) {
+            const vwap = toFiniteNumber(latestSessionBar[session.vwap]);
+            const upper = toFiniteNumber(latestSessionBar[session.upper]);
+            const lower = toFiniteNumber(latestSessionBar[session.lower]);
+            const stdev = (upper - lower) / (2 * configuredBandMultiplier);
+            if (Number.isFinite(close) && Number.isFinite(vwap) && Number.isFinite(stdev) && stdev > 0) {
+              latestSessionSdPosition = { label: session.label, color: session.color, position: (close - vwap) / stdev };
+              break;
+            }
+          }
+        }
+        if (latestSessionSdPosition) {
+          setCurrentSessionSdPosition(latestSessionSdPosition);
+        } else {
+          setCurrentSessionSdPosition(null);
         }
 
         const newMomFlip = rawData.map(d => ({
@@ -1654,6 +1740,10 @@ useEffect(() => {
         if (upperBandSeriesRef.current) upperBandSeriesRef.current.applyOptions({ priceFormat });
         if (lowerBandSeriesRef.current) lowerBandSeriesRef.current.applyOptions({ priceFormat });
         if (vwapSeriesRef.current) vwapSeriesRef.current.applyOptions({ priceFormat });
+        Object.values(sessionVwapBandSeriesRef.current).forEach(bands => {
+          bands?.upper?.applyOptions({ priceFormat });
+          bands?.lower?.applyOptions({ priceFormat });
+        });
         if (fairValueSeriesRef.current) fairValueSeriesRef.current.applyOptions({ priceFormat });
         if (lineCloseSeriesRef.current) lineCloseSeriesRef.current.applyOptions({ priceFormat });
         if (lineHighSeriesRef.current) lineHighSeriesRef.current.applyOptions({ priceFormat });
@@ -1691,18 +1781,27 @@ useEffect(() => {
         // Format VWAP & Bands
         const sortedRawForVwap = rawData.filter(d => d.vwap != null && !isNaN(d.vwap)).sort((a,b)=>a.time-b.time);
         const vwapData = sortedRawForVwap.map(item => ({ time: item.time, value: item.vwap, color: '#f8fafc' }));
-        const sessionVwapFields = {
-          asia: 'vwap_asia',
-          europe: 'vwap_europe',
-          preUs: 'vwap_pre_us',
-          us: 'vwap_us',
+        const sessionVwapBandFields = {
+          asia: { upper: 'upper_band_asia', lower: 'lower_band_asia' },
+          europe: { upper: 'upper_band_europe', lower: 'lower_band_europe' },
+          preUs: { upper: 'upper_band_pre_us', lower: 'lower_band_pre_us' },
+          us: { upper: 'upper_band_us', lower: 'lower_band_us' },
         };
-        const sessionVwapData = Object.fromEntries(Object.entries(sessionVwapFields).map(([session, field]) => [
+        const sortedRawForSessionBands = rawData
+          .filter(item => Number.isFinite(Number(item.time)))
+          .sort((a, b) => a.time - b.time);
+        const sessionVwapBandData = Object.fromEntries(Object.entries(sessionVwapBandFields).map(([session, fields]) => [
           session,
-          rawData
-            .filter(item => item[field] != null && Number.isFinite(Number(item[field])))
-            .map(item => ({ time: item.time, value: Number(item[field]) }))
-            .sort((a, b) => a.time - b.time)
+          Object.fromEntries(Object.entries(fields).map(([side, field]) => [
+            side,
+            sortedRawForSessionBands.map(item => {
+              const value = item[field];
+              // Whitespace points break the line outside its matching session.
+              return value != null && Number.isFinite(Number(value))
+                ? { time: item.time, value: Number(value) }
+                : { time: item.time };
+            })
+          ]))
         ]));
           
           const isSunsetMom = chartTheme === 'sunset';
@@ -1911,9 +2010,11 @@ useEffect(() => {
                 if (alertsSeriesRef.current) safeUpdate(alertsSeriesRef.current, { time: d.time, value: d.close });
             });
             vwapData.forEach(d => safeUpdate(vwapSeriesRef.current, d));
-            Object.entries(sessionVwapData).forEach(([session, points]) => {
-              const series = sessionVwapSeriesRef.current[session];
-              if (series) points.forEach(d => safeUpdate(series, d));
+            Object.entries(sessionVwapBandData).forEach(([session, bands]) => {
+              const series = sessionVwapBandSeriesRef.current[session];
+              if (!series) return;
+              bands.upper.forEach(d => safeUpdate(series.upper, d));
+              bands.lower.forEach(d => safeUpdate(series.lower, d));
             });
             if (fairValueSeriesRef.current) fairValueData.forEach(d => safeUpdate(fairValueSeriesRef.current, d));
             upperBandData.forEach(d => safeUpdate(upperBandSeriesRef.current, d));
@@ -1985,9 +2086,12 @@ useEffect(() => {
             lineHighSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.high })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             lineLowSeriesRef.current.setData(formattedData.map(d => ({ time: d.time, value: d.low })).filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             vwapSeriesRef.current.setData(vwapData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
-            Object.entries(sessionVwapData).forEach(([session, points]) => {
-              const series = sessionVwapSeriesRef.current[session];
-              if (series) series.setData(points.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
+            Object.entries(sessionVwapBandData).forEach(([session, bands]) => {
+              const series = sessionVwapBandSeriesRef.current[session];
+              if (!series) return;
+              const validPoints = points => points.filter(d => d && Number.isFinite(d.time) && (d.value == null || Number.isFinite(d.value)));
+              series.upper.setData(validPoints(bands.upper));
+              series.lower.setData(validPoints(bands.lower));
             });
             if (fairValueSeriesRef.current) fairValueSeriesRef.current.setData(fairValueData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
             upperBandSeriesRef.current.setData(upperBandData.filter(d => d && Number.isFinite(d.value) && Number.isFinite(d.time)));
@@ -2167,7 +2271,10 @@ useEffect(() => {
         if (!isPolling && candlestickSeriesRef.current) {
             candlestickSeriesRef.current.setData([]);
             if (vwapSeriesRef.current) vwapSeriesRef.current.setData([]);
-            Object.values(sessionVwapSeriesRef.current).forEach(series => series?.setData([]));
+            Object.values(sessionVwapBandSeriesRef.current).forEach(bands => {
+              bands?.upper?.setData([]);
+              bands?.lower?.setData([]);
+            });
             if (momentumSeriesRef.current) momentumSeriesRef.current.setData([]);
             if (normVolSeriesRef.current) normVolSeriesRef.current.setData([]);
             if (projectedVolSeriesRef.current) projectedVolSeriesRef.current.setData([]);
@@ -2505,18 +2612,33 @@ useEffect(() => {
         {/* Main Chart */}
         <div style={{ flex: 3, position: 'relative', width: '100%', overflow: 'hidden' }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
-          <div ref={sessionVwapTooltipRef} style={{ display: 'none', position: 'absolute', zIndex: 12, pointerEvents: 'none', padding: '5px 8px', border: '1px solid', borderRadius: '6px', background: 'rgba(2, 6, 23, 0.94)', fontSize: '11px', fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }} />
-          {currentSdPosition !== null && (viewMode !== 'backtest' || simulatedTimeRef.current > 0) && (
-            <div style={{
-              position: 'absolute', top: '10px', left: '10px', zIndex: 8, pointerEvents: 'none',
-              padding: '5px 9px', borderRadius: '6px',
-              background: 'rgba(15, 23, 42, 0.9)',
-              border: `1px solid ${currentSdPosition >= 0 ? 'rgba(34, 211, 238, 0.55)' : 'rgba(251, 146, 60, 0.55)'}`,
-              color: currentSdPosition >= 0 ? '#67e8f9' : '#fdba74',
-              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
-              fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
-            }}>
-              VWAP {currentSdPosition > 0 ? '+' : ''}{currentSdPosition.toFixed(2)} SD
+          <div ref={sessionSdTooltipRef} style={{ display: 'none', position: 'absolute', zIndex: 12, pointerEvents: 'none', padding: '5px 8px', border: '1px solid', borderRadius: '6px', background: 'rgba(2, 6, 23, 0.94)', fontSize: '11px', fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }} />
+          {(currentSdPosition !== null || currentSessionSdPosition !== null) && (viewMode !== 'backtest' || simulatedTimeRef.current > 0) && (
+            <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 8, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '5px', pointerEvents: 'none' }}>
+              {currentSdPosition !== null && (
+                <div style={{
+                  padding: '5px 9px', borderRadius: '6px',
+                  background: 'rgba(15, 23, 42, 0.9)',
+                  border: `1px solid ${currentSdPosition >= 0 ? 'rgba(34, 211, 238, 0.55)' : 'rgba(251, 146, 60, 0.55)'}`,
+                  color: currentSdPosition >= 0 ? '#67e8f9' : '#fdba74',
+                  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
+                  fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                }}>
+                  VWAP {currentSdPosition > 0 ? '+' : ''}{currentSdPosition.toFixed(2)} SD
+                </div>
+              )}
+              {currentSessionSdPosition && (
+                <div style={{
+                  padding: '5px 9px', borderRadius: '6px',
+                  background: 'rgba(15, 23, 42, 0.94)',
+                  border: `1px solid ${currentSessionSdPosition.color}`,
+                  color: currentSessionSdPosition.color,
+                  boxShadow: `0 2px 10px ${currentSessionSdPosition.color}35`,
+                  fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                }}>
+                  VWAP {currentSessionSdPosition.label} {currentSessionSdPosition.position > 0 ? '+' : ''}{currentSessionSdPosition.position.toFixed(2)} SD
+                </div>
+              )}
             </div>
           )}
           <canvas 
