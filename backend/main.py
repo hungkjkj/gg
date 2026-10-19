@@ -1717,7 +1717,9 @@ def _matrix_dvp_gap_snapshot(df, end_index, vwap_values, stdev_values, vwap_mult
     band_bins = np.unique(np.sort(band_bins))
     if not len(band_bins):
         return {
-            "gap_sd": None,
+            # With no retained D-VP zone in the band, treat the whole band as
+            # one empty gap. Its width is 2 * vwap_mult standard deviations.
+            "gap_sd": float((band_high - band_low) / stdev),
             "zones": 0,
             "close_vwap_sd": float((close - vwap) / stdev),
         }
