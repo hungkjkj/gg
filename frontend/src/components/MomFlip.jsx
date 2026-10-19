@@ -167,21 +167,10 @@ export const AssistiveTouch = ({
               </div>
               <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '7px' }}>T/F: phân vị động lượng có dấu · Vol: phân vị volume · P = (0.368 × T + 0.632 × F) × hệ số V</div>
               {bubbleMatrixError && <div style={{ marginBottom: '6px', color: '#fca5a5', fontSize: '10px' }}>{bubbleMatrixError}</div>}
-              <div style={{ position: 'relative', maxHeight: '420px', overflowY: 'auto', overflowX: 'hidden', minWidth: 0, paddingRight: '3px', borderRadius: '8px' }}>
-                <div style={{ opacity: bubbleMatrixLoading ? 0.25 : 1, transition: 'opacity 0.18s ease' }}>
-                  {bubbleSessionMatrix
-                    ? <SessionMatrixTable data={bubbleSessionMatrix} compact longPowerRanking={bubblePowerLong} shortPowerRanking={bubblePowerShort} />
-                    : <div style={{ padding: '10px 2px', color: '#94a3b8', fontSize: '12px' }}>Đang chờ dữ liệu Matrix theo phiên…</div>}
-                </div>
-                {bubbleMatrixLoading && (
-                  <div role="status" aria-live="polite" style={{ position: 'sticky', bottom: '8px', margin: '8px auto', width: 'fit-content', maxWidth: 'calc(100% - 20px)', display: 'flex', alignItems: 'center', gap: '9px', padding: '9px 12px', borderRadius: '10px', border: '1px solid rgba(34,211,238,0.45)', background: 'rgba(2,6,23,0.94)', boxShadow: '0 5px 20px rgba(0,0,0,0.45)', color: '#e0f2fe', fontSize: '11px', zIndex: 2 }}>
-                    <span className="matrix-bubble-spinner matrix-bubble-spinner-large" />
-                    <span style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                      <strong>Đang cập nhật ma trận…</strong>
-                      <span style={{ color: '#94a3b8' }}>{bubbleSessionMatrix ? 'Số liệu phía sau là bản cập nhật trước.' : 'Đang tải dữ liệu lần đầu.'}</span>
-                    </span>
-                  </div>
-                )}
+              <div aria-busy={bubbleMatrixLoading} style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'hidden', minWidth: 0, paddingRight: '3px', borderRadius: '8px' }}>
+                {bubbleSessionMatrix
+                  ? <SessionMatrixTable data={bubbleSessionMatrix} compact longPowerRanking={bubblePowerLong} shortPowerRanking={bubblePowerShort} />
+                  : <div style={{ padding: '10px 2px', color: '#94a3b8', fontSize: '12px' }}>Đang chờ dữ liệu Matrix theo phiên…</div>}
               </div>
 
               <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid rgba(148,163,184,0.16)' }}>
@@ -194,8 +183,7 @@ export const AssistiveTouch = ({
                     {bubbleDvpTrendLoading && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#a5f3fc', fontSize: '10px', fontWeight: 700 }}><span className="matrix-bubble-spinner" />Đang cập nhật</span>}
                   </div>
                 </div>
-                <div style={{ position: 'relative', maxHeight: '230px', overflowY: 'auto', overflowX: 'auto', minWidth: 0, borderRadius: '8px' }}>
-                  <div style={{ opacity: bubbleDvpTrendLoading && bubbleDvpTrend?.rows?.length ? 0.35 : 1, transition: 'opacity 0.18s ease' }}>
+                <div aria-busy={bubbleDvpTrendLoading} style={{ maxHeight: '230px', overflowY: 'auto', overflowX: 'auto', minWidth: 0, borderRadius: '8px' }}>
                   {bubbleDvpTrendLoading && !bubbleDvpTrend?.rows?.length ? (
                     <div style={{ padding: '8px 2px', color: '#7dd3fc', fontSize: '11px' }}>Đang tính BXH D-VP…</div>
                   ) : bubbleDvpTrendError && !bubbleDvpTrend?.rows?.length ? (
@@ -230,7 +218,6 @@ export const AssistiveTouch = ({
                   ) : (
                     <div style={{ padding: '8px 2px', color: '#94a3b8', fontSize: '11px' }}>Chưa có dữ liệu BXH D-VP.</div>
                   )}
-                  </div>
                 </div>
                 <div style={{ marginTop: '5px', color: '#64748b', fontSize: '9px', lineHeight: 1.4 }}>
                   P cao = khoảng cách D-VP rộng hơn lịch sử của chính tài sản đó; hướng tăng/giảm dựa trên giá so với VWAP.
@@ -262,7 +249,6 @@ export const AssistiveTouch = ({
             border: 2px solid rgba(125, 211, 252, 0.25); border-top-color: #67e8f9;
             border-radius: 50%; animation: matrixBubbleSpin 0.75s linear infinite;
           }
-          .matrix-bubble-spinner-large { width: 18px; height: 18px; border-width: 2px; }
         `}
       </style>
     </div>
