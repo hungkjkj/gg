@@ -4106,6 +4106,9 @@ function App() {
   const [bubbleSessionMatrix, setBubbleSessionMatrix] = useState(null);
   const [bubblePowerLong, setBubblePowerLong] = useState(null);
   const [bubblePowerShort, setBubblePowerShort] = useState(null);
+  const [bubbleDvpTrend, setBubbleDvpTrend] = useState(null);
+  const [bubbleDvpTrendLoading, setBubbleDvpTrendLoading] = useState(false);
+  const [bubbleDvpTrendError, setBubbleDvpTrendError] = useState('');
 
   
   const [configs, setConfigs] = useState(() => ({
@@ -4163,6 +4166,8 @@ function App() {
     
     let isFetching = false;
     let pendingBacktestRefresh = false;
+    let isDvpTrendFetching = false;
+    let lastDvpTrendRequestAt = 0;
     let unlockTimer = null;
     const finishBubbleFetch = () => {
       if (viewMode !== 'backtest') {
@@ -4211,6 +4216,35 @@ function App() {
         brokerTimezone: params.brokerTimezone
       };
 
+      if (!isDvpTrendFetching && Date.now() - lastDvpTrendRequestAt >= 60 * 1000) {
+        isDvpTrendFetching = true;
+        lastDvpTrendRequestAt = Date.now();
+        setBubbleDvpTrendLoading(true);
+        setBubbleDvpTrendError('');
+        axios.get(`${API_BASE}/api/v1/matrix/dvp-trend`, {
+          params: {
+            ...legacyParams,
+            dvp_lookback_days: configs.dvpLookbackDays,
+            vwap_length: configs.vwapLength,
+            vwap_mult: configs.vwapMult,
+            pct1: configs.pct1,
+            grid_mode: configs.gridMode,
+            fixed_pips: configs.fixedPips,
+            row_count: configs.rowCount,
+            timeout_hours: configs.timeoutHours,
+            force: false
+          }
+        }).then(response => {
+          setBubbleDvpTrend(response.data);
+        }).catch(error => {
+          console.error('Error fetching bubble D-VP trend ranking:', error);
+          setBubbleDvpTrendError('Không tải được BXH D-VP.');
+        }).finally(() => {
+          isDvpTrendFetching = false;
+          setBubbleDvpTrendLoading(false);
+        });
+      }
+
       isFetching = true;
       Promise.all([
         axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...legacyParams, n_hours: shortHours, matrix_mode: 'money_flow' } }),
@@ -4239,7 +4273,7 @@ function App() {
       if (unlockTimer) clearTimeout(unlockTimer);
       window.removeEventListener('simulatedTimeChanged', fetchBubbleMatrix);
     };
-  }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixVolDays, configs.asiaStart, configs.asiaEnd, configs.euroStart, configs.euroEnd, configs.preUsStart, configs.preUsEnd, configs.usStart, configs.usEnd, configs.autoDst, symbol]);
+  }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixVolDays, configs.dvpLookbackDays, configs.vwapLength, configs.vwapMult, configs.pct1, configs.gridMode, configs.fixedPips, configs.rowCount, configs.timeoutHours, configs.asiaStart, configs.asiaEnd, configs.euroStart, configs.euroEnd, configs.preUsStart, configs.preUsEnd, configs.usStart, configs.usEnd, configs.autoDst, symbol]);
 
   useEffect(() => {
     axios.get(`${API_BASE}/api/v1/symbols`)
@@ -4307,6 +4341,9 @@ function App() {
         bubbleSessionMatrix={bubbleSessionMatrix}
         bubblePowerLong={bubblePowerLong}
         bubblePowerShort={bubblePowerShort}
+        bubbleDvpTrend={bubbleDvpTrend}
+        bubbleDvpTrendLoading={bubbleDvpTrendLoading}
+        bubbleDvpTrendError={bubbleDvpTrendError}
         volMode={configs.volMode}
         handleVolModeToggle={(checked) => setConfigs(prev => ({ ...prev, volMode: checked ? 'mean_vol' : 'normal' }))}
       />

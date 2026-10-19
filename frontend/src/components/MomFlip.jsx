@@ -11,6 +11,9 @@ export const AssistiveTouch = ({
   bubbleSessionMatrix,
   bubblePowerLong,
   bubblePowerShort,
+  bubbleDvpTrend,
+  bubbleDvpTrendLoading,
+  bubbleDvpTrendError,
   volMode, handleVolModeToggle 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -70,7 +73,10 @@ export const AssistiveTouch = ({
     if (!isDragging) setIsOpen(!isOpen);
   };
 
-  const hasMatrixRankingData = showMatrixBubble && Array.isArray(bubbleSessionMatrix?.ranking) && bubbleSessionMatrix.ranking.length > 0;
+  const hasMatrixRankingData = showMatrixBubble && (
+    (Array.isArray(bubbleSessionMatrix?.ranking) && bubbleSessionMatrix.ranking.length > 0)
+    || (Array.isArray(bubbleDvpTrend?.rows) && bubbleDvpTrend.rows.length > 0)
+  );
   const controlOptions = [
     {
       id: 'sd-bands', label: 'Dải SD', description: 'Dải lệch chuẩn', checked: showSdBands,
@@ -159,6 +165,54 @@ export const AssistiveTouch = ({
                 {bubbleSessionMatrix
                   ? <SessionMatrixTable data={bubbleSessionMatrix} compact longPowerRanking={bubblePowerLong} shortPowerRanking={bubblePowerShort} />
                   : <div style={{ padding: '10px 2px', color: '#94a3b8', fontSize: '12px' }}>Đang chờ dữ liệu Matrix theo phiên…</div>}
+              </div>
+
+              <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid rgba(148,163,184,0.16)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap', marginBottom: '7px' }}>
+                  <strong style={{ color: '#67e8f9', fontSize: '12px' }}>📊 Xếp hạng xu hướng D-VP</strong>
+                  <span style={{ color: '#94a3b8', fontSize: '10px' }}>
+                    Gap trung bình trong VWAP ± SD · Vol {bubbleDvpTrend?.vol_days || bubbleSessionMatrix?.vol_days || '—'} ngày
+                  </span>
+                </div>
+                <div style={{ maxHeight: '230px', overflowY: 'auto', overflowX: 'auto', minWidth: 0 }}>
+                  {bubbleDvpTrendLoading && !bubbleDvpTrend?.rows?.length ? (
+                    <div style={{ padding: '8px 2px', color: '#7dd3fc', fontSize: '11px' }}>Đang tính BXH D-VP…</div>
+                  ) : bubbleDvpTrendError && !bubbleDvpTrend?.rows?.length ? (
+                    <div style={{ padding: '8px 2px', color: '#fca5a5', fontSize: '11px' }}>{bubbleDvpTrendError}</div>
+                  ) : bubbleDvpTrend?.rows?.length ? (
+                    <table style={{ width: '100%', minWidth: '470px', borderCollapse: 'collapse', fontSize: '10px', textAlign: 'left' }}>
+                      <thead>
+                        <tr>
+                          {['#', 'Cặp / tài sản', 'Chiều', 'Gap TB', 'Phân vị', 'Vùng'].map(label => (
+                            <th key={label} style={{ padding: '5px 6px', color: '#94a3b8', borderBottom: '1px solid rgba(148,163,184,0.16)', whiteSpace: 'nowrap' }}>{label}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bubbleDvpTrend.rows.map(row => {
+                          const up = row.direction === 'up';
+                          const down = row.direction === 'down';
+                          const color = up ? '#4ade80' : down ? '#fb7185' : '#94a3b8';
+                          return (
+                            <tr key={row.symbol}>
+                              <td style={{ padding: '5px 6px', color: '#fbbf24', borderBottom: '1px solid rgba(148,163,184,0.08)' }}>{row.rank}</td>
+                              <td style={{ padding: '5px 6px', color: '#e2e8f0', fontWeight: 600, borderBottom: '1px solid rgba(148,163,184,0.08)', whiteSpace: 'nowrap' }}>{row.symbol}</td>
+                              <td style={{ padding: '5px 6px', color, borderBottom: '1px solid rgba(148,163,184,0.08)', whiteSpace: 'nowrap' }}>{up ? '▲ Tăng' : down ? '▼ Giảm' : '● Cân bằng'}</td>
+                              <td style={{ padding: '5px 6px', color: '#cbd5e1', borderBottom: '1px solid rgba(148,163,184,0.08)', whiteSpace: 'nowrap' }}>{row.gap_sd == null ? '—' : `${row.gap_sd.toFixed(3)} SD`}</td>
+                              <td title={`${row.samples} mẫu lịch sử hợp lệ`} style={{ padding: '5px 6px', color: row.percentile == null ? '#64748b' : row.percentile >= 70 ? '#4ade80' : row.percentile <= 30 ? '#fb7185' : '#fbbf24', fontWeight: 700, borderBottom: '1px solid rgba(148,163,184,0.08)' }}>{row.percentile == null ? '—' : `P${row.percentile.toFixed(0)}`}</td>
+                              <td style={{ padding: '5px 6px', color: '#cbd5e1', borderBottom: '1px solid rgba(148,163,184,0.08)' }}>{row.zones}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div style={{ padding: '8px 2px', color: '#94a3b8', fontSize: '11px' }}>Chưa có dữ liệu BXH D-VP.</div>
+                  )}
+                </div>
+                <div style={{ marginTop: '5px', color: '#64748b', fontSize: '9px', lineHeight: 1.4 }}>
+                  P cao = khoảng cách D-VP rộng hơn lịch sử của chính tài sản đó; hướng tăng/giảm dựa trên giá so với VWAP.
+                </div>
               </div>
             </div>
           )}
