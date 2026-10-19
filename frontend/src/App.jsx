@@ -3011,7 +3011,7 @@ const DvpTrendMatrix = ({ data, loading, error, progress, volDays, sessionSettin
       <div>
         <h2 style={{ margin: 0, color: '#67e8f9', fontSize: '1.2rem' }}>Xếp hạng mức độ xu hướng theo D-VP</h2>
         <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '6px', maxWidth: '900px', lineHeight: 1.55 }}>
-          Đo khoảng trống trung bình giữa các vùng D-VP được giữ lại bên trong VWAP ± {data?.vwap_mult ?? sessionSettings?.vwapMult ?? 2} SD, chuẩn hóa theo 1 SD. Phân vị so với các mẫu cùng thời điểm trong {data?.vol_days ?? volDays} ngày; chiều tăng/giảm lấy từ vị trí giá so với VWAP.
+          Đo khoảng trống trung bình giữa các vùng D-VP được giữ lại và từ vùng D-VP ngoài cùng đến hai mép VWAP ± {data?.vwap_mult ?? sessionSettings?.vwapMult ?? 2} SD, chuẩn hóa theo 1 SD. Phân vị so với các mẫu cùng thời điểm trong {data?.vol_days ?? volDays} ngày; chiều tăng/giảm lấy từ vị trí giá so với VWAP.
         </div>
       </div>
       <div style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap' }}>
@@ -3057,7 +3057,7 @@ const DvpTrendMatrix = ({ data, loading, error, progress, volDays, sessionSettin
       </table>
     )}
     <div style={{ marginTop: '12px', color: '#64748b', fontSize: '11px', lineHeight: 1.5 }}>
-      P cao nghĩa là khoảng cách D-VP hiện tại rộng hơn phần lớn mẫu lịch sử của chính tài sản đó; đây là thước đo cấu trúc/độ giãn vùng, không tự khẳng định xu hướng tăng hay giảm. Dữ liệu lấy trên nến M5 để các tài sản trong Matrix có cùng cơ sở đo.
+      P cao nghĩa là khoảng cách D-VP hiện tại rộng hơn phần lớn mẫu lịch sử của chính tài sản đó; khoảng cách tính cả khoảng trống giữa các vùng và giữa vùng ngoài cùng với mép dải SD. Đây là thước đo cấu trúc/độ giãn vùng, không tự khẳng định xu hướng tăng hay giảm. Dữ liệu lấy trên nến M5 để các tài sản trong Matrix có cùng cơ sở đo.
     </div>
   </div>
 );

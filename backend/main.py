@@ -1631,7 +1631,7 @@ _DVP_TREND_CACHE_TIME = {}
 def _matrix_dvp_gap_snapshot(df, end_index, vwap_values, stdev_values, vwap_mult,
                              lookback_days, pct1, grid_mode, fixed_pips,
                              row_count, timeout_hours):
-    """Measure mean spacing between retained D-VP zones inside the global VWAP band."""
+    """Measure mean D-VP spacing, including empty edges of the global VWAP band."""
     if end_index < 0 or end_index >= len(df):
         return None
 
@@ -1714,28 +1714,32 @@ def _matrix_dvp_gap_snapshot(df, end_index, vwap_values, stdev_values, vwap_mult
     centers = kept_bins.astype(float) * bin_size + bin_size / 2.0
     in_band = (centers + bin_size / 2.0 >= band_low) & (centers - bin_size / 2.0 <= band_high)
     band_bins = kept_bins[in_band]
-    if len(band_bins) < 2:
+    band_bins = np.unique(np.sort(band_bins))
+    if not len(band_bins):
         return {
             "gap_sd": None,
-            "zones": int(len(band_bins)),
+            "zones": 0,
             "close_vwap_sd": float((close - vwap) / stdev),
         }
-
-    band_bins = np.unique(np.sort(band_bins))
     zone_breaks = np.where(np.diff(band_bins) > 1)[0] + 1
     zones = np.split(band_bins, zone_breaks)
-    if len(zones) < 2:
-        return {
-            "gap_sd": None,
-            "zones": int(len(zones)),
-            "close_vwap_sd": float((close - vwap) / stdev),
-        }
-
     gaps = []
-    for left, right in zip(zones[:-1], zones[1:]):
-        gap = (float(right[0]) - float(left[-1]) - 1.0) * bin_size
-        if gap > 0:
-            gaps.append(gap / stdev)
+    if len(zones):
+        # Count empty space between each band edge and the nearest retained D-VP
+        # zone, as well as the empty spaces between neighboring zones.
+        first_zone_low = float(zones[0][0]) * bin_size
+        last_zone_high = (float(zones[-1][-1]) + 1.0) * bin_size
+        lower_edge_gap = max(0.0, first_zone_low - band_low)
+        upper_edge_gap = max(0.0, band_high - last_zone_high)
+        if lower_edge_gap > 0:
+            gaps.append(lower_edge_gap / stdev)
+        if upper_edge_gap > 0:
+            gaps.append(upper_edge_gap / stdev)
+
+        for left, right in zip(zones[:-1], zones[1:]):
+            gap = (float(right[0]) - float(left[-1]) - 1.0) * bin_size
+            if gap > 0:
+                gaps.append(gap / stdev)
     return {
         "gap_sd": float(np.mean(gaps)) if gaps else None,
         "zones": int(len(zones)),
