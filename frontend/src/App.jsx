@@ -1646,10 +1646,10 @@ useEffect(() => {
           : rawCandlesRef.current;
         const configuredBandMultiplier = Number(configsRef.current?.vwapMult ?? 2);
         const sessionSdConfigs = [
-          { label: 'Á', color: '#f97316', vwap: 'vwap_asia', upper: 'upper_band_asia', lower: 'lower_band_asia' },
-          { label: 'Âu', color: '#d946ef', vwap: 'vwap_europe', upper: 'upper_band_europe', lower: 'lower_band_europe' },
-          { label: 'Pre-US', color: '#facc15', vwap: 'vwap_pre_us', upper: 'upper_band_pre_us', lower: 'lower_band_pre_us' },
-          { label: 'Mỹ', color: '#3b82f6', vwap: 'vwap_us', upper: 'upper_band_us', lower: 'lower_band_us' },
+          { label: 'Á', sessionName: 'Á', color: '#f97316', vwap: 'vwap_asia', upper: 'upper_band_asia', lower: 'lower_band_asia', startKey: 'asiaStart', endKey: 'asiaEnd', fallback: ['07:00', '11:00'], timezone: 'Asia/Tokyo', summerOffset: 540 },
+          { label: 'Âu', sessionName: 'Âu', color: '#d946ef', vwap: 'vwap_europe', upper: 'upper_band_europe', lower: 'lower_band_europe', startKey: 'euroStart', endKey: 'euroEnd', fallback: ['07:00', '09:00'], timezone: 'Europe/London', summerOffset: 60 },
+          { label: 'Pre-US', sessionName: 'Pre-US', color: '#facc15', vwap: 'vwap_pre_us', upper: 'upper_band_pre_us', lower: 'lower_band_pre_us', startKey: 'preUsStart', endKey: 'preUsEnd', fallback: ['16:00', '19:00'], timezone: 'America/New_York', summerOffset: -240 },
+          { label: 'Mỹ', sessionName: 'Mỹ', color: '#3b82f6', vwap: 'vwap_us', upper: 'upper_band_us', lower: 'lower_band_us', startKey: 'usStart', endKey: 'usEnd', fallback: ['07:30', '11:00'], timezone: 'America/New_York', summerOffset: -240 },
         ];
         let latestSdPosition = null;
         for (let i = sdSourceData.length - 1; i >= 0; i--) {
@@ -1680,22 +1680,85 @@ useEffect(() => {
           setCurrentSdPosition(null);
         }
 
-        // Session bands are only valid while the latest available candle is
-        // inside that session. Do not carry the previous session's value into
-        // the next session or the quiet hours between them.
+        // When a candle is outside all configured sessions, preview the nearest
+        // upcoming session using its current rolling VWAP and deviation.
         let latestSessionSdPosition = null;
         const latestSessionBar = sdSourceData[sdSourceData.length - 1];
         if (latestSessionBar && configuredBandMultiplier > 0) {
           const toFiniteNumber = value => value == null || value === '' ? NaN : Number(value);
           const close = toFiniteNumber(latestSessionBar.close);
-          for (const session of sessionSdConfigs) {
-            const vwap = toFiniteNumber(latestSessionBar[session.vwap]);
-            const upper = toFiniteNumber(latestSessionBar[session.upper]);
-            const lower = toFiniteNumber(latestSessionBar[session.lower]);
-            const stdev = (upper - lower) / (2 * configuredBandMultiplier);
-            if (Number.isFinite(close) && Number.isFinite(vwap) && Number.isFinite(stdev) && stdev > 0) {
-              latestSessionSdPosition = { label: session.label, color: session.color, position: (close - vwap) / stdev };
-              break;
+          let selectedSession = sessionSdConfigs.find(session => latestSessionBar.session_name === session.sessionName);
+          let isUpcomingSession = false;
+
+          if (!selectedSession) {
+            const timeShiftSeconds = (Number(configsRef.current?.timeShiftHours) || 0) * 3600;
+            const currentUtc = Number(latestSessionBar.time) - timeShiftSeconds;
+            const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
+            const localNow = new Date((currentUtc + browserOffsetHours * 3600) * 1000);
+            const firstLocalDay = Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate()) / 1000;
+            const minuteOfDay = value => {
+              const [hours, minutes] = String(value).split(':').map(Number);
+              return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : NaN;
+            };
+            const isCrypto = /BTC|ETH|SOL|XRP|CRYPTO/i.test(symbol);
+            let nextStart = Infinity;
+
+            for (let dayOffset = 0; dayOffset < 8; dayOffset++) {
+              const localDayStart = firstLocalDay + dayOffset * 86400;
+              for (const session of sessionSdConfigs) {
+                const startText = configsRef.current?.[session.startKey] || session.fallback[0];
+                const endText = configsRef.current?.[session.endKey] || session.fallback[1];
+                const startMinutes = minuteOfDay(startText);
+                const endMinutes = minuteOfDay(endText);
+                if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || startMinutes === endMinutes) continue;
+
+                const approximateStartUtc = localDayStart + startMinutes * 60 - browserOffsetHours * 3600;
+                const dstShiftMinutes = configsRef.current?.autoDst === false
+                  ? 0
+                  : getTimeZoneOffsetMinutes(approximateStartUtc, session.timezone) - session.summerOffset;
+                const adjustedStartMinutes = (startMinutes - dstShiftMinutes + 1440) % 1440;
+                const sessionStartUtc = localDayStart + adjustedStartMinutes * 60 - browserOffsetHours * 3600;
+                if (sessionStartUtc <= currentUtc) continue;
+
+                const date = new Date(sessionStartUtc * 1000);
+                const day = date.getUTCDay();
+                const hour = date.getUTCHours();
+                const marketClosed = !isCrypto && ((day === 5 && hour >= 22) || day === 6 || (day === 0 && hour < 21));
+                if (marketClosed) continue;
+
+                if (sessionStartUtc < nextStart) {
+                  nextStart = sessionStartUtc;
+                  selectedSession = session;
+                }
+              }
+              if (selectedSession && nextStart < Infinity) break;
+            }
+            isUpcomingSession = Boolean(selectedSession);
+          }
+
+          if (selectedSession && Number.isFinite(close)) {
+            const sessionValue = bar => {
+              const vwap = toFiniteNumber(bar?.[selectedSession.vwap]);
+              const upper = toFiniteNumber(bar?.[selectedSession.upper]);
+              const lower = toFiniteNumber(bar?.[selectedSession.lower]);
+              const stdev = (upper - lower) / (2 * configuredBandMultiplier);
+              return Number.isFinite(vwap) && Number.isFinite(stdev) && stdev > 0
+                ? { vwap, stdev }
+                : null;
+            };
+            let stats = sessionValue(latestSessionBar);
+            if (!stats) {
+              for (let i = sdSourceData.length - 1; i >= 0 && !stats; i--) {
+                stats = sessionValue(sdSourceData[i]);
+              }
+            }
+            if (stats) {
+              latestSessionSdPosition = {
+                label: selectedSession.label,
+                color: selectedSession.color,
+                position: (close - stats.vwap) / stats.stdev,
+                isUpcoming: isUpcomingSession,
+              };
             }
           }
         }
@@ -1782,22 +1845,22 @@ useEffect(() => {
         const sortedRawForVwap = rawData.filter(d => d.vwap != null && !isNaN(d.vwap)).sort((a,b)=>a.time-b.time);
         const vwapData = sortedRawForVwap.map(item => ({ time: item.time, value: item.vwap, color: '#f8fafc' }));
         const sessionVwapBandFields = {
-          asia: { upper: 'upper_band_asia', lower: 'lower_band_asia' },
-          europe: { upper: 'upper_band_europe', lower: 'lower_band_europe' },
-          preUs: { upper: 'upper_band_pre_us', lower: 'lower_band_pre_us' },
-          us: { upper: 'upper_band_us', lower: 'lower_band_us' },
+          asia: { name: 'Á', upper: 'upper_band_asia', lower: 'lower_band_asia' },
+          europe: { name: 'Âu', upper: 'upper_band_europe', lower: 'lower_band_europe' },
+          preUs: { name: 'Pre-US', upper: 'upper_band_pre_us', lower: 'lower_band_pre_us' },
+          us: { name: 'Mỹ', upper: 'upper_band_us', lower: 'lower_band_us' },
         };
         const sortedRawForSessionBands = rawData
           .filter(item => Number.isFinite(Number(item.time)))
           .sort((a, b) => a.time - b.time);
         const sessionVwapBandData = Object.fromEntries(Object.entries(sessionVwapBandFields).map(([session, fields]) => [
           session,
-          Object.fromEntries(Object.entries(fields).map(([side, field]) => [
+          Object.fromEntries(Object.entries(fields).filter(([key]) => key !== 'name').map(([side, field]) => [
             side,
             sortedRawForSessionBands.map(item => {
               const value = item[field];
               // Whitespace points break the line outside its matching session.
-              return value != null && Number.isFinite(Number(value))
+              return item.session_name === fields.name && value != null && Number.isFinite(Number(value))
                 ? { time: item.time, value: Number(value) }
                 : { time: item.time };
             })
@@ -2636,7 +2699,7 @@ useEffect(() => {
                   boxShadow: `0 2px 10px ${currentSessionSdPosition.color}35`,
                   fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
                 }}>
-                  VWAP {currentSessionSdPosition.label} {currentSessionSdPosition.position > 0 ? '+' : ''}{currentSessionSdPosition.position.toFixed(2)} SD
+                  VWAP {currentSessionSdPosition.label}{currentSessionSdPosition.isUpcoming ? ' sắp tới' : ''} {currentSessionSdPosition.position > 0 ? '+' : ''}{currentSessionSdPosition.position.toFixed(2)} SD
                 </div>
               )}
             </div>

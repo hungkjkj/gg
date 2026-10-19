@@ -617,14 +617,13 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                 if volume_sum > 0:
                     session_vwap = price_volume_sum / volume_sum
                     result[index] = session_vwap
-                    # Weighted standard deviation around this session VWAP.
-                    # Bands are populated only while this session is active;
-                    # the session VWAP line itself remains available outside it.
-                    if session_mask[index]:
-                        variance = max(squared_price_volume_sum / volume_sum - session_vwap * session_vwap, 0.0)
-                        session_sd = np.sqrt(variance) * vwapMult
-                        upper_result[index] = session_vwap + session_sd
-                        lower_result[index] = session_vwap - session_sd
+                    # Keep the session's reference bands available outside its
+                    # active hours so the frontend can preview the next session.
+                    # The chart still masks these lines to the matching session.
+                    variance = max(squared_price_volume_sum / volume_sum - session_vwap * session_vwap, 0.0)
+                    session_sd = np.sqrt(variance) * vwapMult
+                    upper_result[index] = session_vwap + session_sd
+                    lower_result[index] = session_vwap - session_sd
         df[column] = result
         df[upper_field] = upper_result
         df[lower_field] = lower_result
