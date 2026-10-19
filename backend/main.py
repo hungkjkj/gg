@@ -1743,7 +1743,9 @@ def _matrix_dvp_gap_snapshot(df, end_index, vwap_values, stdev_values, vwap_mult
             if gap > 0:
                 gaps.append(gap / stdev)
     return {
-        "gap_sd": float(np.mean(gaps)) if gaps else None,
+        # A retained zone can cover the entire band. That is a valid zero-gap
+        # observation and must participate in the Vol-days distribution.
+        "gap_sd": float(np.mean(gaps)) if gaps else 0.0,
         "zones": int(len(zones)),
         "close_vwap_sd": float((close - vwap) / stdev),
     }
@@ -1793,7 +1795,7 @@ def get_dvp_trend_ranking(
         return {"matrix_type": matrix_type, "vol_days": vol_days, "rows": [], "message": "Không có tài sản trong nhóm này."}
 
     key = (
-        "trading-day-samples-v2", matrix_type, vol_days, int(end_time or 0), brokerTimezone, lookback_days, vwap_length,
+        "trading-day-samples-v3", matrix_type, vol_days, int(end_time or 0), brokerTimezone, lookback_days, vwap_length,
         vwap_mult, pct1, grid_mode, fixed_pips, row_count, timeout_hours,
     )
     now = time.time()

@@ -3011,7 +3011,7 @@ const DvpTrendMatrix = ({ data, loading, error, progress, volDays, sessionSettin
       <div>
         <h2 style={{ margin: 0, color: '#67e8f9', fontSize: '1.2rem' }}>Xếp hạng mức độ xu hướng theo D-VP</h2>
         <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '6px', maxWidth: '900px', lineHeight: 1.55 }}>
-          Lấy trung bình cộng các khoảng trống giữa những vùng D-VP được giữ lại và từ vùng ngoài cùng đến hai mép VWAP ± {data?.vwap_mult ?? sessionSettings?.vwapMult ?? 2} SD, rồi chuẩn hóa theo 1 SD. Nếu không có vùng D-VP, toàn bộ dải được tính là một khoảng trống. Phân vị so với các mẫu cùng thời điểm trong {data?.vol_days ?? volDays} ngày; chiều tăng/giảm lấy từ vị trí giá so với VWAP.
+          Lấy trung bình cộng các khoảng trống giữa những vùng D-VP được giữ lại và từ vùng ngoài cùng đến hai mép VWAP ± {data?.vwap_mult ?? sessionSettings?.vwapMult ?? 2} SD, rồi chuẩn hóa theo 1 SD. Nếu không có vùng D-VP, toàn bộ dải được tính là một khoảng trống; nếu vùng phủ kín dải thì khoảng cách là 0 SD. Phân vị so với các mẫu cùng thời điểm trong {data?.vol_days ?? volDays} ngày; chiều tăng/giảm lấy từ vị trí giá so với VWAP.
         </div>
       </div>
       <div style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap' }}>
