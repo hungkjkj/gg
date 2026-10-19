@@ -1609,7 +1609,11 @@ useEffect(() => {
         
         const response = await axios.get(`${API_BASE}/api/v1/ohlcv`, {
           signal: !isPolling ? abortControllerRef.current.signal : undefined,
-          params: { symbol, timeframe, count: 10000, end_time: targetEndTime, browserOffsetHours, latest_only: isPolling, _t: Date.now(), ...ohlcvConfigs }
+          // Session classification in the backend must use the same current
+          // browser offset as the session boxes rendered by the frontend.
+          // Keep this after the saved config spread so an old persisted offset
+          // cannot move VWAP session bands into a different session.
+          params: { symbol, timeframe, count: 10000, end_time: targetEndTime, latest_only: isPolling, _t: Date.now(), ...ohlcvConfigs, browserOffsetHours }
         });
         
         // Bỏ qua nếu response trả về dữ liệu của symbol/timeframe cũ (Race condition)
