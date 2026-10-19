@@ -3005,6 +3005,63 @@ useEffect(() => {
   );
 };
 
+const DvpTrendMatrix = ({ data, loading, error, progress, volDays, sessionSettings }) => (
+  <div style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-panel)', padding: '22px', borderRadius: '12px', border: '1px solid rgba(34, 211, 238, 0.24)', boxShadow: '0 0 25px rgba(34, 211, 238, 0.05)', overflowX: 'auto' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap', marginBottom: '16px' }}>
+      <div>
+        <h2 style={{ margin: 0, color: '#67e8f9', fontSize: '1.2rem' }}>Xếp hạng mức độ xu hướng theo D-VP</h2>
+        <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '6px', maxWidth: '900px', lineHeight: 1.55 }}>
+          Đo khoảng trống trung bình giữa các vùng D-VP được giữ lại bên trong VWAP ± {data?.vwap_mult ?? sessionSettings?.vwapMult ?? 2} SD, chuẩn hóa theo 1 SD. Phân vị so với các mẫu cùng thời điểm trong {data?.vol_days ?? volDays} ngày; chiều tăng/giảm lấy từ vị trí giá so với VWAP.
+        </div>
+      </div>
+      <div style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap' }}>
+        Cửa sổ D-VP: {data?.dvp_lookback_days ?? sessionSettings?.dvpLookbackDays ?? 5} ngày · VWAP: {data?.vwap_length ?? sessionSettings?.vwapLength ?? 89} giờ
+      </div>
+    </div>
+
+    {loading && <div style={{ padding: '10px 12px', marginBottom: '12px', borderRadius: '7px', background: 'rgba(8,145,178,0.1)', color: '#7dd3fc' }}>Đang tính khoảng cách D-VP cho từng tài sản… {progress}%</div>}
+    {error && <div style={{ padding: '12px', marginBottom: '12px', borderRadius: '7px', background: 'rgba(248,113,113,0.1)', color: '#fca5a5' }}>{error}</div>}
+    {!loading && !error && (!data?.rows?.length) && <div style={{ padding: '14px', color: '#94a3b8' }}>Chưa có đủ dữ liệu. Thử chọn ít ngày hơn hoặc kiểm tra kết nối MT5.</div>}
+
+    {!!data?.rows?.length && (
+      <table style={{ width: '100%', minWidth: '720px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+        <thead>
+          <tr>
+            {['#', 'Cặp / tài sản', 'Chiều giá', 'Giá cách VWAP', 'Khoảng cách D-VP TB', 'Phân vị Vol days', 'Vùng trong dải', 'Mẫu lịch sử'].map(title => (
+              <th key={title} style={{ padding: '11px 10px', borderBottom: '1px solid rgba(148,163,184,0.2)', color: '#94a3b8', fontWeight: 600, whiteSpace: 'nowrap' }}>{title}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.rows.map(row => {
+            const directionColor = row.direction === 'up' ? '#4ade80' : row.direction === 'down' ? '#fb7185' : '#94a3b8';
+            const directionLabel = row.direction === 'up' ? '▲ Tăng' : row.direction === 'down' ? '▼ Giảm' : '● Cân bằng';
+            return (
+              <tr key={row.symbol}>
+                <td style={{ padding: '11px 10px', borderBottom: '1px solid rgba(148,163,184,0.09)', color: '#fbbf24', fontWeight: 700 }}>{row.rank}</td>
+                <td style={{ padding: '11px 10px', borderBottom: '1px solid rgba(148,163,184,0.09)', color: '#e2e8f0', fontWeight: 700 }}>{row.symbol}</td>
+                <td style={{ padding: '11px 10px', borderBottom: '1px solid rgba(148,163,184,0.09)', color: directionColor, fontWeight: 700, whiteSpace: 'nowrap' }}>{directionLabel}</td>
+                <td style={{ padding: '11px 10px', borderBottom: '1px solid rgba(148,163,184,0.09)', color: row.close_vwap_sd == null ? '#64748b' : row.close_vwap_sd > 0 ? '#4ade80' : row.close_vwap_sd < 0 ? '#fb7185' : '#94a3b8', whiteSpace: 'nowrap' }}>
+                  {row.close_vwap_sd == null ? '—' : `${row.close_vwap_sd > 0 ? '+' : ''}${row.close_vwap_sd.toFixed(2)} SD`}
+                </td>
+                <td style={{ padding: '11px 10px', borderBottom: '1px solid rgba(148,163,184,0.09)', color: '#e2e8f0', whiteSpace: 'nowrap' }}>{row.gap_sd == null ? '—' : `${row.gap_sd.toFixed(3)} SD`}</td>
+                <td style={{ padding: '11px 10px', borderBottom: '1px solid rgba(148,163,184,0.09)', color: row.percentile == null ? '#64748b' : row.percentile >= 70 ? '#4ade80' : row.percentile <= 30 ? '#fb7185' : '#fbbf24', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  {row.percentile == null ? '—' : `P${row.percentile.toFixed(0)}`}
+                </td>
+                <td style={{ padding: '11px 10px', borderBottom: '1px solid rgba(148,163,184,0.09)', color: '#cbd5e1' }}>{row.zones}</td>
+                <td style={{ padding: '11px 10px', borderBottom: '1px solid rgba(148,163,184,0.09)', color: '#94a3b8' }}>{row.samples}/{data.sample_days}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    )}
+    <div style={{ marginTop: '12px', color: '#64748b', fontSize: '11px', lineHeight: 1.5 }}>
+      P cao nghĩa là khoảng cách D-VP hiện tại rộng hơn phần lớn mẫu lịch sử của chính tài sản đó; đây là thước đo cấu trúc/độ giãn vùng, không tự khẳng định xu hướng tăng hay giảm. Dữ liệu lấy trên nến M5 để các tài sản trong Matrix có cùng cơ sở đo.
+    </div>
+  </div>
+);
+
 const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, initialMatrixVolDays, onSaveMatrixSettings, symbol, sessionSettings }) => {
   const [sessionMatrixData, setSessionMatrixData] = useState(null);
   const [legacyPowerLong, setLegacyPowerLong] = useState(null);
@@ -3014,12 +3071,17 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
   const [marketFlowLoading, setMarketFlowLoading] = useState(false);
   const [marketFlowProgress, setMarketFlowProgress] = useState(0);
   const [marketFlowError, setMarketFlowError] = useState('');
+  const [dvpTrendData, setDvpTrendData] = useState(null);
+  const [dvpTrendLoading, setDvpTrendLoading] = useState(false);
+  const [dvpTrendError, setDvpTrendError] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [matrixHours, setMatrixHours] = useState(initialMatrixHours || Number(localStorage.getItem('currencyMatrixHours')) || 24);
   const [matrixHoursLong, setMatrixHoursLong] = useState(Number(localStorage.getItem('currencyMatrixHoursLong')) || 89);
   const [matrixVolDays, setMatrixVolDays] = useState(initialMatrixVolDays || Number(localStorage.getItem('currencyMatrixVolDays')) || 30);
   const [matrixType, setMatrixType] = useState((localStorage.getItem('matrixType') === 'currency' ? 'fx' : localStorage.getItem('matrixType')) || 'fx');
+  const simulatedTimeRef = useRef(simulatedTime);
+  simulatedTimeRef.current = simulatedTime;
 
   // Tự động đổi nhóm tài sản theo symbol đang xem
   useEffect(() => {
@@ -3064,6 +3126,21 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     }
     return () => clearInterval(interval);
   }, [marketFlowLoading]);
+
+  useEffect(() => {
+    let interval;
+    if (dvpTrendLoading) {
+      interval = setInterval(async () => {
+        try {
+          const res = await axios.get(`${API_BASE}/api/v1/matrix/progress?matrix_type=dvp_trend`);
+          setProgress(res.data.progress || 0);
+        } catch (e) {}
+      }, 500);
+    } else if (matrixView === 'trend_ranking') {
+      setProgress(0);
+    }
+    return () => clearInterval(interval);
+  }, [dvpTrendLoading, matrixView]);
 
 
   const fetchMatrix = async (force = false) => {
@@ -3170,6 +3247,37 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     }
   };
 
+  const fetchDvpTrend = async (force = false) => {
+    if (force && onSaveMatrixSettings) onSaveMatrixSettings(matrixHours, matrixVolDays);
+    setDvpTrendLoading(true);
+    setDvpTrendError('');
+    try {
+      const res = await axios.get(`${API_BASE}/api/v1/matrix/dvp-trend`, {
+        params: {
+          matrix_type: matrixType,
+          vol_days: matrixVolDays,
+          end_time: simulatedTimeRef.current || 0,
+          brokerTimezone,
+          dvp_lookback_days: sessionSettings?.dvpLookbackDays,
+          vwap_length: sessionSettings?.vwapLength,
+          vwap_mult: sessionSettings?.vwapMult,
+          pct1: sessionSettings?.pct1,
+          grid_mode: sessionSettings?.gridMode,
+          fixed_pips: sessionSettings?.fixedPips,
+          row_count: sessionSettings?.rowCount,
+          timeout_hours: sessionSettings?.timeoutHours,
+          force
+        }
+      });
+      setDvpTrendData(res.data);
+    } catch (err) {
+      console.error('Error fetching D-VP trend ranking:', err);
+      setDvpTrendError('Không tải được bảng xếp hạng xu hướng D-VP. Hãy thử làm mới hoặc kiểm tra kết nối MT5.');
+    } finally {
+      setDvpTrendLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (matrixView !== 'groups') return undefined;
     fetchMatrix(false);
@@ -3191,6 +3299,16 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       clearInterval(intervalId);
     };
   }, [matrixView, matrixHours, matrixHoursLong, matrixVolDays, brokerTimezone]);
+
+  useEffect(() => {
+    if (matrixView !== 'trend_ranking') return undefined;
+    const initialFetchTimer = setTimeout(() => fetchDvpTrend(false), 350);
+    const intervalId = setInterval(() => fetchDvpTrend(false), 5 * 60 * 1000);
+    return () => {
+      clearTimeout(initialFetchTimer);
+      clearInterval(intervalId);
+    };
+  }, [matrixView, matrixType, matrixVolDays, brokerTimezone, sessionSettings?.dvpLookbackDays, sessionSettings?.vwapLength, sessionSettings?.vwapMult, sessionSettings?.pct1, sessionSettings?.gridMode, sessionSettings?.fixedPips, sessionSettings?.rowCount, sessionSettings?.timeoutHours]);
 
   return (
     <div style={{ padding: '20px', display: 'flex', gap: '40px', color: 'var(--text-primary)', flexDirection: 'column', position: 'relative' }}>
@@ -3214,7 +3332,8 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         {[
           { key: 'groups', label: 'Currency Matrix' },
-          { key: 'market_flows', label: 'Dòng tiền thị trường' }
+          { key: 'market_flows', label: 'Dòng tiền thị trường' },
+          { key: 'trend_ranking', label: 'Xếp hạng xu hướng' }
         ].map(tab => (
           <button key={tab.key} onClick={() => setMatrixView(tab.key)} style={{
             padding: '8px 14px', borderRadius: '8px', border: `1px solid ${matrixView === tab.key ? 'rgba(34,211,238,0.55)' : 'rgba(148,163,184,0.2)'}`,
@@ -3275,18 +3394,20 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '70px' }}
         />
         <button 
-          onClick={() => matrixView === 'groups' ? fetchMatrix(true) : fetchMarketFlow(true)}
+          onClick={() => matrixView === 'groups' ? fetchMatrix(true) : matrixView === 'market_flows' ? fetchMarketFlow(true) : fetchDvpTrend(true)}
           style={{ padding: '5px 15px', borderRadius: '5px', background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
         >
           🔄 Tính lại / Làm mới
         </button>
         <span style={{ fontSize: '12px', color: '#9ca3af', marginLeft: 'auto' }}>
-          {matrixView === 'groups' ? '*Dữ liệu tự động lưu đệm (cache) trong 1 phút để tránh kẹt API.' : '*So sánh GI theo cùng cửa sổ và Vol days; dữ liệu tự làm mới mỗi 5 phút.'}
+          {matrixView === 'groups' ? '*Dữ liệu tự động lưu đệm (cache) trong 1 phút để tránh kẹt API.' : matrixView === 'market_flows' ? '*So sánh GI theo cùng cửa sổ và Vol days; dữ liệu tự làm mới mỗi 5 phút.' : '*Xếp hạng khoảng cách D-VP trong dải VWAP/SD; tự làm mới mỗi 5 phút.'}
         </span>
       </div>
 
       {matrixView === 'market_flows' ? (
         <MarketFlowMatrix data={marketFlowData} loading={marketFlowLoading} error={marketFlowError} progress={marketFlowProgress} onRefresh={() => fetchMarketFlow(true)} />
+      ) : matrixView === 'trend_ranking' ? (
+        <DvpTrendMatrix data={dvpTrendData} loading={dvpTrendLoading} error={dvpTrendError} progress={progress} volDays={matrixVolDays} sessionSettings={sessionSettings} />
       ) : sessionMatrixData ? (() => {
         const ranking = legacyPowerLong || [];
         const topLeader = ranking[0] || null;

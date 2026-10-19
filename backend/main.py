@@ -1624,6 +1624,288 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
 
 _MARKET_FLOW_CACHE = {}
 _MARKET_FLOW_CACHE_TIME = {}
+_DVP_TREND_CACHE = {}
+_DVP_TREND_CACHE_TIME = {}
+
+
+def _matrix_dvp_gap_snapshot(df, end_index, vwap_values, stdev_values, vwap_mult,
+                             lookback_days, pct1, grid_mode, fixed_pips,
+                             row_count, timeout_hours):
+    """Measure mean spacing between retained D-VP zones inside the global VWAP band."""
+    if end_index < 0 or end_index >= len(df):
+        return None
+
+    stamp = int(df["time"].iloc[end_index])
+    start_stamp = stamp - int(lookback_days * 24 * 3600)
+    start_index = int(np.searchsorted(df["time"].to_numpy(dtype=np.int64), start_stamp, side="left"))
+    window = df.iloc[start_index:end_index + 1]
+    if len(window) < 3:
+        return None
+
+    vwap = float(vwap_values[end_index])
+    stdev = float(stdev_values[end_index])
+    close = float(df["close"].iloc[end_index])
+    if not np.isfinite(vwap) or not np.isfinite(stdev) or stdev <= 0:
+        return None
+
+    band_low = vwap - (stdev * vwap_mult)
+    band_high = vwap + (stdev * vwap_mult)
+    if grid_mode == "fixed":
+        mean_price = float(window["close"].mean())
+        if mean_price > 0:
+            pip_size = 10 ** np.floor(np.log10(mean_price * (0.0001 / 1.10)))
+        else:
+            pip_size = 0.0001
+        bin_size = fixed_pips * pip_size
+    else:
+        recent = window.tail(min(120, len(window)))
+        recent_range = float(recent["high"].max() - recent["low"].min())
+        bin_size = recent_range / max(1, row_count)
+
+    profile_range = float(window["high"].max() - window["low"].min())
+    if profile_range <= 0:
+        return None
+    if not np.isfinite(bin_size) or bin_size <= 0:
+        bin_size = profile_range / max(1, row_count)
+    # Keep the matrix calculation bounded for instruments with very fine fixed-pip grids.
+    resolution_cap = max(100, min(1000, row_count * 4))
+    if profile_range / bin_size > resolution_cap:
+        bin_size = profile_range / float(resolution_cap)
+
+    lows = window["low"].to_numpy(dtype=float)
+    highs = window["high"].to_numpy(dtype=float)
+    volumes = window["value"].to_numpy(dtype=float)
+    min_bins = np.floor(lows / bin_size).astype(np.int64)
+    max_bins = np.floor(highs / bin_size).astype(np.int64)
+    bin_counts = np.maximum(max_bins - min_bins + 1, 1)
+
+    # Expand candle ranges into D-VP price-bin events, then split each bin's
+    # history into boxes when its inactivity exceeds the chart's timeout.
+    event_count = int(bin_counts.sum())
+    if event_count <= 0 or event_count > 2_000_000:
+        return None
+    event_bar = np.repeat(np.arange(len(window), dtype=np.int32), bin_counts)
+    event_start_offsets = np.repeat(np.cumsum(bin_counts, dtype=np.int64) - bin_counts, bin_counts)
+    event_bins = np.repeat(min_bins, bin_counts) + (np.arange(event_count, dtype=np.int64) - event_start_offsets)
+    event_volumes = np.repeat(volumes / bin_counts, bin_counts)
+
+    order = np.lexsort((event_bar, event_bins))
+    sorted_bins = event_bins[order]
+    sorted_bars = event_bar[order]
+    sorted_volumes = event_volumes[order]
+    timeout_bars = max(int(timeout_hours * 3600 / 300), 3)
+    run_starts = np.ones(event_count, dtype=bool)
+    if event_count > 1:
+        run_starts[1:] = (sorted_bins[1:] != sorted_bins[:-1]) | ((sorted_bars[1:] - sorted_bars[:-1]) > timeout_bars)
+    run_ids = np.cumsum(run_starts, dtype=np.int64) - 1
+    box_volumes = np.bincount(run_ids, weights=sorted_volumes)
+    box_bins = sorted_bins[run_starts]
+    positive_boxes = box_volumes > 0
+    box_volumes = box_volumes[positive_boxes]
+    box_bins = box_bins[positive_boxes]
+    if not len(box_volumes):
+        return None
+
+    volume_cutoff = float(np.percentile(box_volumes, pct1))
+    kept_bins = np.unique(box_bins[box_volumes >= volume_cutoff])
+    if not len(kept_bins):
+        return None
+
+    centers = kept_bins.astype(float) * bin_size + bin_size / 2.0
+    in_band = (centers + bin_size / 2.0 >= band_low) & (centers - bin_size / 2.0 <= band_high)
+    band_bins = kept_bins[in_band]
+    if len(band_bins) < 2:
+        return {
+            "gap_sd": None,
+            "zones": int(len(band_bins)),
+            "close_vwap_sd": float((close - vwap) / stdev),
+        }
+
+    band_bins = np.unique(np.sort(band_bins))
+    zone_breaks = np.where(np.diff(band_bins) > 1)[0] + 1
+    zones = np.split(band_bins, zone_breaks)
+    if len(zones) < 2:
+        return {
+            "gap_sd": None,
+            "zones": int(len(zones)),
+            "close_vwap_sd": float((close - vwap) / stdev),
+        }
+
+    gaps = []
+    for left, right in zip(zones[:-1], zones[1:]):
+        gap = (float(right[0]) - float(left[-1]) - 1.0) * bin_size
+        if gap > 0:
+            gaps.append(gap / stdev)
+    return {
+        "gap_sd": float(np.mean(gaps)) if gaps else None,
+        "zones": int(len(zones)),
+        "close_vwap_sd": float((close - vwap) / stdev),
+    }
+
+
+@app.get("/api/v1/matrix/dvp-trend")
+def get_dvp_trend_ranking(
+    matrix_type: str = "fx",
+    vol_days: int = 30,
+    end_time: int = 0,
+    brokerTimezone: str = "Europe/Athens",
+    dvp_lookback_days: float = 0,
+    vwap_length: int = 0,
+    vwap_mult: float = 0,
+    pct1: float = -1,
+    grid_mode: str = "",
+    fixed_pips: float = 0,
+    row_count: int = 0,
+    timeout_hours: float = 0,
+    force: bool = False,
+):
+    """Rank assets by today's D-VP gap spacing versus same-time snapshots in Vol days."""
+    try:
+        with open(CONFIG_FILE, "r") as config_file:
+            config = json.load(config_file)
+    except Exception:
+        config = {}
+
+    vol_days = max(1, min(int(vol_days), 365))
+    lookback_days = max(1.0, min(float(dvp_lookback_days or config.get("dvpLookbackDays", 5)), 90.0))
+    vwap_length = max(1, min(int(vwap_length or config.get("vwapLength", 89)), 24 * 30))
+    vwap_mult = max(0.1, min(float(vwap_mult or config.get("vwapMult", 2)), 10.0))
+    pct1 = max(0.0, min(float(config.get("pct1", 75) if pct1 < 0 else pct1), 100.0))
+    grid_mode = grid_mode or config.get("gridMode", "auto")
+    fixed_pips = max(0.01, float(fixed_pips or config.get("fixedPips", 10)))
+    row_count = max(5, min(int(row_count or config.get("rowCount", 50)), 500))
+    timeout_hours = max(0.05, min(float(timeout_hours or config.get("timeoutHours", 1)), 24.0))
+
+    if matrix_type in ("fx", "currency"):
+        symbols = [
+            "EURUSD", "GBPUSD", "AUDUSD", "NZDUSD", "USDJPY", "EURGBP", "EURAUD", "EURNZD",
+            "EURJPY", "GBPAUD", "GBPNZD", "GBPJPY", "AUDNZD", "AUDJPY", "NZDJPY",
+        ]
+    else:
+        symbols = config.get("matrix_groups", {}).get(matrix_type, [])
+    if not symbols:
+        return {"matrix_type": matrix_type, "vol_days": vol_days, "rows": [], "message": "Không có tài sản trong nhóm này."}
+
+    key = (
+        matrix_type, vol_days, int(end_time or 0), brokerTimezone, lookback_days, vwap_length,
+        vwap_mult, pct1, grid_mode, fixed_pips, row_count, timeout_hours,
+    )
+    now = time.time()
+    if not force and key in _DVP_TREND_CACHE and now - _DVP_TREND_CACHE_TIME.get(key, 0) < 60:
+        return _DVP_TREND_CACHE[key]
+
+    bars_per_day = 24 * 12  # Same M5 source interval used by Currency Matrix.
+    max_profiles = vol_days
+    history_bars = min(
+        100_000,
+        max(240, int((max_profiles + lookback_days + (vwap_length / 24.0) + 2) * bars_per_day)),
+    )
+    MATRIX_PROGRESS["dvp_trend"] = 0.0
+    rows = []
+
+    for symbol_index, symbol in enumerate(symbols):
+        try:
+            raw = get_historical_data(symbol, "M5", history_bars, end_time, brokerTimezone, fallback_ea=False)
+            required = {"time", "high", "low", "close"}
+            if raw is None or raw.empty or not required.issubset(raw.columns):
+                MATRIX_PROGRESS["dvp_trend"] = round((symbol_index + 1) / len(symbols) * 100, 2)
+                continue
+
+            df = raw.copy().sort_values("time").drop_duplicates("time").reset_index(drop=True)
+            for column in ("time", "high", "low", "close"):
+                df[column] = pd.to_numeric(df[column], errors="coerce")
+            volume_column = "value" if "value" in df.columns else "tick_volume"
+            if volume_column not in df.columns:
+                df["value"] = 0.0
+            else:
+                df["value"] = pd.to_numeric(df[volume_column], errors="coerce").fillna(0).clip(lower=0)
+            df = df.dropna(subset=["time", "high", "low", "close"]).reset_index(drop=True)
+            if len(df) < max(12, vwap_length * 12 // 2):
+                MATRIX_PROGRESS["dvp_trend"] = round((symbol_index + 1) / len(symbols) * 100, 2)
+                continue
+
+            hlc3 = (df["high"].to_numpy(dtype=float) + df["low"].to_numpy(dtype=float) + df["close"].to_numpy(dtype=float)) / 3.0
+            volumes = df["value"].to_numpy(dtype=float)
+            vwap_window = max(1, vwap_length * 12)
+            vol_sum = pd.Series(volumes).rolling(window=vwap_window, min_periods=1).sum().to_numpy(dtype=float)
+            vwap_series = pd.Series(hlc3 * volumes).rolling(window=vwap_window, min_periods=1).sum().to_numpy(dtype=float) / np.maximum(vol_sum, 1e-9)
+            variance = pd.Series(((hlc3 - vwap_series) ** 2) * volumes).rolling(window=vwap_window, min_periods=1).sum().to_numpy(dtype=float) / np.maximum(vol_sum, 1e-9)
+            stdev_series = np.sqrt(np.maximum(variance, 0.0))
+
+            times = df["time"].to_numpy(dtype=np.int64)
+            latest_time = int(times[-1])
+            sample_indices = [len(df) - 1]
+            seen_indices = {len(df) - 1}
+            for day in range(1, max_profiles + 1):
+                target_time = latest_time - day * 24 * 3600
+                candidate = int(np.searchsorted(times, target_time, side="right") - 1)
+                if candidate < 0 or latest_time - int(times[candidate]) > 72 * 3600:
+                    continue
+                if candidate not in seen_indices:
+                    sample_indices.append(candidate)
+                    seen_indices.add(candidate)
+
+            current = _matrix_dvp_gap_snapshot(
+                df, sample_indices[0], vwap_series, stdev_series, vwap_mult, lookback_days,
+                pct1, grid_mode, fixed_pips, row_count, timeout_hours,
+            )
+            historical = []
+            for sample_index in sample_indices[1:]:
+                sample = _matrix_dvp_gap_snapshot(
+                    df, sample_index, vwap_series, stdev_series, vwap_mult, lookback_days,
+                    pct1, grid_mode, fixed_pips, row_count, timeout_hours,
+                )
+                if sample and sample.get("gap_sd") is not None and np.isfinite(sample["gap_sd"]):
+                    historical.append(float(sample["gap_sd"]))
+
+            gap_sd = current.get("gap_sd") if current else None
+            percentile = None
+            if gap_sd is not None and len(historical) >= 5:
+                less = sum(value < gap_sd for value in historical)
+                equal = sum(np.isclose(value, gap_sd) for value in historical)
+                percentile = ((less + 0.5 * equal) / len(historical)) * 100.0
+
+            close_vwap_sd = current.get("close_vwap_sd") if current else None
+            if close_vwap_sd is None:
+                direction = "neutral"
+            elif close_vwap_sd > 0.05:
+                direction = "up"
+            elif close_vwap_sd < -0.05:
+                direction = "down"
+            else:
+                direction = "neutral"
+            rows.append({
+                "symbol": symbol,
+                "direction": direction,
+                "close_vwap_sd": round(float(close_vwap_sd), 2) if close_vwap_sd is not None and np.isfinite(close_vwap_sd) else None,
+                "gap_sd": round(float(gap_sd), 3) if gap_sd is not None and np.isfinite(gap_sd) else None,
+                "percentile": round(float(percentile), 1) if percentile is not None and np.isfinite(percentile) else None,
+                "zones": int(current.get("zones", 0)) if current else 0,
+                "samples": len(historical),
+            })
+        except Exception as error:
+            print(f"D-VP trend Matrix failed for {symbol}: {error}")
+        MATRIX_PROGRESS["dvp_trend"] = round((symbol_index + 1) / len(symbols) * 100, 2)
+
+    rows.sort(key=lambda row: row["percentile"] if row["percentile"] is not None else -1, reverse=True)
+    for rank, row in enumerate(rows, start=1):
+        row["rank"] = rank
+    result = {
+        "matrix_type": matrix_type,
+        "vol_days": vol_days,
+        "sample_days": max_profiles,
+        "vwap_length": vwap_length,
+        "vwap_mult": vwap_mult,
+        "dvp_lookback_days": lookback_days,
+        "rows": rows,
+    }
+    if len(_DVP_TREND_CACHE) > 50:
+        _DVP_TREND_CACHE.clear()
+        _DVP_TREND_CACHE_TIME.clear()
+    _DVP_TREND_CACHE[key] = result
+    _DVP_TREND_CACHE_TIME[key] = now
+    MATRIX_PROGRESS["dvp_trend"] = 100.0
+    return result
 
 
 @app.get("/api/v1/matrix/market-flows")
