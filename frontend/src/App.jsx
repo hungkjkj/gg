@@ -1645,8 +1645,10 @@ useEffect(() => {
 
         // In backtest, anchor the SD readout to the simulated time so the chart
         // never displays a value calculated from a candle after the replay point.
+        const timeShiftSeconds = (Number(configsRef.current?.timeShiftHours) || 0) * 3600;
+        const backtestChartEndTime = targetEndTime + timeShiftSeconds;
         const sdSourceData = viewMode === 'backtest' && targetEndTime > 0
-          ? rawCandlesRef.current.filter(item => item.time <= targetEndTime)
+          ? rawCandlesRef.current.filter(item => item.time <= backtestChartEndTime)
           : rawCandlesRef.current;
         const configuredBandMultiplier = Number(configsRef.current?.vwapMult ?? 2);
         const sessionSdConfigs = [
@@ -1691,19 +1693,49 @@ useEffect(() => {
         if (latestSessionBar && configuredBandMultiplier > 0) {
           const toFiniteNumber = value => value == null || value === '' ? NaN : Number(value);
           const close = toFiniteNumber(latestSessionBar.close);
-          let selectedSession = sessionSdConfigs.find(session => latestSessionBar.session_name === session.sessionName);
+          const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
+          // Backtest time can be exactly at a session boundary while the most
+          // recent candle is still the previous session's final candle (e.g.
+          // 13:59 immediately before the 14:00 Europe open). Select by the
+          // replay timestamp so the badge changes with the session box.
+          const chartAsOfTime = viewMode === 'backtest' && targetEndTime > 0
+            ? targetEndTime + timeShiftSeconds
+            : Number(latestSessionBar.time);
+          const currentUtc = chartAsOfTime - timeShiftSeconds;
+          const localNow = new Date((currentUtc + browserOffsetHours * 3600) * 1000);
+          const localDayStart = Date.UTC(
+            localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate()
+          ) / 1000;
+          const localMinute = localNow.getUTCHours() * 60 + localNow.getUTCMinutes();
+          const minuteOfDay = value => {
+            const [hours, minutes] = String(value).split(':').map(Number);
+            return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : NaN;
+          };
+          let selectedSession = null;
+          for (const session of sessionSdConfigs) {
+            const startText = configsRef.current?.[session.startKey] || session.fallback[0];
+            const endText = configsRef.current?.[session.endKey] || session.fallback[1];
+            const startMinutes = minuteOfDay(startText);
+            const endMinutes = minuteOfDay(endText);
+            if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || startMinutes === endMinutes) continue;
+
+            const approximateStartUtc = localDayStart + startMinutes * 60 - browserOffsetHours * 3600;
+            const dstShiftMinutes = configsRef.current?.autoDst === false
+              ? 0
+              : getTimeZoneOffsetMinutes(approximateStartUtc, session.timezone) - session.summerOffset;
+            const adjustedStartMinutes = (startMinutes - dstShiftMinutes + 1440) % 1440;
+            const adjustedEndMinutes = (endMinutes - dstShiftMinutes + 1440) % 1440;
+            const isWithinSession = adjustedStartMinutes < adjustedEndMinutes
+              ? localMinute >= adjustedStartMinutes && localMinute < adjustedEndMinutes
+              : localMinute >= adjustedStartMinutes || localMinute < adjustedEndMinutes;
+            // Backend assignment order is Á, Âu, Pre-US, Mỹ; a later
+            // overlapping session takes precedence there too.
+            if (isWithinSession) selectedSession = session;
+          }
           let isUpcomingSession = false;
 
           if (!selectedSession) {
-            const timeShiftSeconds = (Number(configsRef.current?.timeShiftHours) || 0) * 3600;
-            const currentUtc = Number(latestSessionBar.time) - timeShiftSeconds;
-            const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
-            const localNow = new Date((currentUtc + browserOffsetHours * 3600) * 1000);
-            const firstLocalDay = Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate()) / 1000;
-            const minuteOfDay = value => {
-              const [hours, minutes] = String(value).split(':').map(Number);
-              return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : NaN;
-            };
+            const firstLocalDay = localDayStart;
             const isCrypto = /BTC|ETH|SOL|XRP|CRYPTO/i.test(symbol);
             let nextStart = Infinity;
 
