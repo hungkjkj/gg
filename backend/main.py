@@ -91,6 +91,7 @@ class TradingLogModel(BaseModel):
     id: str
     timestamp: str
     content: str
+    drawing: Optional[str] = None
 
 
 @app.get("/api/v1/trading-logs")
