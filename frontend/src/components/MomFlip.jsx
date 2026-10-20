@@ -2,6 +2,19 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createChart } from 'lightweight-charts';
 import { SessionMatrixTable } from './SessionMatrixTable';
 
+const ASSISTIVE_BUBBLE_SIZE = 60;
+const ASSISTIVE_VIEWPORT_MARGIN = 12;
+const ASSISTIVE_BOTTOM_MARGIN = 20;
+
+const clampAssistivePosition = ({ x, y }) => {
+  const maxX = Math.max(ASSISTIVE_VIEWPORT_MARGIN, window.innerWidth - ASSISTIVE_BUBBLE_SIZE - ASSISTIVE_VIEWPORT_MARGIN);
+  const maxY = Math.max(ASSISTIVE_VIEWPORT_MARGIN, window.innerHeight - ASSISTIVE_BUBBLE_SIZE - ASSISTIVE_BOTTOM_MARGIN);
+  return {
+    x: Math.max(ASSISTIVE_VIEWPORT_MARGIN, Math.min(x, maxX)),
+    y: Math.max(ASSISTIVE_VIEWPORT_MARGIN, Math.min(y, maxY))
+  };
+};
+
 export const AssistiveTouch = ({ 
   showSdBands, setShowSdBands, 
   showMomFlip, setShowMomFlip, 
@@ -19,10 +32,26 @@ export const AssistiveTouch = ({
   volMode, handleVolModeToggle 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState({ x: window.innerWidth - 80, y: window.innerHeight - 150 });
+  const [position, setPosition] = useState(() => clampAssistivePosition({
+    x: window.innerWidth - 80,
+    y: window.innerHeight - 150
+  }));
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0 });
   const containerRef = useRef(null);
+
+  useEffect(() => {
+    const keepBubbleInViewport = () => {
+      setPosition(current => clampAssistivePosition(current));
+    };
+
+    window.addEventListener('resize', keepBubbleInViewport);
+    window.visualViewport?.addEventListener('resize', keepBubbleInViewport);
+    return () => {
+      window.removeEventListener('resize', keepBubbleInViewport);
+      window.visualViewport?.removeEventListener('resize', keepBubbleInViewport);
+    };
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -55,15 +84,12 @@ export const AssistiveTouch = ({
     const dy = e.clientY - dragRef.current.startY;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) setIsDragging(true);
     
-    let newX = dragRef.current.initialX + dx;
-    let newY = dragRef.current.initialY + dy;
-    
-    const bubbleSize = 60;
-    const margin = 10;
-    newX = Math.max(margin, Math.min(newX, window.innerWidth - bubbleSize - margin));
-    newY = Math.max(margin, Math.min(newY, window.innerHeight - bubbleSize - margin));
-    
-    setPosition({ x: newX, y: newY });
+    const nextPosition = clampAssistivePosition({
+      x: dragRef.current.initialX + dx,
+      y: dragRef.current.initialY + dy
+    });
+
+    setPosition(nextPosition);
   };
 
   const handlePointerUp = (e) => {
