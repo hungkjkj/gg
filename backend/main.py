@@ -9,6 +9,7 @@ import time
 import numpy as np
 from typing import List, Optional
 import concurrent.futures
+import threading
 
 # Nháº­p cÃ¡c hÃ m tá»« service MT5
 import mt5_service
@@ -62,6 +63,9 @@ def health_check():
     return {"status": "ok", "time": time.time()}
 
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "app_configs.json")
+USER_DATA_ROOT = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), ".local", "share")
+TRADING_LOGS_FILE = os.path.join(USER_DATA_ROOT, "TOOL TRADE", "trading_logs.json")
+TRADING_LOGS_LOCK = threading.Lock()
 
 @app.get("/api/v1/configs")
 def get_configs():
@@ -81,6 +85,47 @@ def save_configs(config: dict):
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class TradingLogModel(BaseModel):
+    id: str
+    timestamp: str
+    content: str
+
+
+@app.get("/api/v1/trading-logs")
+def get_trading_logs():
+    with TRADING_LOGS_LOCK:
+        try:
+            with open(TRADING_LOGS_FILE, "r", encoding="utf-8") as log_file:
+                logs = json.load(log_file)
+            return {"status": "success", "logs": logs if isinstance(logs, list) else []}
+        except FileNotFoundError:
+            return {"status": "success", "logs": []}
+        except Exception as error:
+            raise HTTPException(status_code=500, detail=f"Không đọc được nhật ký: {error}")
+
+
+@app.put("/api/v1/trading-logs")
+def save_trading_logs(logs: List[TradingLogModel]):
+    normalized_logs = [log.dict() for log in logs]
+    temp_file = f"{TRADING_LOGS_FILE}.tmp"
+    with TRADING_LOGS_LOCK:
+        try:
+            os.makedirs(os.path.dirname(TRADING_LOGS_FILE), exist_ok=True)
+            with open(temp_file, "w", encoding="utf-8") as log_file:
+                json.dump(normalized_logs, log_file, ensure_ascii=False, indent=2)
+                log_file.flush()
+                os.fsync(log_file.fileno())
+            os.replace(temp_file, TRADING_LOGS_FILE)
+            return {"status": "success", "count": len(normalized_logs)}
+        except Exception as error:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            except OSError:
+                pass
+            raise HTTPException(status_code=500, detail=f"Không lưu được nhật ký: {error}")
 
 
 class AlertModel(BaseModel):

@@ -10,7 +10,7 @@ import RrTool from './components/RrTool';
 import TradingLogPanel from './components/TradingLogPanel';
 import './index.css';
 
-const API_BASE = window.location.port === '5173' ? `${API_BASE}` : window.location.origin;
+const API_BASE = window.location.port === '5173' ? 'http://127.0.0.1:8000' : window.location.origin;
 
 const customTimeFormatter = (time) => {
     const date = new Date(time * 1000);
@@ -4316,7 +4316,7 @@ function App() {
 
   return (
     <div className="dashboard-container">
-      <TradingLogPanel isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} />
+      <TradingLogPanel isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} apiBase={API_BASE} />
 
         <div className="toast-container">
         {toasts.map(t => (

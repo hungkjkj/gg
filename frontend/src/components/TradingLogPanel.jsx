@@ -1,23 +1,93 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 
-const TradingLogPanel = ({ isOpen, onClose }) => {
-  const [logs, setLogs] = useState([]);
+const LOGS_STORAGE_KEY = 'jarvis_trading_logs';
+
+const readLocalLogs = () => {
+  try {
+    const saved = localStorage.getItem(LOGS_STORAGE_KEY);
+    const parsed = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed) ? parsed.filter(log => log && log.id != null && typeof log.content === 'string') : [];
+  } catch (e) {
+    console.error('Error loading local trading logs', e);
+    return [];
+  }
+};
+
+const mergeLogs = (...groups) => {
+  const unique = new Map();
+  groups.flat().forEach(log => {
+    if (log && log.id != null && typeof log.content === 'string' && !unique.has(String(log.id))) {
+      unique.set(String(log.id), { ...log, id: String(log.id) });
+    }
+  });
+  return [...unique.values()].sort((a, b) => {
+    const aId = Number(a.id);
+    const bId = Number(b.id);
+    return Number.isFinite(aId) && Number.isFinite(bId) ? bId - aId : 0;
+  });
+};
+
+const TradingLogPanel = ({ isOpen, onClose, apiBase }) => {
+  const [logs, setLogs] = useState(readLocalLogs);
   const [inputText, setInputText] = useState('');
+  const [storageReady, setStorageReady] = useState(false);
+  const [storageStatus, setStorageStatus] = useState('Đang tải nhật ký đã lưu…');
+  const logsRef = useRef(logs);
+  const saveQueueRef = useRef(Promise.resolve());
+
+  const persistLogs = (nextLogs) => {
+    setStorageStatus('Đang lưu…');
+    saveQueueRef.current = saveQueueRef.current
+      .catch(() => {})
+      .then(() => axios.put(`${apiBase}/api/v1/trading-logs`, nextLogs))
+      .then(() => {
+        if (logsRef.current === nextLogs) setStorageStatus('Đã lưu an toàn trên thiết bị');
+      })
+      .catch((e) => {
+        console.error('Error saving trading logs', e);
+        if (logsRef.current === nextLogs) setStorageStatus('Lỗi đồng bộ — bản tạm còn trên trình duyệt');
+      });
+  };
 
   useEffect(() => {
+    let isActive = true;
     try {
-      const saved = localStorage.getItem('jarvis_trading_logs');
-      if (saved) {
-        setLogs(JSON.parse(saved));
-      }
+      const localLogs = readLocalLogs();
+      axios.get(`${apiBase}/api/v1/trading-logs`)
+        .then(response => {
+          if (!isActive) return;
+          const remoteLogs = Array.isArray(response.data?.logs) ? response.data.logs : [];
+          const mergedLogs = mergeLogs(logsRef.current, localLogs, remoteLogs);
+          logsRef.current = mergedLogs;
+          setLogs(mergedLogs);
+          try { localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(mergedLogs)); } catch (e) { console.error('Error updating local trading log cache', e); }
+          setStorageReady(true);
+          if (JSON.stringify(mergedLogs) !== JSON.stringify(remoteLogs)) {
+            persistLogs(mergedLogs);
+          } else {
+            setStorageStatus('Đã lưu an toàn trên thiết bị');
+          }
+        })
+        .catch(e => {
+          console.error('Error loading trading logs from backend', e);
+          if (!isActive) return;
+          setStorageReady(true);
+          setStorageStatus('Không kết nối được nơi lưu nhật ký — đang giữ bản trên trình duyệt');
+        });
     } catch (e) {
-      console.error('Error loading logs', e);
+      console.error('Error starting trading log load', e);
+      setStorageReady(true);
+      setStorageStatus('Không đọc được nhật ký đã lưu');
     }
-  }, []);
+    return () => { isActive = false; };
+  }, [apiBase]);
 
   const saveLogs = (newLogs) => {
+    logsRef.current = newLogs;
     setLogs(newLogs);
-    localStorage.setItem('jarvis_trading_logs', JSON.stringify(newLogs));
+    try { localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(newLogs)); } catch (e) { console.error('Error saving local trading log cache', e); }
+    persistLogs(newLogs);
   };
 
   const handleCreate = () => {
@@ -102,6 +172,7 @@ const TradingLogPanel = ({ isOpen, onClose }) => {
           />
           <button 
             onClick={handleCreate}
+            disabled={!storageReady}
             style={{
               width: '100%',
               padding: '12px',
@@ -109,7 +180,8 @@ const TradingLogPanel = ({ isOpen, onClose }) => {
               border: '1px solid #00f0ff',
               color: '#00f0ff',
               fontWeight: 'bold',
-              cursor: 'pointer',
+              cursor: storageReady ? 'pointer' : 'wait',
+              opacity: storageReady ? 1 : 0.65,
               borderRadius: '4px',
               boxShadow: '0 0 10px rgba(0,240,255,0.2)',
               transition: 'all 0.2s',
@@ -119,8 +191,11 @@ const TradingLogPanel = ({ isOpen, onClose }) => {
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0, 240, 255, 0.3)'; e.currentTarget.style.boxShadow = '0 0 20px rgba(0,240,255,0.5)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0, 240, 255, 0.1)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(0,240,255,0.2)'; }}
           >
-            + Khởi tạo bản ghi
+            {storageReady ? '+ Khởi tạo bản ghi' : 'Đang tải nhật ký…'}
           </button>
+          <div role="status" aria-live="polite" style={{ color: storageStatus.startsWith('Lỗi') || storageStatus.startsWith('Không') ? '#fca5a5' : '#94a3b8', fontSize: '0.72rem', textAlign: 'center', marginTop: '-8px' }}>
+            {storageStatus}
+          </div>
         </div>
 
         {/* Log List */}
@@ -147,6 +222,7 @@ const TradingLogPanel = ({ isOpen, onClose }) => {
               <button 
                 className="del-btn"
                 onClick={() => handleDelete(log.id)}
+                disabled={!storageReady}
                 style={{
                   position: 'absolute',
                   top: '10px',
