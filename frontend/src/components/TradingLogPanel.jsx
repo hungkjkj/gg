@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 
 const LOGS_STORAGE_KEY = 'jarvis_trading_logs';
@@ -247,6 +247,46 @@ const TradingLogPanel = ({ isOpen, onClose, apiBase }) => {
     setWhiteboardKey(key => key + 1);
   };
 
+  const pasteImageToWhiteboard = useCallback((file) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !file) return;
+    const imageUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      const rect = canvas.getBoundingClientRect();
+      const context = canvas.getContext('2d');
+      if (!context || !rect.width || !rect.height) {
+        URL.revokeObjectURL(imageUrl);
+        return;
+      }
+      const scale = Math.min((rect.width * 0.9) / image.width, (rect.height * 0.9) / image.height, 1);
+      const width = image.width * scale;
+      const height = image.height * scale;
+      context.save();
+      context.shadowColor = 'rgba(0,0,0,0.55)';
+      context.shadowBlur = 14;
+      context.drawImage(image, (rect.width - width) / 2, (rect.height - height) / 2, width, height);
+      context.restore();
+      setDraftDrawing(canvas.toDataURL('image/png'));
+      URL.revokeObjectURL(imageUrl);
+    };
+    image.onerror = () => URL.revokeObjectURL(imageUrl);
+    image.src = imageUrl;
+  }, [canvasRef]);
+
+  useEffect(() => {
+    if (!isOpen || !isFullscreen) return undefined;
+    const handlePaste = (event) => {
+      const imageItem = Array.from(event.clipboardData?.items || []).find(item => item.type.startsWith('image/'));
+      const file = imageItem?.getAsFile();
+      if (!file) return;
+      event.preventDefault();
+      pasteImageToWhiteboard(file);
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [isOpen, isFullscreen, pasteImageToWhiteboard]);
+
   const downloadJournalPng = () => {
     const source = canvasRef.current;
     if (!source) return;
@@ -363,7 +403,7 @@ const TradingLogPanel = ({ isOpen, onClose, apiBase }) => {
                 style={{ width: '100%', height: '135px', resize: 'vertical', background: '#020612', border: '1px solid rgba(0,240,255,0.3)', color: '#e0f2fe', padding: '12px', borderRadius: '8px', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5 }}
               />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                <strong style={{ color: '#67e8f9', fontSize: '0.9rem' }}>Bảng vẽ</strong>
+                <strong style={{ color: '#67e8f9', fontSize: '0.9rem' }}>Bảng vẽ <span style={{ color: '#64748b', fontSize: '0.72rem', fontWeight: 400 }}>· Ctrl+V để dán ảnh chụp</span></strong>
                 <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                   <button onClick={() => setDrawingTool('pen')} aria-pressed={drawingTool === 'pen'} style={{ padding: '7px 10px', borderRadius: '6px', border: `1px solid ${drawingTool === 'pen' ? '#00f0ff' : 'rgba(148,163,184,0.3)'}`, background: drawingTool === 'pen' ? 'rgba(0,240,255,0.15)' : 'transparent', color: '#e0f2fe', cursor: 'pointer' }}>✎ Bút</button>
                   <button onClick={() => setDrawingTool('eraser')} aria-pressed={drawingTool === 'eraser'} style={{ padding: '7px 10px', borderRadius: '6px', border: `1px solid ${drawingTool === 'eraser' ? '#00f0ff' : 'rgba(148,163,184,0.3)'}`, background: drawingTool === 'eraser' ? 'rgba(0,240,255,0.15)' : 'transparent', color: '#e0f2fe', cursor: 'pointer' }}>⌫ Tẩy</button>
