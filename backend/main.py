@@ -550,7 +550,11 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         try:
             end_ts = int(df['broker_time'].max()) + 3600
             if dvpLookbackDays > 0:
-                start_ts = max(int(df['broker_time'].min()), int(df['broker_time'].max()) - int(dvpLookbackDays * 24 * 3600))
+                # Fetch the configured D-VP window independently of the chart
+                # candle count. On M1, the 10k chart bars cover only about a
+                # week; clamping to df.min() silently truncated longer D-VP
+                # lookbacks that are still available on higher timeframes.
+                start_ts = int(df['broker_time'].max()) - int(dvpLookbackDays * 24 * 3600)
             else:
                 start_ts = int(df['broker_time'].min())
             real_sym = _get_real_symbol(symbol)
