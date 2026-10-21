@@ -92,10 +92,22 @@ const getTimeZoneOffsetMinutes = (timestamp, timeZone) => {
     }
 };
 
+const getSessionSdZoneLabel = (position) => {
+  if (position >= 2) return '≥ +2 SD';
+  if (position >= 1) return '+1 → +2 SD';
+  if (position >= 0) return 'VWAP → +1 SD';
+  if (position > -1) return '−1 SD → VWAP';
+  if (position > -2) return '−2 → −1 SD';
+  return '≤ −2 SD';
+};
+
 const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
   const [momFlipData, setMomFlipData] = useState([]);
   const [currentSdPosition, setCurrentSdPosition] = useState(null);
   const [currentSessionSdPosition, setCurrentSessionSdPosition] = useState(null);
+  const [sessionSdPositions, setSessionSdPositions] = useState([]);
+  const [selectedSessionSdKey, setSelectedSessionSdKey] = useState('');
+  const selectedSessionSdPosition = sessionSdPositions.find(position => position.key === selectedSessionSdKey);
   const chartContainerRef = useRef(null);
   const sessionSdTooltipRef = useRef(null);
   const momentumChartContainerRef = useRef(null);
@@ -139,6 +151,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   useEffect(() => {
     setCurrentSdPosition(null);
     setCurrentSessionSdPosition(null);
+    setSessionSdPositions([]);
   }, [symbol, timeframe]);
   
   const [contextMenu, setContextMenu] = useState(null);
@@ -1652,10 +1665,10 @@ useEffect(() => {
           : rawCandlesRef.current;
         const configuredBandMultiplier = Number(configsRef.current?.vwapMult ?? 2);
         const sessionSdConfigs = [
-          { label: 'Á', sessionName: 'Á', color: '#f97316', vwap: 'vwap_asia', upper: 'upper_band_asia', lower: 'lower_band_asia', startKey: 'asiaStart', endKey: 'asiaEnd', fallback: ['07:00', '11:00'], timezone: 'Asia/Tokyo', summerOffset: 540 },
-          { label: 'Âu', sessionName: 'Âu', color: '#d946ef', vwap: 'vwap_europe', upper: 'upper_band_europe', lower: 'lower_band_europe', startKey: 'euroStart', endKey: 'euroEnd', fallback: ['07:00', '09:00'], timezone: 'Europe/London', summerOffset: 60 },
-          { label: 'Pre-US', sessionName: 'Pre-US', color: '#facc15', vwap: 'vwap_pre_us', upper: 'upper_band_pre_us', lower: 'lower_band_pre_us', startKey: 'preUsStart', endKey: 'preUsEnd', fallback: ['16:00', '19:00'], timezone: 'America/New_York', summerOffset: -240 },
-          { label: 'Mỹ', sessionName: 'Mỹ', color: '#3b82f6', vwap: 'vwap_us', upper: 'upper_band_us', lower: 'lower_band_us', startKey: 'usStart', endKey: 'usEnd', fallback: ['07:30', '11:00'], timezone: 'America/New_York', summerOffset: -240 },
+          { key: 'asia', label: 'Á', sessionName: 'Á', color: '#f97316', vwap: 'vwap_asia', upper: 'upper_band_asia', lower: 'lower_band_asia', startKey: 'asiaStart', endKey: 'asiaEnd', fallback: ['07:00', '11:00'], timezone: 'Asia/Tokyo', summerOffset: 540 },
+          { key: 'europe', label: 'Âu', sessionName: 'Âu', color: '#d946ef', vwap: 'vwap_europe', upper: 'upper_band_europe', lower: 'lower_band_europe', startKey: 'euroStart', endKey: 'euroEnd', fallback: ['07:00', '09:00'], timezone: 'Europe/London', summerOffset: 60 },
+          { key: 'preUs', label: 'Pre-US', sessionName: 'Pre-US', color: '#facc15', vwap: 'vwap_pre_us', upper: 'upper_band_pre_us', lower: 'lower_band_pre_us', startKey: 'preUsStart', endKey: 'preUsEnd', fallback: ['16:00', '19:00'], timezone: 'America/New_York', summerOffset: -240 },
+          { key: 'us', label: 'Mỹ', sessionName: 'Mỹ', color: '#3b82f6', vwap: 'vwap_us', upper: 'upper_band_us', lower: 'lower_band_us', startKey: 'usStart', endKey: 'usEnd', fallback: ['07:30', '11:00'], timezone: 'America/New_York', summerOffset: -240 },
         ];
         let latestSdPosition = null;
         for (let i = sdSourceData.length - 1; i >= 0; i--) {
@@ -1689,6 +1702,7 @@ useEffect(() => {
         // When a candle is outside all configured sessions, preview the nearest
         // upcoming session using its current rolling VWAP and deviation.
         let latestSessionSdPosition = null;
+        let latestSessionSdPositions = [];
         const latestSessionBar = sdSourceData[sdSourceData.length - 1];
         if (latestSessionBar && configuredBandMultiplier > 0) {
           const toFiniteNumber = value => value == null || value === '' ? NaN : Number(value);
@@ -1772,32 +1786,43 @@ useEffect(() => {
             isUpcomingSession = Boolean(selectedSession);
           }
 
-          if (selectedSession && Number.isFinite(close)) {
-            const sessionValue = bar => {
-              const vwap = toFiniteNumber(bar?.[selectedSession.vwap]);
-              const upper = toFiniteNumber(bar?.[selectedSession.upper]);
-              const lower = toFiniteNumber(bar?.[selectedSession.lower]);
-              const stdev = (upper - lower) / (2 * configuredBandMultiplier);
-              return Number.isFinite(vwap) && Number.isFinite(stdev) && stdev > 0
-                ? { vwap, stdev }
-                : null;
-            };
-            let stats = sessionValue(latestSessionBar);
-            if (!stats) {
-              for (let i = sdSourceData.length - 1; i >= 0 && !stats; i--) {
-                stats = sessionValue(sdSourceData[i]);
-              }
-            }
-            if (stats) {
-              latestSessionSdPosition = {
-                label: selectedSession.label,
-                color: selectedSession.color,
-                position: (close - stats.vwap) / stats.stdev,
-                isUpcoming: isUpcomingSession,
+          if (Number.isFinite(close)) {
+            const getSessionStats = session => {
+              const sessionValue = bar => {
+                const vwap = toFiniteNumber(bar?.[session.vwap]);
+                const upper = toFiniteNumber(bar?.[session.upper]);
+                const lower = toFiniteNumber(bar?.[session.lower]);
+                const stdev = (upper - lower) / (2 * configuredBandMultiplier);
+                return Number.isFinite(vwap) && Number.isFinite(stdev) && stdev > 0
+                  ? { vwap, stdev }
+                  : null;
               };
+              let stats = sessionValue(latestSessionBar);
+              if (!stats) {
+                for (let i = sdSourceData.length - 1; i >= 0 && !stats; i--) {
+                  stats = sessionValue(sdSourceData[i]);
+                }
+              }
+              return stats;
+            };
+
+            latestSessionSdPositions = sessionSdConfigs.map(session => {
+              const stats = getSessionStats(session);
+              return stats ? {
+                key: session.key,
+                label: session.label,
+                color: session.color,
+                position: (close - stats.vwap) / stats.stdev,
+              } : null;
+            }).filter(Boolean);
+
+            const selectedPosition = latestSessionSdPositions.find(position => position.key === selectedSession?.key);
+            if (selectedPosition) {
+              latestSessionSdPosition = { ...selectedPosition, isUpcoming: isUpcomingSession };
             }
           }
         }
+        setSessionSdPositions(latestSessionSdPositions);
         if (latestSessionSdPosition) {
           setCurrentSessionSdPosition(latestSessionSdPosition);
         } else {
@@ -2712,8 +2737,8 @@ useEffect(() => {
         <div style={{ flex: 3, position: 'relative', width: '100%', overflow: 'hidden' }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
           <div ref={sessionSdTooltipRef} style={{ display: 'none', position: 'absolute', zIndex: 12, pointerEvents: 'none', padding: '5px 8px', border: '1px solid', borderRadius: '6px', background: 'rgba(2, 6, 23, 0.94)', fontSize: '11px', fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }} />
-          {(currentSdPosition !== null || currentSessionSdPosition !== null) && (viewMode !== 'backtest' || simulatedTimeRef.current > 0) && (
-            <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 8, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '5px', pointerEvents: 'none' }}>
+          {(currentSdPosition !== null || currentSessionSdPosition !== null || sessionSdPositions.length > 0) && (viewMode !== 'backtest' || simulatedTimeRef.current > 0) && (
+            <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 8, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '5px', pointerEvents: 'auto' }}>
               {currentSdPosition !== null && (
                 <div style={{
                   padding: '5px 9px', borderRadius: '6px',
@@ -2737,6 +2762,38 @@ useEffect(() => {
                 }}>
                   VWAP {currentSessionSdPosition.label}{currentSessionSdPosition.isUpcoming ? ' sắp tới' : ''} {currentSessionSdPosition.position > 0 ? '+' : ''}{currentSessionSdPosition.position.toFixed(2)} SD
                 </div>
+              )}
+              {sessionSdPositions.length > 0 && (
+                <>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 6px', borderRadius: '6px', background: 'rgba(15,23,42,0.94)', border: '1px solid rgba(148,163,184,0.4)', color: '#cbd5e1', fontSize: '11px', fontWeight: 600 }}>
+                    Xem dải phiên
+                    <select
+                      value={selectedSessionSdKey}
+                      onChange={event => setSelectedSessionSdKey(event.target.value)}
+                      aria-label="Chọn phiên để xem vị trí giá theo SD"
+                      style={{ maxWidth: '100px', padding: '3px 5px', background: '#020612', border: '1px solid rgba(0,240,255,0.4)', borderRadius: '4px', color: '#e0f2fe', fontSize: '11px', cursor: 'pointer' }}
+                    >
+                      <option value="">Chọn phiên…</option>
+                      {sessionSdPositions.map(position => <option key={position.key} value={position.key}>{position.label}</option>)}
+                    </select>
+                  </label>
+                  {selectedSessionSdKey && (
+                    selectedSessionSdPosition ? (
+                      <div style={{
+                        padding: '5px 9px', borderRadius: '6px',
+                        background: 'rgba(15, 23, 42, 0.94)',
+                        border: `1px solid ${selectedSessionSdPosition.color}`,
+                        color: selectedSessionSdPosition.color,
+                        boxShadow: `0 2px 10px ${selectedSessionSdPosition.color}35`,
+                        fontSize: '11px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                      }}>
+                        VWAP {selectedSessionSdPosition.label} {selectedSessionSdPosition.position > 0 ? '+' : ''}{selectedSessionSdPosition.position.toFixed(2)} SD · {getSessionSdZoneLabel(selectedSessionSdPosition.position)}
+                      </div>
+                    ) : (
+                      <div style={{ padding: '5px 9px', borderRadius: '6px', background: 'rgba(15,23,42,0.94)', color: '#94a3b8', fontSize: '11px' }}>Chưa có đủ dữ liệu cho phiên này</div>
+                    )
+                  )}
+                </>
               )}
             </div>
           )}
