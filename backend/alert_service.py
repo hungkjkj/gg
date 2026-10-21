@@ -4,7 +4,6 @@ import smtplib
 import asyncio
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from mt5_service import get_tick
 
 ALERTS_FILE = os.path.join(os.path.dirname(__file__), "alerts.json")
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "app_configs.json")
@@ -148,13 +147,31 @@ async def alert_worker():
                 await asyncio.sleep(2)
                 continue
                 
-            symbols = list(set([a["symbol"] for a in active_alerts if a.get("type", "price") == "price"]))
-            ticks = {}
-            for sym in symbols:
-                # MT5 service get_tick is synchronous
-                tick = await asyncio.to_thread(get_tick, sym)
-                if tick:
-                    ticks[sym] = tick
+            import mt5_service
+
+            price_alerts = [a for a in active_alerts if a.get("type", "price") == "price"]
+            price_series = {}
+            price_series_keys = sorted({
+                (a["symbol"], a.get("timeframe") or "H1")
+                for a in price_alerts
+            })
+            if price_series_keys:
+                configs = get_email_config() or {}
+                broker_timezone = configs.get("brokerTimezone", "Europe/Athens")
+                for sym, tf in price_series_keys:
+                    try:
+                        rates = await asyncio.to_thread(
+                            mt5_service.get_historical_data,
+                            sym,
+                            tf,
+                            2,
+                            0,
+                            broker_timezone,
+                        )
+                        if rates is not None and not rates.empty:
+                            price_series[(sym, tf)] = rates
+                    except Exception as e:
+                        print(f"Error fetching OHLCV for price alert ({sym}, {tf}):", e)
                     
             triggered_any = False
             any_state_changed = False
@@ -167,28 +184,22 @@ async def alert_worker():
                 state_changed = False
                 
                 if alert_type == "price":
+                    tf = alert.get("timeframe") or "H1"
+                    rates = price_series.get((sym, tf))
+                    if rates is None or rates.empty:
+                        continue
+
                     if alert.get("bar_close_only"):
-                        tf = alert.get("timeframe", "H1")
-                        import mt5_service
-                        import pandas as pd
-                        try:
-                            rates = await asyncio.to_thread(mt5_service._fetch_raw_data, sym, tf, 2, 0)
-                            if rates is not None and not rates.empty and len(rates) >= 2:
-                                current_forming_time = int(rates.iloc[-1]['time']) if 'time' in rates.columns else 0
-                                if alert.get("last_forming_time") == current_forming_time:
-                                    continue
-                                current_value = float(rates.iloc[-2]['close'])
-                                alert["last_forming_time"] = current_forming_time
-                                any_state_changed = True
-                            else:
-                                continue
-                        except Exception as e:
-                            print("Error fetching OHLCV for price bar_close_only alert:", e)
+                        if len(rates) < 2:
                             continue
+                        current_forming_time = int(rates.iloc[-1]["time"]) if "time" in rates.columns else 0
+                        if alert.get("last_forming_time") == current_forming_time:
+                            continue
+                        current_value = float(rates.iloc[-2]["close"])
+                        alert["last_forming_time"] = current_forming_time
+                        any_state_changed = True
                     else:
-                        if sym not in ticks:
-                            continue
-                        current_value = ticks[sym].get("bid") or ticks[sym].get("last")
+                        current_value = float(rates.iloc[-1]["close"])
                 elif alert_type == "mom":
                     tf = alert.get("timeframe", "H1")
                     if not tf: tf = "H1"
