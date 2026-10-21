@@ -92,15 +92,6 @@ const getTimeZoneOffsetMinutes = (timestamp, timeZone) => {
     }
 };
 
-const getSessionSdZoneLabel = (position) => {
-  if (position >= 2) return '≥+2';
-  if (position >= 1) return '+1…+2';
-  if (position >= 0) return '0…+1';
-  if (position > -1) return '−1…0';
-  if (position > -2) return '−2…−1';
-  return '≤−2';
-};
-
 const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
   const [momFlipData, setMomFlipData] = useState([]);
   const [currentSdPosition, setCurrentSdPosition] = useState(null);
@@ -2787,8 +2778,8 @@ useEffect(() => {
                         boxShadow: `0 2px 10px ${selectedSessionSdPosition.color}35`,
                         fontSize: '10px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
                       }}>
-                        <span title={`VWAP phiên ${selectedSessionSdPosition.label} · ${getSessionSdZoneLabel(selectedSessionSdPosition.position)} SD`}>
-                          {selectedSessionSdPosition.label} {selectedSessionSdPosition.position > 0 ? '+' : ''}{selectedSessionSdPosition.position.toFixed(2)} SD · {getSessionSdZoneLabel(selectedSessionSdPosition.position)}
+                        <span title={`VWAP phiên ${selectedSessionSdPosition.label}`}>
+                          {selectedSessionSdPosition.label} {selectedSessionSdPosition.position > 0 ? '+' : ''}{selectedSessionSdPosition.position.toFixed(2)} SD
                         </span>
                       </div>
                     ) : (
