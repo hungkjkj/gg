@@ -11,6 +11,17 @@ import TradingLogPanel from './components/TradingLogPanel';
 import './index.css';
 
 const API_BASE = window.location.port === '5173' ? 'http://127.0.0.1:8000' : window.location.origin;
+const assetSpreadRequests = new Map();
+
+const fetchAssetSpread = (symbol, matrixType, brokerTimezone) => {
+  const key = `${symbol}|${matrixType}|${brokerTimezone}`;
+  if (assetSpreadRequests.has(key)) return assetSpreadRequests.get(key);
+  const request = axios.get(`${API_BASE}/api/v1/symbol-info/spread`, {
+    params: { symbol, matrix_type: matrixType, brokerTimezone },
+  }).then(response => response.data).finally(() => assetSpreadRequests.delete(key));
+  assetSpreadRequests.set(key, request);
+  return request;
+};
 
 const customTimeFormatter = (time) => {
     const date = new Date(time * 1000);
@@ -4196,14 +4207,14 @@ function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
       matrixRequest(matrixHoursLong, 'trend'),
       matrixRequest(matrixHoursLong, 'money_flow'),
       axios.get(`${API_BASE}/api/v1/matrix/dvp-trend`, { params: dvpParams }),
-      axios.get(`${API_BASE}/api/v1/symbol-info/spread`, {
-        params: { symbol, matrix_type: matrixType, brokerTimezone: commonMatrixParams.brokerTimezone },
-      }),
+      fetchAssetSpread(symbol, matrixType, commonMatrixParams.brokerTimezone),
     ];
 
     Promise.allSettled(requests).then(results => {
       if (!active) return;
-      const valueAt = index => results[index].status === 'fulfilled' ? results[index].value.data : null;
+      const valueAt = index => results[index].status === 'fulfilled'
+        ? (results[index].value?.data ?? results[index].value)
+        : null;
       const matrix = {
         trendShort: valueAt(0), flowShort: valueAt(1),
         trendLong: valueAt(2), flowLong: valueAt(3),
@@ -4582,6 +4593,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isAssetInfoOpen, setIsAssetInfoOpen] = useState(false);
+  const [assetSpread, setAssetSpread] = useState(null);
   const [availableSymbols, setAvailableSymbols] = useState(DEFAULT_SYMBOLS);
   const [quickSymbolQuery, setQuickSymbolQuery] = useState('');
   const [quickSymbolError, setQuickSymbolError] = useState('');
@@ -4829,6 +4841,28 @@ function App() {
       })
       .catch(err => console.error("Could not load configs from backend", err));
   }, []);
+
+  useEffect(() => {
+    if (viewMode !== 'chart' || !symbol) {
+      setAssetSpread(null);
+      return undefined;
+    }
+    let active = true;
+    const matrixType = getMatrixTypeForSymbol(symbol);
+    const brokerTimezone = configs.brokerTimezone || 'Europe/Athens';
+    setAssetSpread(null);
+    const refreshSpread = () => {
+      fetchAssetSpread(symbol, matrixType, brokerTimezone)
+        .then(data => { if (active) setAssetSpread(data); })
+        .catch(error => console.warn(`Could not load spread status for ${symbol}:`, error));
+    };
+    refreshSpread();
+    const intervalId = setInterval(refreshSpread, 60 * 1000);
+    return () => {
+      active = false;
+      clearInterval(intervalId);
+    };
+  }, [symbol, viewMode, configs.brokerTimezone]);
 
   // Kích hoạt lại resize khi ẩn/hiện thanh công cụ để chart tự giãn cách
   useEffect(() => {
@@ -5189,7 +5223,13 @@ function App() {
             </button>
             {viewMode === 'chart' ? (
               <>
-                <span>{symbol} • {timeframe}</span>
+                <span
+                  title={assetSpread?.assessment
+                    ? `Spread ${assetSpread.assessment}: ${Number(assetSpread.current?.spread_to_range_pct || 0).toFixed(2)}% biên độ M5 trung bình`
+                    : 'Đang tải mức spread so với biến động trung bình'}
+                  style={{ color: assetSpread?.assessment === 'cao' ? '#fb7185' : assetSpread?.assessment === 'thấp' ? '#4ade80' : assetSpread?.assessment === 'trung bình' ? '#fbbf24' : 'var(--text-primary)', transition: 'color 250ms ease' }}
+                >{symbol}</span>
+                <span>• {timeframe}</span>
                 <button
                   type="button"
                   onClick={() => setIsAssetInfoOpen(true)}
