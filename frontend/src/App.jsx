@@ -905,10 +905,10 @@ useEffect(() => {
       });
       const maVolSeries = volumeChart.addLineSeries({ color: 'rgba(57, 255, 20, 0.8)', lineWidth: 2 });
       
-      const vol85Line = volumeChart.addLineSeries({ color: 'rgba(255, 165, 0, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
-      const vol75Line = volumeChart.addLineSeries({ color: 'rgba(225, 230, 38, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
-      const vol50Line = volumeChart.addLineSeries({ color: 'rgba(128, 128, 128, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
-      const vol15Line = volumeChart.addLineSeries({ color: 'rgba(0, 191, 255, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
+      const vol85Line = volumeChart.addLineSeries({ color: 'rgba(255, 177, 0, 0.98)', lineWidth: 2, crosshairMarkerVisible: false });
+      const vol75Line = volumeChart.addLineSeries({ color: 'rgba(255, 242, 0, 0.98)', lineWidth: 2, crosshairMarkerVisible: false });
+      const vol50Line = volumeChart.addLineSeries({ color: 'rgba(203, 213, 225, 0.88)', lineWidth: 1, crosshairMarkerVisible: false });
+      const vol15Line = volumeChart.addLineSeries({ color: 'rgba(56, 189, 248, 0.9)', lineWidth: 1, crosshairMarkerVisible: false });
       
       const volumeDummySeries = volumeChart.addLineSeries({ color: 'rgba(0,0,0,0)', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
       volumeDummySeriesRef.current = volumeDummySeries;
