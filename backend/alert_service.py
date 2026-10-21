@@ -283,7 +283,16 @@ async def alert_worker():
                 if prev_value is not None:
                     # Check crossover
                     direction = ""
-                    if prev_value < target_value and current_value >= target_value:
+                    if alert_type == "mom":
+                        # Signed TKH alerts only fire when momentum enters the
+                        # requested side of the threshold: +75 for bullish,
+                        # -75 for bearish. Falling back through the threshold
+                        # does not count as a new burst alert.
+                        if target_value > 0 and prev_value < target_value and current_value >= target_value:
+                            direction = "Vượt lên trên"
+                        elif target_value < 0 and prev_value > target_value and current_value <= target_value:
+                            direction = "Cắt xuống dưới"
+                    elif prev_value < target_value and current_value >= target_value:
                         direction = "Vượt lên trên"
                     elif prev_value > target_value and current_value <= target_value:
                         direction = "Cắt xuống dưới"

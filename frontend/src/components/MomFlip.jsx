@@ -371,21 +371,21 @@ export const MomFlipChartComponent = ({ data = [], dataVersion = 0, dataRevision
     });
     priceLinesRef.current = [];
     
-    // Show each magnitude alert on both directional sides of the zero line.
+    // An alert is signed: positive values mark bullish bursts, negative values
+    // mark bearish bursts. Do not mirror one alert onto the opposite side.
     const momAlerts = momAlertsRef.current.filter(a => a.symbol === symbol && a.type === 'mom');
     momAlerts.forEach(alert => {
-      const level = Math.abs(Number(alert.price));
+      const level = Number(alert.price);
+      if (!Number.isFinite(level) || level === 0) return;
       const color = alert.status === 'active' ? '#eab308' : '#94a3b8';
-      [level, -level].forEach(price => {
-        const line = seriesRef.current.createPriceLine({
-          price,
-          color,
-          lineWidth: 1,
-          lineStyle: 1,
-          axisLabelVisible: true,
-        });
-        priceLinesRef.current.push(line);
+      const line = seriesRef.current.createPriceLine({
+        price: level,
+        color,
+        lineWidth: 1,
+        lineStyle: 1,
+        axisLabelVisible: true,
       });
+      priceLinesRef.current.push(line);
     });
   }, [momAlertSignature, symbol]);
   

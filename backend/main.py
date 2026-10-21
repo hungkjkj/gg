@@ -980,10 +980,16 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                 return None
 
         previous_record = records[-2] if len(records) > 1 else records[-1]
+        current_flip = finite_alert_value(records[-1].get('mom_flip'))
+        previous_flip = finite_alert_value(previous_record.get('mom_flip'))
+        current_direction = np.sign(finite_alert_value(records[-1].get('mom_raw')) or 0.0)
+        previous_direction = np.sign(finite_alert_value(previous_record.get('mom_raw')) or 0.0)
         alert_service.LATEST_MOM_FLIP_DATA[f"{symbol}_{timeframe}"] = {
-            'value': finite_alert_value(records[-1].get('mom_flip')),
+            # TKH chart values carry the momentum direction. Keep alert values
+            # signed too, so a +75% alert cannot be triggered by a -75% burst.
+            'value': current_flip * current_direction if current_flip is not None else None,
             'time': records[-1]['time'],
-            'prev_value': finite_alert_value(previous_record.get('mom_flip')),
+            'prev_value': previous_flip * previous_direction if previous_flip is not None else None,
             'updated_at': time.time(),
         }
         

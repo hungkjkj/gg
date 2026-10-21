@@ -1540,10 +1540,13 @@ useEffect(() => {
   };
 
   const isPollingRef = useRef(false);
+  const isLatestCandlePollingRef = useRef(false);
 
   const fetchLatestCandle = async () => {
-    if (viewMode !== 'chart' || loadingRef.current || isPollingRef.current) return;
-    isPollingRef.current = true;
+    // Keep live price polling independent from the slower indicator refresh.
+    // A delayed 10k-candle calculation must not stop the current candle moving.
+    if (viewMode !== 'chart' || loadingRef.current || isLatestCandlePollingRef.current) return;
+    isLatestCandlePollingRef.current = true;
     const currentSymbol = symbol;
     const currentTimeframe = timeframe;
 
@@ -1556,6 +1559,7 @@ useEffect(() => {
           brokerTimezone: configsRef.current?.brokerTimezone || 'Europe/Athens',
           _t: Date.now(),
         },
+        timeout: 8000,
       });
 
       if (response.data.symbol !== symbolRef.current || response.data.timeframe !== timeframeRef.current) return;
@@ -1610,10 +1614,11 @@ useEffect(() => {
         setLastUpdateSignal(Date.now());
       }
     } catch (error) {
-      // The regular indicator refresh handles visible error reporting; a
-      // transient lightweight-poll failure should not clear a valid chart.
+      // Preserve the last valid chart, log the failure, and let the next short
+      // poll retry instead of leaving this path silently stale.
+      console.warn('Live candle refresh failed; retrying on next poll:', error);
     } finally {
-      isPollingRef.current = false;
+      isLatestCandlePollingRef.current = false;
     }
   };
 
@@ -3087,7 +3092,7 @@ useEffect(() => {
               
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9rem' }}>
-                  {customAlertModal.type === 'mom' ? 'Phân vị bùng nổ (%)' : 'Mức giá'}
+                  {customAlertModal.type === 'mom' ? 'Ngưỡng TKH có dấu (%)' : 'Mức giá'}
                 </label>
                 <input 
                   type="number" 
@@ -3095,6 +3100,7 @@ useEffect(() => {
                   onChange={(e) => setCustomAlertModal({...customAlertModal, price: e.target.value})}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: 'white', fontWeight: 'bold' }} 
                 />
+                {customAlertModal.type === 'mom' && <div style={{ marginTop: '5px', color: '#94a3b8', fontSize: '0.78rem' }}>Số dương báo động lượng tăng; số âm báo động lượng giảm. Ví dụ: 75 chỉ báo tại +75%.</div>}
               </div>
 
               <div>
