@@ -93,12 +93,12 @@ const getTimeZoneOffsetMinutes = (timestamp, timeZone) => {
 };
 
 const getSessionSdZoneLabel = (position) => {
-  if (position >= 2) return '≥ +2 SD';
-  if (position >= 1) return '+1 → +2 SD';
-  if (position >= 0) return 'VWAP → +1 SD';
-  if (position > -1) return '−1 SD → VWAP';
-  if (position > -2) return '−2 → −1 SD';
-  return '≤ −2 SD';
+  if (position >= 2) return '≥+2';
+  if (position >= 1) return '+1…+2';
+  if (position >= 0) return '0…+1';
+  if (position > -1) return '−1…0';
+  if (position > -2) return '−2…−1';
+  return '≤−2';
 };
 
 const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
@@ -2764,36 +2764,38 @@ useEffect(() => {
                 </div>
               )}
               {sessionSdPositions.length > 0 && (
-                <>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 6px', borderRadius: '6px', background: 'rgba(15,23,42,0.94)', border: '1px solid rgba(148,163,184,0.4)', color: '#cbd5e1', fontSize: '11px', fontWeight: 600 }}>
-                    Xem dải phiên
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                  <label title="Chọn phiên để xem giá đang ở dải SD nào" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 5px', borderRadius: '5px', background: 'rgba(15,23,42,0.94)', border: '1px solid rgba(148,163,184,0.35)', color: '#cbd5e1', fontSize: '10px', fontWeight: 600 }}>
+                    SD
                     <select
                       value={selectedSessionSdKey}
                       onChange={event => setSelectedSessionSdKey(event.target.value)}
                       aria-label="Chọn phiên để xem vị trí giá theo SD"
-                      style={{ maxWidth: '100px', padding: '3px 5px', background: '#020612', border: '1px solid rgba(0,240,255,0.4)', borderRadius: '4px', color: '#e0f2fe', fontSize: '11px', cursor: 'pointer' }}
+                      style={{ maxWidth: '80px', padding: '2px 4px', background: '#020612', border: '1px solid rgba(0,240,255,0.35)', borderRadius: '4px', color: '#e0f2fe', fontSize: '10px', cursor: 'pointer' }}
                     >
-                      <option value="">Chọn phiên…</option>
+                      <option value="">Phiên…</option>
                       {sessionSdPositions.map(position => <option key={position.key} value={position.key}>{position.label}</option>)}
                     </select>
                   </label>
                   {selectedSessionSdKey && (
                     selectedSessionSdPosition ? (
                       <div style={{
-                        padding: '5px 9px', borderRadius: '6px',
+                        padding: '4px 7px', borderRadius: '5px',
                         background: 'rgba(15, 23, 42, 0.94)',
                         border: `1px solid ${selectedSessionSdPosition.color}`,
                         color: selectedSessionSdPosition.color,
                         boxShadow: `0 2px 10px ${selectedSessionSdPosition.color}35`,
-                        fontSize: '11px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                        fontSize: '10px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
                       }}>
-                        VWAP {selectedSessionSdPosition.label} {selectedSessionSdPosition.position > 0 ? '+' : ''}{selectedSessionSdPosition.position.toFixed(2)} SD · {getSessionSdZoneLabel(selectedSessionSdPosition.position)}
+                        <span title={`VWAP phiên ${selectedSessionSdPosition.label} · ${getSessionSdZoneLabel(selectedSessionSdPosition.position)} SD`}>
+                          {selectedSessionSdPosition.label} {selectedSessionSdPosition.position > 0 ? '+' : ''}{selectedSessionSdPosition.position.toFixed(2)} SD · {getSessionSdZoneLabel(selectedSessionSdPosition.position)}
+                        </span>
                       </div>
                     ) : (
-                      <div style={{ padding: '5px 9px', borderRadius: '6px', background: 'rgba(15,23,42,0.94)', color: '#94a3b8', fontSize: '11px' }}>Chưa có đủ dữ liệu cho phiên này</div>
+                      <div style={{ padding: '4px 7px', borderRadius: '5px', background: 'rgba(15,23,42,0.94)', color: '#94a3b8', fontSize: '10px' }}>Thiếu dữ liệu</div>
                     )
                   )}
-                </>
+                </div>
               )}
             </div>
           )}
