@@ -340,13 +340,19 @@ _SYMBOL_SPREAD_CACHE_TIME = {}
 
 
 @app.get("/api/v1/symbol-info/spread")
-def get_symbol_spread_comparison(symbol: str, matrix_type: str = "fx", brokerTimezone: str = "Europe/Athens"):
-    """Compare a live spread/mean M5 range ratio with related instruments."""
+def get_symbol_spread_comparison(
+    symbol: str,
+    matrix_type: str = "fx",
+    brokerTimezone: str = "Europe/Athens",
+    end_time: int = 0,
+):
+    """Compare live or replay-time spread/mean M5 range with related instruments."""
     symbol = symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol is required")
 
-    cache_key = (symbol.upper(), matrix_type, brokerTimezone)
+    time_bucket = int(end_time) // 300 * 300 if end_time > 0 else 0
+    cache_key = (symbol.upper(), matrix_type, brokerTimezone, time_bucket)
     now = time.time()
     if cache_key in _SYMBOL_SPREAD_CACHE and now - _SYMBOL_SPREAD_CACHE_TIME.get(cache_key, 0) < 30:
         return JSONResponse(content=_json_safe(_SYMBOL_SPREAD_CACHE[cache_key]))
@@ -387,13 +393,31 @@ def get_symbol_spread_comparison(symbol: str, matrix_type: str = "fx", brokerTim
     current_metric = None
     for peer in symbols:
         try:
-            tick = get_tick(peer)
-            if not tick or tick.get("bid") is None or tick.get("ask") is None:
-                continue
-            spread = max(0.0, float(tick["ask"]) - float(tick["bid"]))
-            history = get_historical_data(peer, "M5", 288, 0, brokerTimezone, fallback_ea=False)
+            history = get_historical_data(peer, "M5", 288, int(end_time or 0), brokerTimezone, fallback_ea=end_time > 0)
             if history is None or history.empty or not {"high", "low"}.issubset(history.columns):
                 continue
+
+            if end_time > 0:
+                # MT5 history provides one spread value per candle (points),
+                # not a full bid/ask tick stream. Convert the replay candle's
+                # value into price units for the same comparison as live mode.
+                if "spread" not in history.columns:
+                    continue
+                spread_values = pd.to_numeric(history["spread"], errors="coerce").dropna()
+                if spread_values.empty:
+                    continue
+                real_symbol = _get_real_symbol(peer)
+                symbol_info = mt5_service.mt5.symbol_info(real_symbol)
+                point = float(getattr(symbol_info, "point", 0) or 0) if symbol_info else 0
+                if point <= 0:
+                    continue
+                spread = max(0.0, float(spread_values.iloc[-1]) * point)
+            else:
+                tick = get_tick(peer)
+                if not tick or tick.get("bid") is None or tick.get("ask") is None:
+                    continue
+                spread = max(0.0, float(tick["ask"]) - float(tick["bid"]))
+
             ranges = (
                 pd.to_numeric(history["high"], errors="coerce")
                 - pd.to_numeric(history["low"], errors="coerce")

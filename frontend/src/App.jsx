@@ -13,11 +13,12 @@ import './index.css';
 const API_BASE = window.location.port === '5173' ? 'http://127.0.0.1:8000' : window.location.origin;
 const assetSpreadRequests = new Map();
 
-const fetchAssetSpread = (symbol, matrixType, brokerTimezone) => {
-  const key = `${symbol}|${matrixType}|${brokerTimezone}`;
+const fetchAssetSpread = (symbol, matrixType, brokerTimezone, endTime = 0) => {
+  const timeBucket = endTime > 0 ? Math.floor(endTime / 300) * 300 : 0;
+  const key = `${symbol}|${matrixType}|${brokerTimezone}|${timeBucket}`;
   if (assetSpreadRequests.has(key)) return assetSpreadRequests.get(key);
   const request = axios.get(`${API_BASE}/api/v1/symbol-info/spread`, {
-    params: { symbol, matrix_type: matrixType, brokerTimezone },
+    params: { symbol, matrix_type: matrixType, brokerTimezone, end_time: timeBucket || undefined },
   }).then(response => response.data).finally(() => assetSpreadRequests.delete(key));
   assetSpreadRequests.set(key, request);
   return request;
@@ -4319,7 +4320,7 @@ const getMatrixTypeForSymbol = (sym) => {
 
 const normalizeInfoSymbol = value => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-function AssetInfoModal({ symbol, timeframe, configs, viewMode, onClose }) {
+function AssetInfoModal({ symbol, timeframe, configs, viewMode, historicalSpread, onClose }) {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -4391,7 +4392,8 @@ function AssetInfoModal({ symbol, timeframe, configs, viewMode, onClose }) {
     normalizeInfoSymbol(row.symbol) === canonicalSymbol
   );
   const dvpRow = findDvp();
-  const spread = info?.spread?.current;
+  const spreadData = viewMode === 'backtest' ? historicalSpread : info?.spread;
+  const spread = spreadData?.current;
   const percentColor = value => value == null ? '#64748b' : value > 0 ? '#4ade80' : value < 0 ? '#fb7185' : '#cbd5e1';
   const formatPercentile = value => value == null ? '—' : `${value > 0 ? '+' : ''}${Number(value).toFixed(1)}%`;
   const formatPriceValue = value => value == null ? '—' : Number(value).toPrecision(5).replace(/\.?0+$/, '');
@@ -4403,7 +4405,7 @@ function AssetInfoModal({ symbol, timeframe, configs, viewMode, onClose }) {
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '16px' }}>
           <div>
             <h2 style={{ margin: 0, color: '#67e8f9', fontSize: '19px' }}>Thông tin {symbol}</h2>
-            <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>{timeframe}{viewMode === 'backtest' ? ' · Backtest đang mở · chỉ số Matrix/spread theo thời gian thực' : ''} · Currency Matrix: {matrixHours}h / {matrixHoursLong}h</div>
+            <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>{timeframe}{viewMode === 'backtest' ? ' · Backtest · Matrix theo live, spread theo nến M5 giả lập' : ''} · Currency Matrix: {matrixHours}h / {matrixHoursLong}h</div>
           </div>
           <button onClick={onClose} aria-label="Đóng" style={{ border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', background: 'rgba(8,47,73,0.55)', color: '#67e8f9', fontSize: '20px', width: '36px', height: '36px', cursor: 'pointer' }}>×</button>
         </header>
@@ -4488,14 +4490,14 @@ function AssetInfoModal({ symbol, timeframe, configs, viewMode, onClose }) {
             {spread ? (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
-                  <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Spread hiện tại</span><strong style={{ display: 'block', marginTop: '4px' }}>{formatPriceValue(info.spread.current.spread)}</strong></div>
-                  <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Biến động TB M5 / 24h</span><strong style={{ display: 'block', marginTop: '4px' }}>{formatPriceValue(info.spread.current.average_range)}</strong></div>
-                  <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Spread / biên độ TB</span><strong style={{ display: 'block', marginTop: '4px', color: '#fbbf24' }}>{Number(info.spread.current.spread_to_range_pct).toFixed(2)}%</strong></div>
-                  <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>So với nhóm cùng loại</span><strong style={{ display: 'block', marginTop: '4px', color: info.spread.assessment === 'cao' ? '#fb7185' : info.spread.assessment === 'thấp' ? '#4ade80' : '#fbbf24' }}>{info.spread.assessment ? `${info.spread.assessment} · P${info.spread.percentile}` : 'Chưa đủ dữ liệu'}{info.spread.relative_to_group_median != null ? ` · ${info.spread.relative_to_group_median.toFixed(2)}× trung vị` : ''}</strong></div>
+                  <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>{viewMode === 'backtest' ? 'Spread nến M5 tại mốc giả lập' : 'Spread hiện tại'}</span><strong style={{ display: 'block', marginTop: '4px' }}>{formatPriceValue(spread.spread)}</strong></div>
+                  <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Biến động TB M5 / 24h</span><strong style={{ display: 'block', marginTop: '4px' }}>{formatPriceValue(spread.average_range)}</strong></div>
+                  <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Spread / biên độ TB</span><strong style={{ display: 'block', marginTop: '4px', color: '#fbbf24' }}>{Number(spread.spread_to_range_pct).toFixed(2)}%</strong></div>
+                  <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>So với nhóm cùng loại</span><strong style={{ display: 'block', marginTop: '4px', color: spreadData.assessment === 'cao' ? '#fb7185' : spreadData.assessment === 'thấp' ? '#4ade80' : '#fbbf24' }}>{spreadData.assessment ? `${spreadData.assessment} · P${spreadData.percentile}` : 'Chưa đủ dữ liệu'}{spreadData.relative_to_group_median != null ? ` · ${spreadData.relative_to_group_median.toFixed(2)}× trung vị` : ''}</strong></div>
                 </div>
-                <div style={{ color: '#64748b', fontSize: '10px', lineHeight: 1.5, marginTop: '9px' }}>So sánh các cặp FX có chung đồng tiền (hoặc cùng nhóm tài sản); biến động TB là High−Low trung bình của tối đa 288 nến M5 gần nhất (~24 giờ nến giao dịch).</div>
+                <div style={{ color: '#64748b', fontSize: '10px', lineHeight: 1.5, marginTop: '9px' }}>So sánh các cặp FX có chung đồng tiền (hoặc cùng nhóm tài sản); biến động TB là High−Low trung bình của tối đa 288 nến M5 gần nhất{viewMode === 'backtest' ? ' tại mốc giả lập' : ''} (~24 giờ nến giao dịch).</div>
               </>
-            ) : <div style={{ color: '#94a3b8', fontSize: '12px' }}>Chưa lấy được tick và nến để so sánh spread.</div>}
+            ) : <div style={{ color: '#94a3b8', fontSize: '12px' }}>{viewMode === 'backtest' ? 'Chưa lấy được spread lịch sử tại mốc giả lập này.' : 'Chưa lấy được tick và nến để so sánh spread.'}</div>}
           </section>
 
           <section style={cardStyle}>
@@ -5073,16 +5075,61 @@ function App() {
     const matrixType = getMatrixTypeForSymbol(symbol);
     const brokerTimezone = configs.brokerTimezone || 'Europe/Athens';
     setAssetSpread(null);
-    const refreshSpread = () => {
-      fetchAssetSpread(symbol, matrixType, brokerTimezone)
+    const refreshSpread = (endTime = 0) => {
+      fetchAssetSpread(symbol, matrixType, brokerTimezone, endTime)
         .then(data => { if (active) setAssetSpread(data); })
         .catch(error => console.warn(`Could not load spread status for ${symbol}:`, error));
     };
-    refreshSpread();
-    const intervalId = setInterval(refreshSpread, 60 * 1000);
+
+    if (viewMode === 'chart') {
+      refreshSpread();
+      const intervalId = setInterval(() => refreshSpread(), 60 * 1000);
+      return () => {
+        active = false;
+        clearInterval(intervalId);
+      };
+    }
+
+    let pendingTimeBucket = 0;
+    let lastRequestedTimeBucket = 0;
+    let lastRequestAt = 0;
+    let inFlight = false;
+    let throttleTimer = null;
+    const runHistoricalSpreadRequest = () => {
+      throttleTimer = null;
+      if (!active || !pendingTimeBucket || pendingTimeBucket === lastRequestedTimeBucket || inFlight) return;
+      const requestTimeBucket = pendingTimeBucket;
+      inFlight = true;
+      lastRequestAt = Date.now();
+      fetchAssetSpread(symbol, matrixType, brokerTimezone, requestTimeBucket)
+        .then(data => {
+          if (active) setAssetSpread(data);
+          lastRequestedTimeBucket = requestTimeBucket;
+        })
+        .catch(error => console.warn(`Could not load historical spread status for ${symbol}:`, error))
+        .finally(() => {
+          inFlight = false;
+          if (active && pendingTimeBucket !== lastRequestedTimeBucket) scheduleHistoricalSpreadRefresh();
+        });
+    };
+    const scheduleHistoricalSpreadRefresh = () => {
+      if (throttleTimer || inFlight || pendingTimeBucket === lastRequestedTimeBucket) return;
+      const remainingThrottle = Math.max(0, 15000 - (Date.now() - lastRequestAt));
+      if (remainingThrottle > 0) throttleTimer = setTimeout(runHistoricalSpreadRequest, remainingThrottle);
+      else runHistoricalSpreadRequest();
+    };
+    const refreshHistoricalSpread = () => {
+      const simulatedTime = Number(window.currentSimulatedTime) || 0;
+      if (!simulatedTime) return;
+      pendingTimeBucket = Math.floor(simulatedTime / 300) * 300;
+      scheduleHistoricalSpreadRefresh();
+    };
+    refreshHistoricalSpread();
+    window.addEventListener('simulatedTimeChanged', refreshHistoricalSpread);
     return () => {
       active = false;
-      clearInterval(intervalId);
+      if (throttleTimer) clearTimeout(throttleTimer);
+      window.removeEventListener('simulatedTimeChanged', refreshHistoricalSpread);
     };
   }, [symbol, viewMode, configs.brokerTimezone]);
 
@@ -5100,7 +5147,7 @@ function App() {
     <div className="dashboard-container">
       <TradingLogPanel isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} apiBase={API_BASE} />
       {isAssetInfoOpen && ['chart', 'backtest'].includes(viewMode) && (
-        <AssetInfoModal symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} onClose={() => setIsAssetInfoOpen(false)} />
+        <AssetInfoModal symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} historicalSpread={assetSpread} onClose={() => setIsAssetInfoOpen(false)} />
       )}
 
       {quickSymbolQuery && (
@@ -5447,7 +5494,7 @@ function App() {
               <>
                 <span
                   title={assetSpread?.assessment
-                    ? `Spread ${assetSpread.assessment}: ${Number(assetSpread.current?.spread_to_range_pct || 0).toFixed(2)}% biên độ M5 trung bình · tick hiện tại`
+                    ? `Spread ${assetSpread.assessment}: ${Number(assetSpread.current?.spread_to_range_pct || 0).toFixed(2)}% biên độ M5 trung bình · ${viewMode === 'backtest' ? 'nến lịch sử tại thời điểm giả lập' : 'tick hiện tại'}`
                     : 'Đang tải mức spread so với biến động trung bình'}
                   style={{ color: assetSpread?.assessment === 'cao' ? '#fb7185' : assetSpread?.assessment === 'thấp' ? '#4ade80' : assetSpread?.assessment === 'trung bình' ? '#fbbf24' : 'var(--text-primary)', transition: 'color 250ms ease' }}
                 >{symbol}</span>
