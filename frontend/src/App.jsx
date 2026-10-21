@@ -96,6 +96,7 @@ const assetInfoSnapshot = entry => ({
 
 const subscribeAssetInfo = (symbol, configs, listener) => {
   const requestSet = buildAssetInfoRequestSet(symbol, configs);
+  const matrixType = getMatrixTypeForSymbol(symbol);
   const storageKey = assetInfoStorageKey(requestSet.cacheKey);
   let entry = assetInfoCache.get(requestSet.cacheKey);
   if (!entry) {
