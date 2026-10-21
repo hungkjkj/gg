@@ -4042,6 +4042,46 @@ const DEFAULT_SYMBOLS = {
   ]
 };
 
+const normalizeSymbolQuery = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/[\s_./#-]/g, '');
+
+const getQuickSymbolMatches = (query, symbols) => {
+  const normalizedQuery = normalizeSymbolQuery(query);
+  if (!normalizedQuery) return [];
+
+  const syntheticSymbols = [
+    { name: 'GLOBAL_INDEX', description: 'Thị trường chung · FX GI', aliases: 'global index thi truong chung fx gi' },
+    { name: 'US_STOCKS_GI', description: 'Chỉ số Cổ phiếu Mỹ · US Stocks GI', aliases: 'us stocks stocks gi chi so co phieu my' },
+    { name: 'COMMODITIES_GI', description: 'Chỉ số Hàng hóa · Commodities GI', aliases: 'commodities hang hoa chi so hang hoa' },
+    { name: 'CRYPTO_GI', description: 'Chỉ số Tiền điện tử · Crypto GI', aliases: 'crypto tien dien tu chi so tien dien tu' },
+  ];
+  const listedSymbols = Object.entries(symbols || {}).flatMap(([group, items]) =>
+    (Array.isArray(items) ? items : []).map(item => ({ ...item, group }))
+  );
+  const uniqueSymbols = new Map();
+  [...syntheticSymbols, ...listedSymbols].forEach(item => {
+    const name = String(item.name || '').trim();
+    if (name && !uniqueSymbols.has(name.toUpperCase())) uniqueSymbols.set(name.toUpperCase(), { ...item, name });
+  });
+
+  return [...uniqueSymbols.values()]
+    .map(item => {
+      const normalizedName = normalizeSymbolQuery(item.name);
+      const normalizedDescription = normalizeSymbolQuery(`${item.description || ''} ${item.aliases || ''}`);
+      const rank = normalizedName === normalizedQuery ? 0
+        : normalizedName.startsWith(normalizedQuery) ? 1
+          : normalizedName.includes(normalizedQuery) ? 2
+            : normalizedDescription.includes(normalizedQuery) ? 3 : Infinity;
+      return { ...item, rank };
+    })
+    .filter(item => Number.isFinite(item.rank))
+    .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name))
+    .slice(0, 8);
+};
+
 function App() {
   const [symbol, setSymbol] = useState('EURUSD');
   const [searchSymbol, setSearchSymbol] = useState('');
@@ -4234,6 +4274,111 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [availableSymbols, setAvailableSymbols] = useState(DEFAULT_SYMBOLS);
+  const [quickSymbolQuery, setQuickSymbolQuery] = useState('');
+  const [quickSymbolError, setQuickSymbolError] = useState('');
+  const [quickSymbolActiveIndex, setQuickSymbolActiveIndex] = useState(0);
+  const availableSymbolsRef = useRef(availableSymbols);
+  const quickSymbolQueryRef = useRef('');
+  const quickSymbolActiveIndexRef = useRef(0);
+  availableSymbolsRef.current = availableSymbols;
+  const quickSymbolMatches = getQuickSymbolMatches(quickSymbolQuery, availableSymbols);
+  const quickSymbolMatchesRef = useRef(quickSymbolMatches);
+  quickSymbolMatchesRef.current = quickSymbolMatches;
+
+  useEffect(() => {
+    const isEditableTarget = (target) => target instanceof HTMLElement && (
+      target.isContentEditable
+      || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+      || target.closest('[contenteditable="true"], [role="textbox"]')
+    );
+
+    const clearQuickSearch = () => {
+      quickSymbolQueryRef.current = '';
+      quickSymbolActiveIndexRef.current = 0;
+      setQuickSymbolQuery('');
+      setQuickSymbolError('');
+      setQuickSymbolActiveIndex(0);
+    };
+
+    const handleQuickSymbolKeyDown = (event) => {
+      if (isEditableTarget(event.target) || event.isComposing) return;
+      const query = quickSymbolQueryRef.current;
+
+      if (event.key === 'Escape' && query) {
+        event.preventDefault();
+        event.stopPropagation();
+        clearQuickSearch();
+        return;
+      }
+
+      if (event.ctrlKey || event.altKey || event.metaKey) return;
+
+      if (query && event.key === 'Backspace') {
+        event.preventDefault();
+        const nextQuery = query.slice(0, -1);
+        quickSymbolQueryRef.current = nextQuery;
+        quickSymbolActiveIndexRef.current = 0;
+        setQuickSymbolQuery(nextQuery);
+        setQuickSymbolError('');
+        setQuickSymbolActiveIndex(0);
+        return;
+      }
+
+      if (query && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        event.preventDefault();
+        const matchCount = quickSymbolMatchesRef.current.length;
+        if (matchCount) {
+          const delta = event.key === 'ArrowDown' ? 1 : -1;
+          const nextIndex = (quickSymbolActiveIndexRef.current + delta + matchCount) % matchCount;
+          quickSymbolActiveIndexRef.current = nextIndex;
+          setQuickSymbolActiveIndex(nextIndex);
+        }
+        return;
+      }
+
+      if (query && event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        const matches = getQuickSymbolMatches(query, availableSymbolsRef.current);
+        const normalizedQuery = normalizeSymbolQuery(query);
+        const exactMatch = matches.find(match => normalizeSymbolQuery(match.name) === normalizedQuery);
+        const selectedMatch = exactMatch || matches[quickSymbolActiveIndexRef.current] || matches[0];
+        if (!selectedMatch) {
+          setQuickSymbolError(`Không tìm thấy mã “${query}”`);
+          return;
+        }
+        setSymbol(selectedMatch.name);
+        setViewMode('chart');
+        setSearchSymbol('');
+        clearQuickSearch();
+        return;
+      }
+
+      if (event.key.length === 1 && /^[a-zA-Z0-9._/# -]$/.test(event.key)) {
+        event.preventDefault();
+        const nextQuery = query + event.key;
+        quickSymbolQueryRef.current = nextQuery;
+        quickSymbolActiveIndexRef.current = 0;
+        setQuickSymbolQuery(nextQuery);
+        setQuickSymbolError('');
+        setQuickSymbolActiveIndex(0);
+      }
+    };
+
+    window.addEventListener('keydown', handleQuickSymbolKeyDown, true);
+    return () => window.removeEventListener('keydown', handleQuickSymbolKeyDown, true);
+  }, []);
+
+  const selectQuickSymbol = (match) => {
+    setSymbol(match.name);
+    setViewMode('chart');
+    setSearchSymbol('');
+    quickSymbolQueryRef.current = '';
+    setQuickSymbolQuery('');
+    setQuickSymbolError('');
+    setQuickSymbolActiveIndex(0);
+    quickSymbolActiveIndexRef.current = 0;
+  };
 
   useEffect(() => {
     if (!showMatrixBubble) return;
@@ -4390,6 +4535,39 @@ function App() {
     <div className="dashboard-container">
       <TradingLogPanel isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} apiBase={API_BASE} />
 
+      {quickSymbolQuery && (
+        <div role="dialog" aria-label="Tìm nhanh tài sản" style={{ position: 'fixed', top: '72px', left: '50%', transform: 'translateX(-50%)', width: 'min(460px, calc(100vw - 28px))', zIndex: 10002, padding: '12px', borderRadius: '12px', background: 'rgba(2,6,18,0.97)', border: '1px solid rgba(0,240,255,0.55)', boxShadow: '0 12px 36px rgba(0,0,0,0.65), 0 0 22px rgba(0,240,255,0.16)', color: '#e0f2fe', fontFamily: 'monospace' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '9px' }}>
+            <strong style={{ color: '#67e8f9', fontSize: '12px' }}>TÌM NHANH TÀI SẢN</strong>
+            <span style={{ color: '#64748b', fontSize: '10px' }}>Enter mở · Esc đóng</span>
+          </div>
+          <div style={{ padding: '9px 10px', borderRadius: '7px', background: 'rgba(15,23,42,0.95)', border: '1px solid rgba(0,240,255,0.25)', color: '#f8fafc', fontSize: '18px', fontWeight: 700, letterSpacing: '1px', minHeight: '40px' }}>
+            {quickSymbolQuery.toUpperCase()}
+            <span aria-hidden="true" style={{ display: 'inline-block', width: '1px', height: '17px', marginLeft: '3px', verticalAlign: 'middle', background: '#00f0ff' }} />
+          </div>
+          {quickSymbolMatches.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+              {quickSymbolMatches.map((match, index) => (
+                <button
+                  key={match.name}
+                  type="button"
+                  onClick={() => selectQuickSymbol(match)}
+                  onMouseEnter={() => { quickSymbolActiveIndexRef.current = index; setQuickSymbolActiveIndex(index); }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', width: '100%', padding: '8px 9px', textAlign: 'left', border: `1px solid ${index === quickSymbolActiveIndex ? 'rgba(0,240,255,0.5)' : 'transparent'}`, borderRadius: '6px', background: index === quickSymbolActiveIndex ? 'rgba(8,145,178,0.2)' : 'transparent', color: '#e2e8f0', cursor: 'pointer' }}
+                >
+                  <span style={{ color: '#67e8f9', fontWeight: 700, whiteSpace: 'nowrap' }}>{match.name}</span>
+                  <span style={{ color: '#94a3b8', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.description}{match.group ? ` · ${match.group}` : ''}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding: '10px 3px 3px', color: quickSymbolError ? '#fca5a5' : '#94a3b8', fontSize: '11px' }}>
+              {quickSymbolError || 'Không tìm thấy mã phù hợp'}
+            </div>
+          )}
+        </div>
+      )}
+
         <div className="toast-container">
         {toasts.map(t => (
           <div key={t.id} className="toast">
@@ -4454,7 +4632,7 @@ function App() {
             <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Cặp tiền tệ (Symbol)</label>
             <input
               type="text"
-              placeholder="Tìm kiếm mã hoặc tên tài sản..."
+              placeholder="Tìm mã... (hoặc gõ ở bất kỳ đâu rồi Enter)"
               value={searchSymbol}
               onChange={(e) => setSearchSymbol(e.target.value)}
               onKeyDown={(e) => {
