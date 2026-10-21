@@ -646,7 +646,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df['mean_vol_lvl4'] = df['mean_ma_vol'].rolling(window=lookback_candles, min_periods=1).quantile(volPct4 / 100.0)
     
     vp_boxes = []
-    cache_key = f"{symbol}_{timeframe}_{dvpLookbackDays}_{timeoutHours}_{rowCount}_{pct1}"
+    cache_key = f"{symbol}_{timeframe}_{dvpLookbackDays}_{timeoutHours}_{rowCount}_{pct1}_{gridMode}_{fixedPips}_{timeShiftHours}_{brokerTimezone}"
     current_time_val = time.time()
     
     use_cache = False
@@ -674,7 +674,13 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
             else:
                 start_ts = int(df['broker_time'].min())
             real_sym = _get_real_symbol(symbol)
-            m1_rates = mt5.copy_rates_range(real_sym, mt5.TIMEFRAME_M1, start_ts, end_ts)
+            # Serialize this direct MT5 request with the rest of the data service.
+            # Referencing `mt5` here used to raise NameError; the broad exception
+            # below silently forced D-VP back to chart-timeframe candles.
+            with mt5_service.mt5_api_lock:
+                m1_rates = mt5_service.mt5.copy_rates_range(
+                    real_sym, mt5_service.mt5.TIMEFRAME_M1, start_ts, end_ts
+                )
             has_m1 = m1_rates is not None and len(m1_rates) > 0
             if has_m1:
                 df_m1 = pd.DataFrame(m1_rates)
@@ -687,7 +693,8 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                 m1_utc_aware = m1_broker_aware.dt.tz_convert('UTC')
                 df_m1['time'] = (m1_utc_aware - pd.Timestamp("1970-01-01", tz="UTC")) // pd.Timedelta('1s')
                 df_m1['time'] = df_m1['time'].astype(int)
-        except:
+        except Exception as error:
+            print(f"M1 D-VP source unavailable for {symbol} {timeframe}: {error}")
             has_m1 = False
 
     # Manual Time Shift requested by user
@@ -885,8 +892,12 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     
     if not use_cache:
         # --- 3. Dynamic Volume Profile (D-VP State Machine) ---
+        # Use one common M1-derived price grid for all chart timeframes. If
+        # Auto grid is based on the current chart bars, the same M1 profile is
+        # split into different price bins on M1 and M5, creating missing zones.
+        dvp_grid_reference = df_m1 if has_m1 and not df_m1.empty else df
         if gridMode == 'fixed':
-            avg_price = df['close'].mean() if len(df) > 0 else 0
+            avg_price = dvp_grid_reference['close'].mean() if len(dvp_grid_reference) > 0 else 0
             if avg_price > 0:
                 import math
                 # Dynamic pip size based on EURUSD ratio
@@ -898,14 +909,16 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
             bin_size = fixedPips * pip_size
             
             # NgÄƒn cháº·n viá»‡c bin_size quÃ¡ nhá» (gÃ¢y lag náº¿u sá»‘ lÆ°á»£ng há»™p > 1000)
-            recent_min = df['low'].min()
-            recent_max = df['high'].max()
+            recent_min = dvp_grid_reference['low'].min()
+            recent_max = dvp_grid_reference['high'].max()
             if recent_max - recent_min > 0 and bin_size > 0:
                 if (recent_max - recent_min) / bin_size > 1000:
                     bin_size = (recent_max - recent_min) / 1000
         else:
-            lookback_bars = min(120, len(df))
-            recent_df = df.tail(max(1, lookback_bars))
+            # 120 M5 bars = 600 M1 candles, keeping Auto-grid resolution
+            # identical when switching between M1 and M5.
+            lookback_bars = min(600 if has_m1 else 120, len(dvp_grid_reference))
+            recent_df = dvp_grid_reference.tail(max(1, lookback_bars))
             recent_min = recent_df['low'].min()
             recent_max = recent_df['high'].max()
             bin_size = (recent_max - recent_min) / max(1, rowCount)
@@ -919,11 +932,19 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         if bin_size <= 0:
             bin_size = 0.0001
         # DÃ¹ng láº¡i tf_seconds Ä‘Ã£ tÃ­nh á»Ÿ trÃªn (dÃ²ng 250) Ä‘á»ƒ trÃ¡nh ghi Ä‘Ã¨ vÃ  thiáº¿u M30
-        timeout_sec = max(timeoutHours * 3600, tf_seconds * 3)
+        timeout_floor_sec = 180 if has_m1 else tf_seconds * 3
+        timeout_sec = max(timeoutHours * 3600, timeout_floor_sec)
         
         # --- Calculate D-VP Cutoff Time ---
-        if dvpLookbackDays > 0 and len(df) > 0:
-            last_time = df['time'].iloc[-1]
+        if has_m1 and len(df_m1) > 0:
+            # Anchor the profile window to the same latest M1 bar on every chart TF.
+            profile_end_time = int(df_m1['time'].max())
+            if not is_macro_tf:
+                profile_end_time += int(timeShiftHours * 3600)
+        else:
+            profile_end_time = int(df['time'].iloc[-1]) if len(df) > 0 else 0
+        if dvpLookbackDays > 0 and profile_end_time > 0:
+            last_time = profile_end_time
             dvp_cutoff_time = last_time - (dvpLookbackDays * 24 * 3600)
         else:
             dvp_cutoff_time = 0
