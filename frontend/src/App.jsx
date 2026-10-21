@@ -93,7 +93,9 @@ const getTimeZoneOffsetMinutes = (timestamp, timeZone) => {
 };
 
 const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
-  const [momFlipData, setMomFlipData] = useState([]);
+  const momFlipDataRef = useRef([]);
+  const [momFlipDataVersion, setMomFlipDataVersion] = useState(0);
+  const [momFlipDataRevision, setMomFlipDataRevision] = useState(0);
   const [currentSdPosition, setCurrentSdPosition] = useState(null);
   const [currentSessionSdPosition, setCurrentSessionSdPosition] = useState(null);
   const [sessionSdPositions, setSessionSdPositions] = useState([]);
@@ -1828,13 +1830,22 @@ useEffect(() => {
         })).sort((a,b)=>a.time - b.time);
 
         if (!isPolling) {
-            setMomFlipData(newMomFlip);
+            momFlipDataRef.current = newMomFlip;
+            setMomFlipDataRevision(revision => revision + 1);
         } else {
-            setMomFlipData(prev => {
-                const m = new Map(prev.map(i => [i.time, i]));
-                newMomFlip.forEach(i => m.set(i.time, i));
-                return Array.from(m.values()).sort((a,b)=>a.time - b.time);
+            const currentData = momFlipDataRef.current;
+            newMomFlip.forEach(item => {
+                let low = 0;
+                let high = currentData.length;
+                while (low < high) {
+                    const middle = (low + high) >>> 1;
+                    if (currentData[middle].time < item.time) low = middle + 1;
+                    else high = middle;
+                }
+                if (currentData[low]?.time === item.time) currentData[low] = item;
+                else currentData.splice(low, 0, item);
             });
+            setMomFlipDataVersion(version => version + 1);
         }
 
         // Update price format for new symbol
@@ -3050,7 +3061,7 @@ useEffect(() => {
             </div>
           </div>
         )}
-        {showMomFlipChart && <MomFlipChartComponent data={momFlipData} mainChart={chartRef.current} mainSeries={candlestickSeriesRef.current} alerts={alerts} symbol={symbol} chartTheme={chartTheme} />}
+        {showMomFlipChart && <MomFlipChartComponent data={momFlipDataRef.current} dataVersion={momFlipDataVersion} dataRevision={momFlipDataRevision} mainChart={chartRef.current} mainSeries={candlestickSeriesRef.current} alerts={alerts} symbol={symbol} chartTheme={chartTheme} />}
       </div>
   );
 };
@@ -3582,7 +3593,7 @@ const SettingsModal = ({ configs, setConfigs, onClose }) => {
       >
         <h2 style={{ marginBottom: '20px', color: 'var(--accent-color)' }}>⚙️ Indicator Settings</h2>
 
-        <details style={styleGroup} open>
+        <details style={styleGroup}>
           <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#60a5fa' }}>D-VP (Volume Profile Động)</summary>
           <div style={{ marginTop: '10px' }}>
             <label style={styleLabel}>Chế độ chia lưới</label>

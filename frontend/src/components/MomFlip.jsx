@@ -281,11 +281,17 @@ export const AssistiveTouch = ({
   );
 };
 
-export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, symbol, chartTheme }) => {
+export const MomFlipChartComponent = ({ data = [], dataVersion = 0, dataRevision = 0, mainChart, mainSeries, alerts, symbol, chartTheme }) => {
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
   const priceLinesRef = useRef([]);
+  const dataRef = useRef(data || []);
+  const momAlertsRef = useRef(alerts || []);
+  const renderedDataRef = useRef({ revision: null, firstTime: null, length: 0, chartTheme: null });
+  const momAlertSignature = (alerts || [])
+    .map(alert => `${alert.id}:${alert.symbol}:${alert.type}:${alert.price}:${alert.status}`)
+    .join('|');
   const [position, setPosition] = useState({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 - 125 });
   const dragRef = useRef(null);
   
@@ -345,9 +351,17 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
         setTimeout(() => { try { if (c) c.remove(); } catch(e) {} }, 0);
     };
   }, []);
+
+  useEffect(() => {
+    dataRef.current = data || [];
+  }, [data, dataVersion, dataRevision]);
+
+  useEffect(() => {
+    momAlertsRef.current = alerts || [];
+  }, [alerts]);
   
   useEffect(() => {
-    if (!seriesRef.current || !alerts || !symbol) return;
+    if (!seriesRef.current || !symbol) return;
     
     // Clear old lines
     priceLinesRef.current.forEach(line => {
@@ -358,7 +372,7 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
     priceLinesRef.current = [];
     
     // Show each magnitude alert on both directional sides of the zero line.
-    const momAlerts = alerts.filter(a => a.symbol === symbol && a.type === 'mom');
+    const momAlerts = momAlertsRef.current.filter(a => a.symbol === symbol && a.type === 'mom');
     momAlerts.forEach(alert => {
       const level = Math.abs(Number(alert.price));
       const color = alert.status === 'active' ? '#eab308' : '#94a3b8';
@@ -373,7 +387,7 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
         priceLinesRef.current.push(line);
       });
     });
-  }, [alerts, symbol]);
+  }, [momAlertSignature, symbol]);
   
   useEffect(() => {
     if (!mainChart || !chartRef.current || !mainSeries || !seriesRef.current) return;
@@ -401,13 +415,14 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
     };
 
     const findDataByTime = (time) => {
-        if (!data || data.length === 0) return null;
+        const currentData = dataRef.current;
+        if (currentData.length === 0) return null;
         const target = timeToPrimitive(time);
-        let l = 0, r = data.length - 1;
+        let l = 0, r = currentData.length - 1;
         while (l <= r) {
             let m = Math.floor((l + r) / 2);
-            let current = timeToPrimitive(data[m].time);
-            if (current === target) return data[m];
+            let current = timeToPrimitive(currentData[m].time);
+            if (current === target) return currentData[m];
             if (current < target) l = m + 1;
             else r = m - 1;
         }
@@ -463,12 +478,21 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
       mainChart.unsubscribeCrosshairMove(handleMainCrosshairMove);
       chartRef.current.unsubscribeCrosshairMove(handleFlipCrosshairMove);
     };
-  }, [mainChart, mainSeries, data]);
+  }, [mainChart, mainSeries]);
 
   useEffect(() => {
     if (seriesRef.current && data && data.length > 0) {
+      const previous = renderedDataRef.current;
+      const requiresFullRefresh = previous.revision !== dataRevision
+        || previous.chartTheme !== chartTheme
+        || previous.length === 0
+        || data.length < previous.length
+        || data[0]?.time !== previous.firstTime;
+      const sourcePoints = requiresFullRefresh
+        ? data
+        : data.slice(Math.max(0, previous.length - 2));
       const isSunsetMom = chartTheme === 'sunset';
-      seriesRef.current.setData(data.map(d => {
+      const points = sourcePoints.map(d => {
         const score = Math.min(100, Math.max(0, Math.abs(d.value || 0)));
         const direction = d.mom_raw > 0 ? 1 : (d.mom_raw < 0 ? -1 : 0);
         const signedScore = direction * score;
@@ -488,9 +512,26 @@ export const MomFlipChartComponent = ({ data, mainChart, mainSeries, alerts, sym
           value: signedScore,
           color: `rgba(${r}, ${g}, ${b}, ${alpha})`
         };
-      }));
+      });
+
+      if (requiresFullRefresh) {
+        seriesRef.current.setData(points);
+      } else {
+        // Polling changes only the forming candle and may append a newly opened
+        // candle. Updating this short tail avoids rebuilding the entire TKH plot.
+        points.forEach(point => {
+          try { seriesRef.current.update(point); } catch (e) {}
+        });
+      }
+
+      renderedDataRef.current = {
+        revision: dataRevision,
+        chartTheme,
+        firstTime: data[0]?.time ?? null,
+        length: data.length,
+      };
     }
-  }, [data, chartTheme]);
+  }, [data, data.length, dataVersion, dataRevision, chartTheme]);
 
   const handlePointerDown = (e) => {
     e.preventDefault();

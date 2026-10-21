@@ -200,12 +200,25 @@ async def alert_worker():
                         
                         # Cache key for fetching so we don't spam 
                         fetch_key = f"{sym}_{tf}"
-                        if now - alert_worker.last_mom_fetch.get(fetch_key, 0) > 60:
+                        refresh_by_timeframe = {
+                            "M1": 15, "M2": 15, "M3": 20, "M4": 20,
+                            "M5": 30, "M15": 60, "M30": 60,
+                            "H1": 120, "H2": 120, "H4": 180, "H8": 300,
+                            "D1": 600, "W1": 1800, "MN1": 3600,
+                        }
+                        refresh_seconds = refresh_by_timeframe.get(tf.upper(), 120)
+                        latest_cached = LATEST_MOM_FLIP_DATA.get(fetch_key)
+                        cache_updated_at = latest_cached.get("updated_at", 0) if isinstance(latest_cached, dict) else 0
+                        has_fresh_chart_value = now - cache_updated_at < refresh_seconds
+                        if not has_fresh_chart_value and now - alert_worker.last_mom_fetch.get(fetch_key, 0) >= refresh_seconds:
                             import main
                             # Read configs to match chart parameters
                             configs = get_email_config() or {}
                             # Extract kwargs for get_ohlcv
                             kwargs = {
+                                'mfTargetPct': configs.get('mfTargetPct', 75.0),
+                                'mfTimeoutCandles': configs.get('mfTimeoutCandles', 120.0),
+                                'matrixLookbackHours': configs.get('matrixLookbackHours', 89.0),
                                 'maVolLength': configs.get('maVolLength', 2),
                                 'momMaLength': configs.get('momMaLength', 3),
                                 'smaMomLength': configs.get('smaMomLength', 10),
@@ -215,9 +228,12 @@ async def alert_worker():
                                 'volPct2': configs.get('volPct2', 75.0),
                                 'volPct3': configs.get('volPct3', 50.0),
                                 'volPct4': configs.get('volPct4', 15.0),
+                                'brokerTimezone': configs.get('brokerTimezone', 'Europe/Athens'),
                             }
-                            # Fetch with small count to be fast and update LATEST_MOM_FLIP_DATA
-                            await asyncio.to_thread(main.get_ohlcv, sym, tf, 300, 0, False, **kwargs)
+                            # Use the same history window as the chart so the 75%
+                            # rank has the same sample base. latest_only skips D-VP
+                            # history work while still calculating the latest TKH values.
+                            await asyncio.to_thread(main.get_ohlcv, sym, tf, 10000, 0, True, **kwargs)
                             alert_worker.last_mom_fetch[fetch_key] = now
                     except Exception as e:
                         print("Error fetching OHLCV for mom alert:", e)
@@ -227,11 +243,19 @@ async def alert_worker():
                         continue
                     mom_data = LATEST_MOM_FLIP_DATA[data_key]
                     if isinstance(mom_data, dict):
+                        try:
+                            data_age = time.time() - float(mom_data.get("updated_at", 0))
+                        except (TypeError, ValueError):
+                            data_age = float("inf")
+                        if data_age > max(refresh_seconds * 2, 30):
+                            continue
                         if alert.get("bar_close_only"):
                             current_forming_time = mom_data.get('time')
                             if alert.get("last_forming_time") == current_forming_time:
                                 continue
                             current_value = mom_data.get('prev_value')
+                            if current_forming_time is None or current_value is None:
+                                continue
                             alert["last_forming_time"] = current_forming_time
                             any_state_changed = True
                         else:

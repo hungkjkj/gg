@@ -927,13 +927,24 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
     df = df.replace({np.nan: None})
     records = df.to_dict(orient="records")
     
-    # Save the latest mom_flip for alert checking
-    if len(records) > 0 and 'mom_flip' in records[-1] and records[-1]['mom_flip'] is not None:
+    # Keep the latest TKH state for alert checking, including an explicit None
+    # when the candle does not qualify. Leaving the previous value in place
+    # would let a stale >=75% reading trigger after the current signal vanished.
+    if end_time == 0 and len(records) > 0 and 'mom_flip' in records[-1]:
         import alert_service
+        def finite_alert_value(value):
+            try:
+                number = float(value)
+                return round(number, 2) if np.isfinite(number) else None
+            except (TypeError, ValueError):
+                return None
+
+        previous_record = records[-2] if len(records) > 1 else records[-1]
         alert_service.LATEST_MOM_FLIP_DATA[f"{symbol}_{timeframe}"] = {
-            'value': round(records[-1]['mom_flip'], 2),
+            'value': finite_alert_value(records[-1].get('mom_flip')),
             'time': records[-1]['time'],
-            'prev_value': round(records[-2]['mom_flip'], 2) if len(records) > 1 and records[-2].get('mom_flip') is not None else round(records[-1]['mom_flip'], 2)
+            'prev_value': finite_alert_value(previous_record.get('mom_flip')),
+            'updated_at': time.time(),
         }
         
 
