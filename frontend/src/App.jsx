@@ -4157,6 +4157,163 @@ const getMatrixTypeForSymbol = (sym) => {
   return 'fx';
 };
 
+const normalizeInfoSymbol = value => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
+  const [info, setInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const matrixType = getMatrixTypeForSymbol(symbol);
+  const canonicalSymbol = normalizeInfoSymbol(symbol);
+  const matrixHours = Number(localStorage.getItem('currencyMatrixHours')) || Number(configs.matrixHours) || 24;
+  const matrixHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || 89;
+
+  useEffect(() => {
+    let active = true;
+    const commonMatrixParams = {
+      matrix_type: matrixType,
+      vol_days: Number(configs.matrixVolDays) || 30,
+      brokerTimezone: configs.brokerTimezone || 'Europe/Athens',
+    };
+    const matrixRequest = (hours, mode) => axios.get(`${API_BASE}/api/v1/matrix`, {
+      params: { ...commonMatrixParams, n_hours: hours, matrix_mode: mode },
+    });
+    const dvpParams = {
+      ...commonMatrixParams,
+      dvp_lookback_days: configs.dvpLookbackDays,
+      vwap_length: configs.vwapLength,
+      vwap_mult: configs.vwapMult,
+      pct1: configs.pct1,
+      grid_mode: configs.gridMode,
+      fixed_pips: configs.fixedPips,
+      row_count: configs.rowCount,
+      timeout_hours: configs.timeoutHours,
+      force: false,
+    };
+    const requests = [
+      matrixRequest(matrixHours, 'trend'),
+      matrixRequest(matrixHours, 'money_flow'),
+      matrixRequest(matrixHoursLong, 'trend'),
+      matrixRequest(matrixHoursLong, 'money_flow'),
+      axios.get(`${API_BASE}/api/v1/matrix/dvp-trend`, { params: dvpParams }),
+      axios.get(`${API_BASE}/api/v1/symbol-info/spread`, {
+        params: { symbol, matrix_type: matrixType, brokerTimezone: commonMatrixParams.brokerTimezone },
+      }),
+    ];
+
+    Promise.allSettled(requests).then(results => {
+      if (!active) return;
+      const valueAt = index => results[index].status === 'fulfilled' ? results[index].value.data : null;
+      const matrix = {
+        trendShort: valueAt(0), flowShort: valueAt(1),
+        trendLong: valueAt(2), flowLong: valueAt(3),
+      };
+      const successful = results.filter(result => result.status === 'fulfilled').length;
+      setInfo({ matrix, dvp: valueAt(4), spread: valueAt(5) });
+      if (successful === 0) setError('Không tải được dữ liệu thông tin cho cặp này.');
+      else if (successful < requests.length) setError('Một vài mục chưa tải được; các mục còn lại vẫn dùng được.');
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+
+    return () => { active = false; };
+  }, [symbol, matrixType, matrixHours, matrixHoursLong, configs]);
+
+  useEffect(() => {
+    const handleKeyDown = event => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const fxPair = matrixType === 'fx' && canonicalSymbol.length >= 6
+    ? canonicalSymbol.slice(0, 6)
+    : '';
+  const components = fxPair
+    ? [fxPair.slice(0, 3), fxPair.slice(3, 6)]
+    : [symbol];
+  const findRanking = (response, component) => (response?.ranking || []).find(item =>
+    normalizeInfoSymbol(item.currency) === normalizeInfoSymbol(component)
+  );
+  const findDvp = () => (info?.dvp?.rows || []).find(row =>
+    normalizeInfoSymbol(row.symbol) === canonicalSymbol
+  );
+  const dvpRow = findDvp();
+  const spread = info?.spread?.current;
+  const percentColor = value => value == null ? '#64748b' : value > 0 ? '#4ade80' : value < 0 ? '#fb7185' : '#cbd5e1';
+  const formatPercentile = value => value == null ? '—' : `${value > 0 ? '+' : ''}${Number(value).toFixed(1)}%`;
+  const formatPriceValue = value => value == null ? '—' : Number(value).toPrecision(5).replace(/\.?0+$/, '');
+  const cardStyle = { padding: '14px', borderRadius: '10px', background: 'rgba(15,23,42,0.62)', border: '1px solid rgba(34,211,238,0.15)' };
+
+  return (
+    <div onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }} style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'rgba(1,6,18,0.76)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px' }}>
+      <section role="dialog" aria-modal="true" aria-label={`Thông tin ${symbol}`} style={{ width: 'min(760px, 96vw)', maxHeight: 'min(86vh, 900px)', overflowY: 'auto', color: '#e2e8f0', background: '#071121', border: '1px solid rgba(34,211,238,0.45)', borderRadius: '14px', boxShadow: '0 18px 70px rgba(0,0,0,0.6), 0 0 28px rgba(34,211,238,0.12)', padding: '20px' }}>
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '16px' }}>
+          <div>
+            <h2 style={{ margin: 0, color: '#67e8f9', fontSize: '19px' }}>Thông tin {symbol}</h2>
+            <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>{timeframe} · Currency Matrix: {matrixHours}h / {matrixHoursLong}h</div>
+          </div>
+          <button onClick={onClose} aria-label="Đóng" style={{ border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', background: 'rgba(8,47,73,0.55)', color: '#67e8f9', fontSize: '20px', width: '36px', height: '36px', cursor: 'pointer' }}>×</button>
+        </header>
+
+        {loading && <div style={{ padding: '9px 12px', marginBottom: '14px', borderRadius: '8px', color: '#7dd3fc', background: 'rgba(8,145,178,0.12)' }}>Đang tải Matrix, D‑VP và dữ liệu spread…</div>}
+        {error && <div style={{ padding: '9px 12px', marginBottom: '14px', borderRadius: '8px', color: '#fbbf24', background: 'rgba(180,83,9,0.12)' }}>{error}</div>}
+
+        <div style={{ display: 'grid', gap: '12px' }}>
+          <section style={cardStyle}>
+            <h3 style={{ margin: '0 0 10px', color: '#a5f3fc', fontSize: '14px' }}>Động lượng Currency Matrix</h3>
+            {components.map(component => {
+              const trendShort = findRanking(info?.matrix?.trendShort, component);
+              const flowShort = findRanking(info?.matrix?.flowShort, component);
+              const trendLong = findRanking(info?.matrix?.trendLong, component);
+              const flowLong = findRanking(info?.matrix?.flowLong, component);
+              return (
+                <div key={component} style={{ display: 'grid', gridTemplateColumns: 'minmax(70px, 1fr) repeat(2, minmax(150px, 1.2fr))', gap: '8px', alignItems: 'center', padding: '8px 0', borderTop: '1px solid rgba(148,163,184,0.1)' }}>
+                  <strong style={{ color: '#f8fafc' }}>{component}</strong>
+                  {[{ label: `${matrixHours}h`, trend: trendShort, flow: flowShort }, { label: `${matrixHoursLong}h`, trend: trendLong, flow: flowLong }].map(period => (
+                    <div key={period.label} style={{ color: '#94a3b8', fontSize: '12px', lineHeight: 1.7 }}>
+                      <span>{period.label} · </span><span style={{ color: percentColor(period.trend?.mom_percentile) }}>T {formatPercentile(period.trend?.mom_percentile)}</span>
+                      <span style={{ marginLeft: '8px', color: percentColor(period.flow?.mom_percentile) }}>F {formatPercentile(period.flow?.mom_percentile)}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+            <div style={{ color: '#64748b', fontSize: '10px', marginTop: '5px' }}>T = Price Trend, F = Money Flow; số liệu là phân vị động lượng có dấu như trong Matrix.</div>
+          </section>
+
+          <section style={cardStyle}>
+            <h3 style={{ margin: '0 0 8px', color: '#c4b5fd', fontSize: '14px' }}>Xếp hạng xu hướng D‑VP</h3>
+            {dvpRow ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(125px, 1fr))', gap: '10px' }}>
+                <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Hạng trong nhóm</span><strong style={{ display: 'block', marginTop: '4px' }}>#{dvpRow.rank}/{info?.dvp?.rows?.length || '—'}</strong></div>
+                <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Khoảng cách D‑VP TB</span><strong style={{ display: 'block', marginTop: '4px' }}>{dvpRow.gap_sd == null ? '—' : `${dvpRow.gap_sd.toFixed(3)} SD`}</strong></div>
+                <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Phân vị Vol days</span><strong style={{ display: 'block', marginTop: '4px' }}>{dvpRow.percentile == null ? 'Chưa đủ mẫu' : `P${Number(dvpRow.percentile).toFixed(0)}`}</strong></div>
+                <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Vị trí giá so với VWAP</span><strong style={{ display: 'block', marginTop: '4px', color: percentColor(dvpRow.close_vwap_sd) }}>{dvpRow.close_vwap_sd == null ? '—' : `${dvpRow.close_vwap_sd > 0 ? '+' : ''}${dvpRow.close_vwap_sd.toFixed(2)} SD`}</strong></div>
+              </div>
+            ) : <div style={{ color: '#94a3b8', fontSize: '12px' }}>Chưa có mẫu D‑VP cho tài sản này trong nhóm Matrix.</div>}
+            <div style={{ color: '#64748b', fontSize: '10px', lineHeight: 1.5, marginTop: '9px' }}>Hạng được xếp theo phân vị khoảng trống D‑VP so với lịch sử của từng tài sản; khoảng trống lớn hơn biểu thị cấu trúc vùng thưa hơn.</div>
+          </section>
+
+          <section style={cardStyle}>
+            <h3 style={{ margin: '0 0 8px', color: '#fcd34d', fontSize: '14px' }}>Spread so với biến động trung bình</h3>
+            {spread ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                  <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Spread hiện tại</span><strong style={{ display: 'block', marginTop: '4px' }}>{formatPriceValue(info.spread.current.spread)}</strong></div>
+                  <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Biến động TB M5 / 24h</span><strong style={{ display: 'block', marginTop: '4px' }}>{formatPriceValue(info.spread.current.average_range)}</strong></div>
+                  <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Spread / biên độ TB</span><strong style={{ display: 'block', marginTop: '4px', color: '#fbbf24' }}>{Number(info.spread.current.spread_to_range_pct).toFixed(2)}%</strong></div>
+                  <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>So với nhóm cùng loại</span><strong style={{ display: 'block', marginTop: '4px', color: info.spread.assessment === 'cao' ? '#fb7185' : info.spread.assessment === 'thấp' ? '#4ade80' : '#fbbf24' }}>{info.spread.assessment ? `${info.spread.assessment} · P${info.spread.percentile}` : 'Chưa đủ dữ liệu'}{info.spread.relative_to_group_median != null ? ` · ${info.spread.relative_to_group_median.toFixed(2)}× trung vị` : ''}</strong></div>
+                </div>
+                <div style={{ color: '#64748b', fontSize: '10px', lineHeight: 1.5, marginTop: '9px' }}>So sánh các cặp FX có chung đồng tiền (hoặc cùng nhóm tài sản); biên độ là trung bình High−Low của nến M5 trong 24 giờ gần nhất.</div>
+              </>
+            ) : <div style={{ color: '#94a3b8', fontSize: '12px' }}>Chưa lấy được tick và nến để so sánh spread.</div>}
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 const DEFAULT_SYMBOLS = {
   "15 Cặp tiền tệ chính": [
     {name: "EURUSD", description: "Euro vs US Dollar"},
@@ -4424,6 +4581,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLogOpen, setIsLogOpen] = useState(false);
+  const [isAssetInfoOpen, setIsAssetInfoOpen] = useState(false);
   const [availableSymbols, setAvailableSymbols] = useState(DEFAULT_SYMBOLS);
   const [quickSymbolQuery, setQuickSymbolQuery] = useState('');
   const [quickSymbolError, setQuickSymbolError] = useState('');
@@ -4685,6 +4843,9 @@ function App() {
   return (
     <div className="dashboard-container">
       <TradingLogPanel isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} apiBase={API_BASE} />
+      {isAssetInfoOpen && viewMode === 'chart' && (
+        <AssetInfoModal symbol={symbol} timeframe={timeframe} configs={configs} onClose={() => setIsAssetInfoOpen(false)} />
+      )}
 
       {quickSymbolQuery && (
         <div role="dialog" aria-label="Tìm nhanh tài sản" style={{ position: 'fixed', top: '72px', left: '50%', transform: 'translateX(-50%)', width: 'min(460px, calc(100vw - 28px))', zIndex: 10002, padding: '12px', borderRadius: '12px', background: 'rgba(2,6,18,0.97)', border: '1px solid rgba(0,240,255,0.55)', boxShadow: '0 12px 36px rgba(0,0,0,0.65), 0 0 22px rgba(0,240,255,0.16)', color: '#e0f2fe', fontFamily: 'monospace' }}>
@@ -5026,7 +5187,18 @@ function App() {
             >
               ☰
             </button>
-            {viewMode === 'chart' ? `${symbol} • ${timeframe}` : viewMode === 'backtest' ? `${symbol} • ${timeframe} (Backtest Mode)` : viewMode === 'catalyst' ? 'Lịch Tin tức Catalyst' : viewMode === 'strategy' ? 'Strategy Builder' : 'Currency Strength Matrix'}
+            {viewMode === 'chart' ? (
+              <>
+                <span>{symbol} • {timeframe}</span>
+                <button
+                  type="button"
+                  onClick={() => setIsAssetInfoOpen(true)}
+                  title={`Thông tin ${symbol}`}
+                  aria-label={`Thông tin ${symbol}`}
+                  style={{ width: '23px', height: '23px', padding: 0, borderRadius: '50%', border: '1px solid rgba(103,232,249,0.65)', background: 'rgba(8,47,73,0.48)', color: '#67e8f9', cursor: 'pointer', fontSize: '13px', fontWeight: 800, lineHeight: '21px' }}
+                >i</button>
+              </>
+            ) : viewMode === 'backtest' ? `${symbol} • ${timeframe} (Backtest Mode)` : viewMode === 'catalyst' ? 'Lịch Tin tức Catalyst' : viewMode === 'strategy' ? 'Strategy Builder' : 'Currency Strength Matrix'}
           </div>
           <div className="toolbar">
               <button onClick={() => setIsLogOpen(true)} className="primary" style={{ boxShadow: '0 0 10px rgba(0,240,255,0.4)', border: '1px solid #00f0ff' }}>[SYS.LOG]</button>

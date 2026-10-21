@@ -318,6 +318,122 @@ def get_ticks(symbols: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+_SYMBOL_SPREAD_CACHE = {}
+_SYMBOL_SPREAD_CACHE_TIME = {}
+
+
+@app.get("/api/v1/symbol-info/spread")
+def get_symbol_spread_comparison(symbol: str, matrix_type: str = "fx", brokerTimezone: str = "Europe/Athens"):
+    """Compare a live spread/mean M5 range ratio with related instruments."""
+    symbol = symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol is required")
+
+    cache_key = (symbol.upper(), matrix_type, brokerTimezone)
+    now = time.time()
+    if cache_key in _SYMBOL_SPREAD_CACHE and now - _SYMBOL_SPREAD_CACHE_TIME.get(cache_key, 0) < 30:
+        return _SYMBOL_SPREAD_CACHE[cache_key]
+
+    try:
+        with open(CONFIG_FILE, "r") as config_file:
+            config = json.load(config_file)
+    except Exception:
+        config = {}
+
+    if matrix_type in ("fx", "currency"):
+        group_symbols = [
+            "EURUSD", "GBPUSD", "AUDUSD", "NZDUSD", "USDJPY", "EURGBP", "EURAUD", "EURNZD",
+            "EURJPY", "GBPAUD", "GBPNZD", "GBPJPY", "AUDNZD", "AUDJPY", "NZDJPY",
+        ]
+        clean_symbol = "".join(char for char in symbol.upper() if char.isalnum())
+        known_currencies = {"EUR", "GBP", "AUD", "NZD", "JPY", "USD", "CAD", "CHF"}
+        base, quote = clean_symbol[:3], clean_symbol[3:6]
+        if len(clean_symbol) >= 6 and base in known_currencies and quote in known_currencies:
+            # Compare FX pairs that share a currency with the selected pair.
+            group_symbols = [
+                pair for pair in group_symbols
+                if pair[:3] in (base, quote) or pair[3:6] in (base, quote)
+            ]
+    else:
+        group_symbols = config.get("matrix_groups", {}).get(matrix_type, [])
+
+    symbols = []
+    seen_symbols = set()
+    for candidate in [symbol, *group_symbols]:
+        normalized = "".join(char for char in candidate.upper() if char.isalnum())
+        if normalized and normalized not in seen_symbols:
+            symbols.append(candidate)
+            seen_symbols.add(normalized)
+        if len(symbols) >= 31:
+            break
+    peer_metrics = []
+    current_metric = None
+    for peer in symbols:
+        try:
+            tick = get_tick(peer)
+            if not tick or tick.get("bid") is None or tick.get("ask") is None:
+                continue
+            spread = max(0.0, float(tick["ask"]) - float(tick["bid"]))
+            history = get_historical_data(peer, "M5", 288, 0, brokerTimezone, fallback_ea=False)
+            if history is None or history.empty or not {"high", "low"}.issubset(history.columns):
+                continue
+            ranges = (
+                pd.to_numeric(history["high"], errors="coerce")
+                - pd.to_numeric(history["low"], errors="coerce")
+            )
+            ranges = ranges[np.isfinite(ranges) & (ranges > 0)]
+            if ranges.empty:
+                continue
+            average_range = float(ranges.mean())
+            metric = {
+                "symbol": peer,
+                "spread": spread,
+                "average_range": average_range,
+                "spread_to_range_pct": (spread / average_range) * 100.0,
+            }
+            peer_metrics.append(metric)
+            if peer.upper() == symbol.upper():
+                current_metric = metric
+        except Exception as error:
+            print(f"Spread comparison failed for {peer}: {error}")
+
+    if current_metric is None:
+        # Broker suffixes can differ between the chart symbol and configured
+        # Matrix symbol. Resolve the current instrument by its alphanumeric name.
+        clean_symbol = "".join(char for char in symbol.upper() if char.isalnum())
+        current_metric = next((
+            item for item in peer_metrics
+            if "".join(char for char in item["symbol"].upper() if char.isalnum()) == clean_symbol
+        ), None)
+
+    result = {"symbol": symbol, "matrix_type": matrix_type, "current": current_metric, "peers": []}
+    if current_metric:
+        ratios = [item["spread_to_range_pct"] for item in peer_metrics if item["spread"] > 0]
+        if ratios:
+            current_ratio = current_metric["spread_to_range_pct"]
+            ordered = sorted(ratios)
+            rank = sum(value <= current_ratio for value in ordered)
+            percentile = (rank / len(ordered)) * 100.0
+            median = float(np.median(ordered))
+            result.update({
+                "peer_count": max(0, len(ordered) - 1),
+                "rank": rank,
+                "peer_total": len(ordered),
+                "percentile": round(percentile, 1),
+                "group_median_pct": median,
+                "relative_to_group_median": (current_ratio / median) if median > 0 else None,
+                "assessment": "cao" if percentile >= 75 else "thấp" if percentile <= 25 else "trung bình",
+            })
+            result["peers"] = sorted(peer_metrics, key=lambda item: item["spread_to_range_pct"], reverse=True)
+
+    _SYMBOL_SPREAD_CACHE[cache_key] = result
+    _SYMBOL_SPREAD_CACHE_TIME[cache_key] = now
+    if len(_SYMBOL_SPREAD_CACHE) > 100:
+        _SYMBOL_SPREAD_CACHE.clear()
+        _SYMBOL_SPREAD_CACHE_TIME.clear()
+    return result
+
+
 @app.get("/api/v1/ohlcv")
 def get_ohlcv(symbol: str, timeframe: str, count: int = 10000, 
               end_time: int = 0, latest_only: bool = False,
