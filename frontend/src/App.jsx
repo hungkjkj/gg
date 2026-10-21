@@ -228,6 +228,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const [lastUpdateSignal, setLastUpdateSignal] = useState(0);
   
   const [vpBoxes, setVpBoxes] = useState([]);
+  const vpBoxesRef = useRef([]);
   const [volStats, setVolStats] = useState(null);
   const volStatsRef = useRef(null);
   const canvasRef = useRef(null);
@@ -767,6 +768,42 @@ useEffect(() => {
         type: 'price',
         precision: precision,
         minMove: minMove,
+      },
+      // D-VP rectangles are drawn on a canvas layer, so the chart's price
+      // autoscale would otherwise ignore them. This is especially noticeable
+      // on M1, whose candle history is much shorter than the D-VP lookback.
+      autoscaleInfoProvider: original => {
+        const info = original();
+        if (!info?.priceRange) return info;
+
+        const visibleRange = chart.timeScale().getVisibleRange();
+        if (!visibleRange) return info;
+        const toTimestamp = value => {
+          if (typeof value === 'number') return value;
+          if (value && typeof value === 'object' && value.year && value.month && value.day) {
+            return Date.UTC(value.year, value.month - 1, value.day) / 1000;
+          }
+          return NaN;
+        };
+        const visibleFrom = toTimestamp(visibleRange.from);
+        const visibleTo = toTimestamp(visibleRange.to);
+        if (!Number.isFinite(visibleFrom) || !Number.isFinite(visibleTo)) return info;
+
+        let minValue = info.priceRange.minValue;
+        let maxValue = info.priceRange.maxValue;
+        for (const box of vpBoxesRef.current || []) {
+          const start = Number(box.start);
+          const end = Number(box.end);
+          const price = Number(box.price);
+          const halfHeight = Math.abs(Number(box.height)) / 2;
+          if (![start, end, price, halfHeight].every(Number.isFinite)) continue;
+          if (end < visibleFrom || start > visibleTo) continue;
+          minValue = Math.min(minValue, price - halfHeight);
+          maxValue = Math.max(maxValue, price + halfHeight);
+        }
+
+        if (minValue === info.priceRange.minValue && maxValue === info.priceRange.maxValue) return info;
+        return { ...info, priceRange: { ...info.priceRange, minValue, maxValue } };
       },
     });
 
@@ -1513,6 +1550,21 @@ useEffect(() => {
     } catch (e) {
     }
   };
+
+  useEffect(() => {
+    vpBoxesRef.current = vpBoxes;
+    updateOverlaysRef.current = updateOverlays;
+    try {
+      const rightPriceScale = chartRef.current?.priceScale('right');
+      if (rightPriceScale?.options().autoScale) {
+        rightPriceScale.applyOptions({ autoScale: false });
+        rightPriceScale.applyOptions({ autoScale: true });
+      }
+    } catch (error) {
+      console.warn('Could not refresh price scale for D-VP boxes:', error);
+    }
+    updateOverlaysRef.current?.();
+  }, [vpBoxes]);
 
   useEffect(() => {
     updateOverlaysRef.current = updateOverlays;
