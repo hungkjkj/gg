@@ -1541,6 +1541,82 @@ useEffect(() => {
 
   const isPollingRef = useRef(false);
 
+  const fetchLatestCandle = async () => {
+    if (viewMode !== 'chart' || loadingRef.current || isPollingRef.current) return;
+    isPollingRef.current = true;
+    const currentSymbol = symbol;
+    const currentTimeframe = timeframe;
+
+    try {
+      const response = await axios.get(`${API_BASE}/api/v1/ohlcv/latest`, {
+        params: {
+          symbol: currentSymbol,
+          timeframe: currentTimeframe,
+          timeShiftHours: configsRef.current?.timeShiftHours || 0,
+          brokerTimezone: configsRef.current?.brokerTimezone || 'Europe/Athens',
+          _t: Date.now(),
+        },
+      });
+
+      if (response.data.symbol !== symbolRef.current || response.data.timeframe !== timeframeRef.current) return;
+      if (!chartRef.current || !candlestickSeriesRef.current) return;
+
+      const latestRows = (response.data.data || [])
+        .filter(item => item && Number.isFinite(Number(item.time)))
+        .sort((a, b) => Number(a.time) - Number(b.time));
+      if (latestRows.length === 0) return;
+
+      const existingRaw = rawCandlesRef.current || [];
+      const rawMap = new Map(existingRaw.map(item => [Number(item.time), item]));
+      const priorLatestTime = lastUpdateTimeRef.current || 0;
+      let latestTimeAdvanced = false;
+      const minMove = currentSymbol.includes('JPY')
+        ? 0.001
+        : /XAU|GOLD|BTC|ETH|SOL/.test(currentSymbol)
+          ? 0.01
+          : 0.00001;
+
+      for (const item of latestRows) {
+        const candle = {
+          time: Math.floor(Number(item.time)),
+          open: Number(item.open),
+          high: Number(item.high),
+          low: Number(item.low),
+          close: Number(item.close),
+          spread: Number(item.spread) || 0,
+        };
+        if (![candle.open, candle.high, candle.low, candle.close].every(Number.isFinite)) continue;
+        if (candle.time < (lastUpdateTimeRef.current || 0)) continue;
+        if (candle.time > priorLatestTime) latestTimeAdvanced = true;
+
+        const update = (series, point) => {
+          if (!series) return;
+          try { series.update(point); } catch (e) {}
+        };
+        update(candlestickSeriesRef.current, candle);
+        update(lineCloseSeriesRef.current, { time: candle.time, value: candle.close });
+        update(lineHighSeriesRef.current, { time: candle.time, value: candle.high });
+        update(lineLowSeriesRef.current, { time: candle.time, value: candle.low });
+        update(alertsSeriesRef.current, { time: candle.time, value: candle.close });
+        bidPriceLineRef.current?.applyOptions({ price: candle.close });
+        askPriceLineRef.current?.applyOptions({ price: candle.close + candle.spread * minMove });
+        rawMap.set(candle.time, { ...(rawMap.get(candle.time) || {}), ...candle });
+        lastUpdateTimeRef.current = Math.max(lastUpdateTimeRef.current || 0, candle.time);
+      }
+
+      rawCandlesRef.current = Array.from(rawMap.values()).sort((a, b) => a.time - b.time);
+      if (latestTimeAdvanced) {
+        if (updateOverlaysRef.current) updateOverlaysRef.current();
+        setLastUpdateSignal(Date.now());
+      }
+    } catch (error) {
+      // The regular indicator refresh handles visible error reporting; a
+      // transient lightweight-poll failure should not clear a valid chart.
+    } finally {
+      isPollingRef.current = false;
+    }
+  };
+
   // Fetch data từ FastAPI backend
   const fetchData = async (isPolling = false, targetEndTime = 0, skipLoadingUI = false, resetViewport = false) => {
     // Không cho phép gửi Polling request nếu hệ thống đang bận tải Full Load
@@ -2445,8 +2521,14 @@ useEffect(() => {
       fetchData();
       const intervalId = setInterval(() => {
         fetchData(true);
-      }, 3000); // 3 giây cập nhật giá 1 lần
-      return () => clearInterval(intervalId);
+      }, 15000); // Refresh indicator calculations less often; live candles use the lightweight poll below.
+      const candleIntervalId = setInterval(() => {
+        fetchLatestCandle();
+      }, 2000);
+      return () => {
+        clearInterval(intervalId);
+        clearInterval(candleIntervalId);
+      };
     } else if (viewMode === 'backtest' && simulatedTimeRef.current) {
       // Khi đổi symbol hoặc timeframe trong lúc backtest
       fetchData(false, simulatedTimeRef.current);

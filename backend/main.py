@@ -67,6 +67,46 @@ USER_DATA_ROOT = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expandus
 TRADING_LOGS_FILE = os.path.join(USER_DATA_ROOT, "TOOL TRADE", "trading_logs.json")
 TRADING_LOGS_LOCK = threading.Lock()
 
+
+@app.get("/api/v1/ohlcv/latest")
+def get_latest_ohlcv(
+    symbol: str,
+    timeframe: str,
+    timeShiftHours: float = 0.0,
+    brokerTimezone: str = "Europe/Athens",
+):
+    """Return the last two raw candles for frequent live price updates."""
+    df = get_historical_data(symbol, timeframe, 2, 0, brokerTimezone)
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail=f"No data found for {symbol} on {timeframe}")
+
+    broker_naive = pd.to_datetime(df["time"], unit="s")
+    try:
+        broker_aware = broker_naive.dt.tz_localize(
+            brokerTimezone, nonexistent="shift_forward", ambiguous="NaT"
+        )
+    except Exception:
+        broker_aware = broker_naive.dt.tz_localize("UTC")
+    utc_aware = broker_aware.dt.tz_convert("UTC")
+    df = df.copy()
+    df["time"] = (utc_aware - pd.Timestamp("1970-01-01", tz="UTC")) // pd.Timedelta("1s")
+    df = df.dropna(subset=["time"])
+
+    if timeframe.upper() not in {"D1", "W1", "MN1"}:
+        df["time"] = df["time"] + (timeShiftHours * 3600)
+
+    records = []
+    for _, row in df.tail(2).iterrows():
+        record = {"time": int(row["time"])}
+        for field in ("open", "high", "low", "close", "spread"):
+            if field not in df.columns:
+                continue
+            value = row[field]
+            record[field] = None if pd.isna(value) else float(value)
+        records.append(record)
+
+    return {"symbol": symbol, "timeframe": timeframe, "data": records}
+
 @app.get("/api/v1/configs")
 def get_configs():
     if os.path.exists(CONFIG_FILE):
