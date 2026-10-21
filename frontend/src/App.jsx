@@ -4146,6 +4146,28 @@ function App() {
 
   const [timeframe, setTimeframe] = useState('H1');
   const [viewMode, setViewMode] = useState('chart'); // 'chart' hoặc 'matrix'
+
+  useEffect(() => {
+    const featureByShortcut = { '1': 'chart', '2': 'matrix', '3': 'backtest', '4': 'catalyst' };
+    const handleFeatureShortcut = (event) => {
+      if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (
+        target.isContentEditable
+        || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+        || target.closest('[contenteditable="true"], [role="textbox"]')
+      )) return;
+
+      const nextView = featureByShortcut[event.key];
+      if (!nextView) return;
+      event.preventDefault();
+      setViewMode(nextView);
+    };
+
+    window.addEventListener('keydown', handleFeatureShortcut, true);
+    return () => window.removeEventListener('keydown', handleFeatureShortcut, true);
+  }, []);
+
   const [chartType, setChartType] = useState(localStorage.getItem('chartType') || 'candles');
   const [chartTheme, setChartTheme] = useState(localStorage.getItem('chartTheme') || 'dark');
   const [showSdBands, setShowSdBands] = useState(localStorage.getItem('showSdBands') !== 'false');
