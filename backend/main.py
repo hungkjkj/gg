@@ -661,7 +661,10 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                 for box in vp_boxes:
                     if box.get('is_active'):
                         box['end'] = current_last_time
-    if not use_cache and not latest_only:
+    # Live latest-only refreshes can rebuild the profile when their cache
+    # expires. Backtest polling intentionally skips this expensive rebuild;
+    # the frontend retains the last profile calculated at the replay point.
+    if not use_cache and (not latest_only or end_time == 0):
         # --- Fetch M1 data BEFORE shifting df['time'] ---
         try:
             end_ts = int(df['broker_time'].max()) + 3600
@@ -1060,6 +1063,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                     'vol': float(b['vol']),
                     'start': int(mapped_start),
                     'end': int(mapped_end),
+                    'is_active': bool(b.get('is_active', False)),
                     'level': level,
                     'color': color,
                     'height': float(bin_size)

@@ -1489,11 +1489,17 @@ useEffect(() => {
         // --- DRAW VP BOXES ---
         if (vpBoxes && vpBoxes.length > 0) {
           const plotWidth = timeScale.width() || canvas.width;
+          const latestRawTime = Number(rawCandlesRef.current?.[rawCandlesRef.current.length - 1]?.time);
           for (let i = 0; i < vpBoxes.length; i++) {
            const box = vpBoxes[i];
-           if (box.end < minTime || box.start > maxTime) continue; // CULLING OFF-SCREEN BOXES
+           // Active D-VP zones remain open as new candles arrive. Extend their
+           // right edge locally so they do not vanish between backend refreshes.
+           const boxEnd = box.is_active && Number.isFinite(latestRawTime)
+             ? Math.max(Number(box.end), latestRawTime)
+             : box.end;
+           if (boxEnd < minTime || box.start > maxTime) continue; // CULLING OFF-SCREEN BOXES
            const startX = timeScale.timeToCoordinate(box.start);
-           const endX = timeScale.timeToCoordinate(box.end);
+           const endX = timeScale.timeToCoordinate(boxEnd);
            
            const topY = candlestickSeriesRef.current.priceToCoordinate(box.price + box.height/2);
            const bottomY = candlestickSeriesRef.current.priceToCoordinate(box.price - box.height/2);
@@ -1505,7 +1511,7 @@ useEffect(() => {
            const finalStartX = Math.max(0, Math.min(plotWidth,
              startX ?? (box.start <= minTime ? 0 : plotWidth)));
            const finalEndX = Math.max(0, Math.min(plotWidth,
-             endX ?? (box.end >= maxTime ? plotWidth : 0)));
+             endX ?? (boxEnd >= maxTime ? plotWidth : 0)));
            const width = finalEndX - finalStartX;
            if (width <= 0) continue;
            // Fix: Đảm bảo chiều cao tối thiểu là 1 pixel để không bị biến mất khi thu nhỏ thanh giá (sub-pixel rendering)
@@ -2517,8 +2523,15 @@ useEffect(() => {
           }
         }
         
-        // Lưu Volume Profile boxes
-        if (response.data.indicators && response.data.indicators.vp_boxes && response.data.indicators.vp_boxes.length > 0) { setVpBoxes(response.data.indicators.vp_boxes); } else if (isPolling && viewMode === 'backtest') { setVpBoxes([]); }
+        // Keep the last valid D-VP during lightweight backtest polls. Those
+        // requests intentionally omit a full profile recalculation; an empty
+        // array means "not refreshed", not "remove every existing zone".
+        const updatedVpBoxes = response.data.indicators?.vp_boxes;
+        if (Array.isArray(updatedVpBoxes) && updatedVpBoxes.length > 0) {
+          setVpBoxes(updatedVpBoxes);
+        } else if (!isPolling) {
+          setVpBoxes([]);
+        }
         
         if (response.data.indicators && response.data.indicators.vol_stats) {
             setVolStats(response.data.indicators.vol_stats);
