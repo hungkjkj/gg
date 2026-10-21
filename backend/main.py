@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 import pandas as pd
 import time
@@ -17,6 +17,23 @@ from mt5_service import initialize_mt5, get_historical_data, shutdown_mt5, get_t
 
 app = FastAPI(title="Quant Trading Dashboard API")
 _VP_BOXES_CACHE = {}
+
+
+def _json_safe(value):
+    """Convert NumPy/Pandas values in API payloads to standard JSON types."""
+    if isinstance(value, np.ndarray):
+        return [_json_safe(item) for item in value.tolist()]
+    if isinstance(value, np.generic):
+        return _json_safe(value.item())
+    if isinstance(value, dict):
+        return {str(_json_safe(key)): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    if value is pd.NA or value is pd.NaT:
+        return None
+    if isinstance(value, (float, np.floating)) and not np.isfinite(value):
+        return None
+    return value
 
 @app.middleware("http")
 async def add_cache_control_header(request, call_next):
@@ -332,7 +349,7 @@ def get_symbol_spread_comparison(symbol: str, matrix_type: str = "fx", brokerTim
     cache_key = (symbol.upper(), matrix_type, brokerTimezone)
     now = time.time()
     if cache_key in _SYMBOL_SPREAD_CACHE and now - _SYMBOL_SPREAD_CACHE_TIME.get(cache_key, 0) < 30:
-        return _SYMBOL_SPREAD_CACHE[cache_key]
+        return JSONResponse(content=_json_safe(_SYMBOL_SPREAD_CACHE[cache_key]))
 
     try:
         with open(CONFIG_FILE, "r") as config_file:
@@ -431,7 +448,7 @@ def get_symbol_spread_comparison(symbol: str, matrix_type: str = "fx", brokerTim
     if len(_SYMBOL_SPREAD_CACHE) > 100:
         _SYMBOL_SPREAD_CACHE.clear()
         _SYMBOL_SPREAD_CACHE_TIME.clear()
-    return result
+    return JSONResponse(content=_json_safe(result))
 
 
 @app.get("/api/v1/ohlcv")
@@ -1205,7 +1222,7 @@ def get_session_currency_matrix(
     )
     now = time.time()
     if cache_key in _SESSION_MATRIX_CACHE and now - _SESSION_MATRIX_CACHE_TIME.get(cache_key, 0) < 15:
-        return _SESSION_MATRIX_CACHE[cache_key]
+        return JSONResponse(content=_json_safe(_SESSION_MATRIX_CACHE[cache_key]))
 
     if matrix_type in ["fx", "currency"]:
         currencies = ["EUR", "GBP", "AUD", "NZD", "JPY", "USD", "GI"]
@@ -1216,7 +1233,7 @@ def get_session_currency_matrix(
     else:
         group_symbols = config.get("matrix_groups", {}).get(matrix_type, [])
         if not group_symbols:
-            return {"progress": 100.0, "ranking": [], "corr_matrix": [], "currencies": [], "sessions": []}
+            return JSONResponse(content={"progress": 100.0, "ranking": [], "corr_matrix": [], "currencies": [], "sessions": []})
         gi_symbol = f"{matrix_type.upper()}_GI"
         currencies = group_symbols + [gi_symbol]
         pairs = group_symbols + [gi_symbol]
@@ -1623,7 +1640,7 @@ def get_session_currency_matrix(
     _SESSION_MATRIX_CACHE[cache_key] = result
     _SESSION_MATRIX_CACHE_TIME[cache_key] = now
     MATRIX_PROGRESS[matrix_type] = 100.0
-    return result
+    return JSONResponse(content=_json_safe(result))
 
 @app.get("/api/v1/matrix")
 def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str = "fx", end_time: int = 0, brokerTimezone: str = "Europe/Athens", matrix_mode: str = "money_flow"):
@@ -1633,7 +1650,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
     
     # Cache for 10 seconds to prevent concurrent overlap and UI progress reset
     if cache_key in _MATRIX_CACHE and current_time - _MATRIX_CACHE_TIME.get(cache_key, 0) < 10:
-        return _MATRIX_CACHE[cache_key]
+        return JSONResponse(content=_json_safe(_MATRIX_CACHE[cache_key]))
         
     import json
     config_path = os.path.join(os.path.dirname(__file__), "app_configs.json")
@@ -1657,7 +1674,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         # Load from config for other groups
         group_symbols = config.get("matrix_groups", {}).get(matrix_type, [])
         if not group_symbols:
-            return {"progress": 100.0, "ranking": [], "pairs_data": [], "matrix_type": matrix_type}
+            return JSONResponse(content={"progress": 100.0, "ranking": [], "pairs_data": [], "matrix_type": matrix_type})
         
         gi_symbol = f"{matrix_type.upper()}_GI"
         currencies = group_symbols + [gi_symbol]
@@ -1918,7 +1935,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
         
     _MATRIX_CACHE[cache_key] = result
     _MATRIX_CACHE_TIME[cache_key] = current_time
-    return result
+    return JSONResponse(content=_json_safe(result))
 
 
 _MARKET_FLOW_CACHE = {}
@@ -2091,7 +2108,7 @@ def get_dvp_trend_ranking(
     else:
         symbols = config.get("matrix_groups", {}).get(matrix_type, [])
     if not symbols:
-        return {"matrix_type": matrix_type, "vol_days": vol_days, "rows": [], "message": "Không có tài sản trong nhóm này."}
+        return JSONResponse(content={"matrix_type": matrix_type, "vol_days": vol_days, "rows": [], "message": "Không có tài sản trong nhóm này."})
 
     key = (
         "trading-day-samples-v3", matrix_type, vol_days, int(end_time or 0), brokerTimezone, lookback_days, vwap_length,
@@ -2099,7 +2116,7 @@ def get_dvp_trend_ranking(
     )
     now = time.time()
     if not force and key in _DVP_TREND_CACHE and now - _DVP_TREND_CACHE_TIME.get(key, 0) < 60:
-        return _DVP_TREND_CACHE[key]
+        return JSONResponse(content=_json_safe(_DVP_TREND_CACHE[key]))
 
     bars_per_day = 24 * 12  # Same M5 source interval used by Currency Matrix.
     max_profiles = vol_days
@@ -2217,7 +2234,7 @@ def get_dvp_trend_ranking(
     _DVP_TREND_CACHE[key] = result
     _DVP_TREND_CACHE_TIME[key] = now
     MATRIX_PROGRESS["dvp_trend"] = 100.0
-    return result
+    return JSONResponse(content=_json_safe(result))
 
 
 @app.get("/api/v1/matrix/market-flows")

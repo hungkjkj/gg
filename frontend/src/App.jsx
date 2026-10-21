@@ -23,6 +23,141 @@ const fetchAssetSpread = (symbol, matrixType, brokerTimezone) => {
   return request;
 };
 
+const ASSET_INFO_REFRESH_MS = 5 * 60 * 1000;
+const assetInfoCache = new Map();
+
+const buildAssetInfoRequestSet = (symbol, configs = {}) => {
+  const matrixType = getMatrixTypeForSymbol(symbol);
+  const matrixHours = Number(localStorage.getItem('currencyMatrixHours')) || Number(configs.matrixHours) || 24;
+  const matrixHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || 89;
+  const commonMatrixParams = {
+    matrix_type: matrixType,
+    vol_days: Number(configs.matrixVolDays) || 30,
+    brokerTimezone: configs.brokerTimezone || 'Europe/Athens',
+  };
+  const sessionParams = {
+    ...commonMatrixParams,
+    short_hours: matrixHours,
+    long_hours: matrixHoursLong,
+    end_time: 0,
+    browserOffsetHours: -new Date().getTimezoneOffset() / 60,
+    autoDst: configs.autoDst ?? true,
+    asiaStart: configs.asiaStart || '07:00',
+    asiaEnd: configs.asiaEnd || '11:00',
+    euroStart: configs.euroStart || '07:00',
+    euroEnd: configs.euroEnd || '09:00',
+    preUsStart: configs.preUsStart || '16:00',
+    preUsEnd: configs.preUsEnd || '19:00',
+    usStart: configs.usStart || '07:30',
+    usEnd: configs.usEnd || '11:00',
+  };
+  const dvpParams = {
+    ...commonMatrixParams,
+    dvp_lookback_days: configs.dvpLookbackDays,
+    vwap_length: configs.vwapLength,
+    vwap_mult: configs.vwapMult,
+    pct1: configs.pct1,
+    grid_mode: configs.gridMode,
+    fixed_pips: configs.fixedPips,
+    row_count: configs.rowCount,
+    timeout_hours: configs.timeoutHours,
+    force: false,
+  };
+  const requests = [
+    { name: 'trendShort', section: 'matrix', url: `${API_BASE}/api/v1/matrix`, params: { ...commonMatrixParams, n_hours: matrixHours, matrix_mode: 'trend' } },
+    { name: 'flowShort', section: 'matrix', url: `${API_BASE}/api/v1/matrix`, params: { ...commonMatrixParams, n_hours: matrixHours, matrix_mode: 'money_flow' } },
+    { name: 'trendLong', section: 'matrix', url: `${API_BASE}/api/v1/matrix`, params: { ...commonMatrixParams, n_hours: matrixHoursLong, matrix_mode: 'trend' } },
+    { name: 'flowLong', section: 'matrix', url: `${API_BASE}/api/v1/matrix`, params: { ...commonMatrixParams, n_hours: matrixHoursLong, matrix_mode: 'money_flow' } },
+    { name: 'dvp', url: `${API_BASE}/api/v1/matrix/dvp-trend`, params: dvpParams },
+    { name: 'spread', url: `${API_BASE}/api/v1/symbol-info/spread`, params: { symbol, matrix_type: matrixType, brokerTimezone: commonMatrixParams.brokerTimezone } },
+    { name: 'sessionStats', url: `${API_BASE}/api/v1/matrix/session-stats`, params: sessionParams },
+  ];
+  const cacheKey = `${normalizeInfoSymbol(symbol)}|${JSON.stringify(requests.map(({ name, url, params }) => ({ name, url, params })))}`;
+  return { cacheKey, matrixHours, matrixHoursLong, requests };
+};
+
+const assetInfoStorageKey = cacheKey => {
+  let hash = 2166136261;
+  for (let index = 0; index < cacheKey.length; index += 1) {
+    hash ^= cacheKey.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `assetInfoCache:v2:${(hash >>> 0).toString(16)}`;
+};
+
+const assetInfoSnapshot = entry => ({
+  data: { ...entry.data, matrix: { ...entry.data.matrix } },
+  loading: entry.refreshing,
+  updatedAt: entry.updatedAt,
+  error: entry.failures > 0
+    ? (entry.hasData ? 'Một vài mục chưa cập nhật được; đang giữ dữ liệu gần nhất.' : 'Không tải được dữ liệu thông tin cho cặp này.')
+    : '',
+});
+
+const subscribeAssetInfo = (symbol, configs, listener) => {
+  const requestSet = buildAssetInfoRequestSet(symbol, configs);
+  const storageKey = assetInfoStorageKey(requestSet.cacheKey);
+  let entry = assetInfoCache.get(requestSet.cacheKey);
+  if (!entry) {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(storageKey) || 'null'); } catch { /* Ignore a damaged local cache. */ }
+    const data = saved?.data || {};
+    entry = {
+      data: { matrix: data.matrix || {}, dvp: data.dvp || null, spread: data.spread || null, sessionStats: data.sessionStats || null },
+      updatedAt: Number(saved?.updatedAt) || 0,
+      failures: 0,
+      hasData: Boolean(saved?.hasData || data.dvp || data.spread || data.sessionStats || Object.keys(data.matrix || {}).length),
+      refreshing: false,
+      pending: 0,
+      listeners: new Set(),
+    };
+    assetInfoCache.set(requestSet.cacheKey, entry);
+  }
+  entry.listeners.add(listener);
+  listener(assetInfoSnapshot(entry));
+
+  const notify = () => entry.listeners.forEach(callback => callback(assetInfoSnapshot(entry)));
+  const persist = () => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ data: entry.data, updatedAt: entry.updatedAt, hasData: entry.hasData }));
+    } catch (error) {
+      console.warn('Could not persist asset info cache on this device:', error);
+    }
+  };
+  const refresh = () => {
+    if (entry.refreshing) return;
+    entry.refreshing = true;
+    entry.failures = 0;
+    entry.pending = requestSet.requests.length;
+    notify();
+    requestSet.requests.forEach(request => {
+      const requestPromise = request.name === 'spread'
+        ? fetchAssetSpread(symbol, matrixType, request.params.brokerTimezone)
+        : axios.get(request.url, { params: request.params }).then(response => response.data);
+      requestPromise.then(value => {
+        if (request.section === 'matrix') entry.data.matrix = { ...entry.data.matrix, [request.name]: value };
+        else entry.data[request.name] = value;
+        entry.hasData = true;
+        persist();
+      }).catch(error => {
+        entry.failures += 1;
+        console.warn(`Could not load ${request.name} info for ${symbol}:`, error);
+      }).finally(() => {
+        entry.pending -= 1;
+        if (entry.pending <= 0) {
+          entry.refreshing = false;
+          entry.updatedAt = Date.now();
+          persist();
+        }
+        notify();
+      });
+    });
+  };
+
+  if (!entry.refreshing && (!entry.updatedAt || Date.now() - entry.updatedAt >= ASSET_INFO_REFRESH_MS)) refresh();
+  return () => entry.listeners.delete(listener);
+};
+
 const customTimeFormatter = (time) => {
     const date = new Date(time * 1000);
     const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -4187,77 +4322,22 @@ function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(0);
   const matrixType = getMatrixTypeForSymbol(symbol);
   const canonicalSymbol = normalizeInfoSymbol(symbol);
   const matrixHours = Number(localStorage.getItem('currencyMatrixHours')) || Number(configs.matrixHours) || 24;
   const matrixHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || 89;
 
   useEffect(() => {
-    let active = true;
-    const commonMatrixParams = {
-      matrix_type: matrixType,
-      vol_days: Number(configs.matrixVolDays) || 30,
-      brokerTimezone: configs.brokerTimezone || 'Europe/Athens',
+    setInfo(null);
+    setError('');
+    const handleUpdate = snapshot => {
+      setInfo(snapshot.data);
+      setLoading(snapshot.loading);
+      setError(snapshot.error);
+      setLastUpdatedAt(snapshot.updatedAt);
     };
-    const sessionMatrixParams = {
-      ...commonMatrixParams,
-      short_hours: matrixHours,
-      long_hours: matrixHoursLong,
-      end_time: 0,
-      browserOffsetHours: -new Date().getTimezoneOffset() / 60,
-      autoDst: configs.autoDst ?? true,
-      asiaStart: configs.asiaStart || '07:00',
-      asiaEnd: configs.asiaEnd || '11:00',
-      euroStart: configs.euroStart || '07:00',
-      euroEnd: configs.euroEnd || '09:00',
-      preUsStart: configs.preUsStart || '16:00',
-      preUsEnd: configs.preUsEnd || '19:00',
-      usStart: configs.usStart || '07:30',
-      usEnd: configs.usEnd || '11:00',
-    };
-    const matrixRequest = (hours, mode) => axios.get(`${API_BASE}/api/v1/matrix`, {
-      params: { ...commonMatrixParams, n_hours: hours, matrix_mode: mode },
-    });
-    const dvpParams = {
-      ...commonMatrixParams,
-      dvp_lookback_days: configs.dvpLookbackDays,
-      vwap_length: configs.vwapLength,
-      vwap_mult: configs.vwapMult,
-      pct1: configs.pct1,
-      grid_mode: configs.gridMode,
-      fixed_pips: configs.fixedPips,
-      row_count: configs.rowCount,
-      timeout_hours: configs.timeoutHours,
-      force: false,
-    };
-    const requests = [
-      matrixRequest(matrixHours, 'trend'),
-      matrixRequest(matrixHours, 'money_flow'),
-      matrixRequest(matrixHoursLong, 'trend'),
-      matrixRequest(matrixHoursLong, 'money_flow'),
-      axios.get(`${API_BASE}/api/v1/matrix/dvp-trend`, { params: dvpParams }),
-      fetchAssetSpread(symbol, matrixType, commonMatrixParams.brokerTimezone),
-      axios.get(`${API_BASE}/api/v1/matrix/session-stats`, { params: sessionMatrixParams }),
-    ];
-
-    Promise.allSettled(requests).then(results => {
-      if (!active) return;
-      const valueAt = index => results[index].status === 'fulfilled'
-        ? (results[index].value?.data ?? results[index].value)
-        : null;
-      const matrix = {
-        trendShort: valueAt(0), flowShort: valueAt(1),
-        trendLong: valueAt(2), flowLong: valueAt(3),
-      };
-      const successful = results.filter(result => result.status === 'fulfilled').length;
-      setInfo({ matrix, dvp: valueAt(4), spread: valueAt(5), sessionStats: valueAt(6) });
-      if (successful === 0) setError('Không tải được dữ liệu thông tin cho cặp này.');
-      else if (successful < requests.length) setError('Một vài mục chưa tải được; các mục còn lại vẫn dùng được.');
-    }).finally(() => {
-      if (active) setLoading(false);
-    });
-
-    return () => { active = false; };
+    return subscribeAssetInfo(symbol, configs, handleUpdate);
   }, [symbol, matrixType, matrixHours, matrixHoursLong, configs]);
 
   useEffect(() => {
@@ -4327,7 +4407,12 @@ function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
           <button onClick={onClose} aria-label="Đóng" style={{ border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', background: 'rgba(8,47,73,0.55)', color: '#67e8f9', fontSize: '20px', width: '36px', height: '36px', cursor: 'pointer' }}>×</button>
         </header>
 
-        {loading && <div style={{ padding: '9px 12px', marginBottom: '14px', borderRadius: '8px', color: '#7dd3fc', background: 'rgba(8,145,178,0.12)' }}>Đang tải Matrix, D‑VP và dữ liệu spread…</div>}
+        {loading && <div style={{ padding: '9px 12px', marginBottom: '14px', borderRadius: '8px', color: '#7dd3fc', background: 'rgba(8,145,178,0.12)' }}>
+          {info && (info.dvp || info.spread || info.sessionStats || Object.keys(info.matrix || {}).length)
+            ? <>Đang cập nhật nền; vẫn hiển thị dữ liệu đã lưu{lastUpdatedAt ? ` lúc ${new Date(lastUpdatedAt).toLocaleTimeString()}` : ''}.</>
+            : 'Đang tải Matrix, D‑VP và dữ liệu spread…'}
+        </div>}
+        {!loading && lastUpdatedAt > 0 && <div style={{ color: '#64748b', fontSize: '11px', marginBottom: '12px' }}>Cập nhật gần nhất: {new Date(lastUpdatedAt).toLocaleString()}</div>}
         {error && <div style={{ padding: '9px 12px', marginBottom: '14px', borderRadius: '8px', color: '#fbbf24', background: 'rgba(180,83,9,0.12)' }}>{error}</div>}
 
         <div style={{ display: 'grid', gap: '12px' }}>
@@ -4407,7 +4492,7 @@ function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
                   <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>Spread / biên độ TB</span><strong style={{ display: 'block', marginTop: '4px', color: '#fbbf24' }}>{Number(info.spread.current.spread_to_range_pct).toFixed(2)}%</strong></div>
                   <div><span style={{ color: '#94a3b8', fontSize: '11px' }}>So với nhóm cùng loại</span><strong style={{ display: 'block', marginTop: '4px', color: info.spread.assessment === 'cao' ? '#fb7185' : info.spread.assessment === 'thấp' ? '#4ade80' : '#fbbf24' }}>{info.spread.assessment ? `${info.spread.assessment} · P${info.spread.percentile}` : 'Chưa đủ dữ liệu'}{info.spread.relative_to_group_median != null ? ` · ${info.spread.relative_to_group_median.toFixed(2)}× trung vị` : ''}</strong></div>
                 </div>
-                <div style={{ color: '#64748b', fontSize: '10px', lineHeight: 1.5, marginTop: '9px' }}>So sánh các cặp FX có chung đồng tiền (hoặc cùng nhóm tài sản); biên độ là trung bình High−Low của nến M5 trong 24 giờ gần nhất.</div>
+                <div style={{ color: '#64748b', fontSize: '10px', lineHeight: 1.5, marginTop: '9px' }}>So sánh các cặp FX có chung đồng tiền (hoặc cùng nhóm tài sản); biến động TB là High−Low trung bình của tối đa 288 nến M5 gần nhất (~24 giờ nến giao dịch).</div>
               </>
             ) : <div style={{ color: '#94a3b8', fontSize: '12px' }}>Chưa lấy được tick và nến để so sánh spread.</div>}
           </section>
@@ -4709,6 +4794,7 @@ function App() {
     emailPassword: '',
     emailReceiver: '',
   }));
+  const [configsLoaded, setConfigsLoaded] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLogOpen, setIsLogOpen] = useState(false);
@@ -4959,8 +5045,23 @@ function App() {
              setConfigs(prev => ({ ...prev, ...data }));
          }
       })
-      .catch(err => console.error("Could not load configs from backend", err));
+      .catch(err => console.error("Could not load configs from backend", err))
+      .finally(() => setConfigsLoaded(true));
   }, []);
+
+  useEffect(() => {
+    if (!configsLoaded || !symbol) return undefined;
+    const unsubscribe = subscribeAssetInfo(symbol, configs, () => {});
+    const refreshIfStale = () => {
+      const release = subscribeAssetInfo(symbol, configs, () => {});
+      release();
+    };
+    const intervalId = setInterval(refreshIfStale, 60 * 1000);
+    return () => {
+      clearInterval(intervalId);
+      unsubscribe();
+    };
+  }, [configsLoaded, symbol, configs]);
 
   useEffect(() => {
     if (viewMode !== 'chart' || !symbol) {
