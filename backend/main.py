@@ -1229,6 +1229,7 @@ def get_session_currency_matrix(
         currency: {session_key: {period: {} for period, _ in period_configs} for session_key, *_ in session_ranges}
         for currency in currencies
     }
+    pair_spread_sessions = {}
     return_series = []
     MATRIX_PROGRESS[matrix_type] = 0.0
 
@@ -1331,6 +1332,55 @@ def get_session_currency_matrix(
                     })
                 session_groups.sort(key=lambda group: group["start_time"])
                 groups_by_session[session_key] = session_groups
+
+            # Capture historical spread burden by session from the same M5
+            # candles used for Matrix. MT5 stores candle spread in points, so
+            # convert it to price before comparing it with the candle range.
+            point_size = None
+            if "spread" in df.columns and pair != "GLOBAL_INDEX" and not pair.endswith("_GI"):
+                try:
+                    with mt5_service.mt5_api_lock:
+                        real_symbol = _get_real_symbol(pair)
+                        symbol_info = mt5_service.mt5.symbol_info(real_symbol) if isinstance(real_symbol, str) else None
+                    if symbol_info and float(symbol_info.point) > 0:
+                        point_size = float(symbol_info.point)
+                except Exception as error:
+                    print(f"Could not read MT5 point size for {pair}: {error}")
+
+            pair_session_values = {}
+            if "spread" in df.columns:
+                spread_points = pd.to_numeric(df["spread"], errors="coerce").to_numpy(dtype=float)
+                ranges = (pd.to_numeric(df["high"], errors="coerce") - pd.to_numeric(df["low"], errors="coerce")).to_numpy(dtype=float)
+                for session_config in session_ranges:
+                    session_key = session_config[0]
+                    groups = [group for group in groups_by_session[session_key] if group["end_time"] >= history_start_time]
+                    selected_positions = [
+                        group["positions"][df_times[group["positions"]] >= history_start_time]
+                        for group in groups
+                    ]
+                    selected_positions = [positions for positions in selected_positions if len(positions)]
+                    if not selected_positions:
+                        pair_session_values[session_key] = None
+                        continue
+                    positions = np.concatenate(selected_positions)
+                    selected_spreads = spread_points[positions]
+                    selected_ranges = ranges[positions]
+                    valid = np.isfinite(selected_spreads) & (selected_spreads >= 0) & np.isfinite(selected_ranges) & (selected_ranges > 0)
+                    if not np.any(valid):
+                        pair_session_values[session_key] = None
+                        continue
+                    average_spread_points = float(np.mean(selected_spreads[valid]))
+                    average_range = float(np.mean(selected_ranges[valid]))
+                    average_spread = average_spread_points * point_size if point_size is not None else None
+                    pair_session_values[session_key] = {
+                        "average_spread_points": round(average_spread_points, 2),
+                        "average_spread": round(average_spread, 10) if average_spread is not None else None,
+                        "average_range": round(average_range, 10),
+                        "spread_to_range_pct": round(average_spread / average_range * 100.0, 3) if average_spread is not None and average_range > 0 else None,
+                        "samples": len(selected_positions),
+                        "bars": int(np.count_nonzero(valid)),
+                    }
+            pair_spread_sessions[pair] = pair_session_values
 
             # Match historical samples at a daily cadence. Their windows use the
             # configured number of candles, so weekends/closures do not shorten them.
@@ -1561,6 +1611,7 @@ def get_session_currency_matrix(
         "ranking": ranking,
         "corr_matrix": corr_matrix,
         "currencies": currencies,
+        "pair_spreads": pair_spread_sessions,
     }
     if len(_SESSION_MATRIX_CACHE) > 100:
         _SESSION_MATRIX_CACHE.clear()

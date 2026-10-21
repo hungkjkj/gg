@@ -4186,6 +4186,22 @@ function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
       vol_days: Number(configs.matrixVolDays) || 30,
       brokerTimezone: configs.brokerTimezone || 'Europe/Athens',
     };
+    const sessionMatrixParams = {
+      ...commonMatrixParams,
+      short_hours: matrixHours,
+      long_hours: matrixHoursLong,
+      end_time: 0,
+      browserOffsetHours: -new Date().getTimezoneOffset() / 60,
+      autoDst: configs.autoDst ?? true,
+      asiaStart: configs.asiaStart || '07:00',
+      asiaEnd: configs.asiaEnd || '11:00',
+      euroStart: configs.euroStart || '07:00',
+      euroEnd: configs.euroEnd || '09:00',
+      preUsStart: configs.preUsStart || '16:00',
+      preUsEnd: configs.preUsEnd || '19:00',
+      usStart: configs.usStart || '07:30',
+      usEnd: configs.usEnd || '11:00',
+    };
     const matrixRequest = (hours, mode) => axios.get(`${API_BASE}/api/v1/matrix`, {
       params: { ...commonMatrixParams, n_hours: hours, matrix_mode: mode },
     });
@@ -4208,6 +4224,7 @@ function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
       matrixRequest(matrixHoursLong, 'money_flow'),
       axios.get(`${API_BASE}/api/v1/matrix/dvp-trend`, { params: dvpParams }),
       fetchAssetSpread(symbol, matrixType, commonMatrixParams.brokerTimezone),
+      axios.get(`${API_BASE}/api/v1/matrix/session-stats`, { params: sessionMatrixParams }),
     ];
 
     Promise.allSettled(requests).then(results => {
@@ -4220,7 +4237,7 @@ function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
         trendLong: valueAt(2), flowLong: valueAt(3),
       };
       const successful = results.filter(result => result.status === 'fulfilled').length;
-      setInfo({ matrix, dvp: valueAt(4), spread: valueAt(5) });
+      setInfo({ matrix, dvp: valueAt(4), spread: valueAt(5), sessionStats: valueAt(6) });
       if (successful === 0) setError('Không tải được dữ liệu thông tin cho cặp này.');
       else if (successful < requests.length) setError('Một vài mục chưa tải được; các mục còn lại vẫn dùng được.');
     }).finally(() => {
@@ -4245,6 +4262,37 @@ function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
   const findRanking = (response, component) => (response?.ranking || []).find(item =>
     normalizeInfoSymbol(item.currency) === normalizeInfoSymbol(component)
   );
+  const findSessionRanking = component => (info?.sessionStats?.ranking || []).find(item =>
+    normalizeInfoSymbol(item.currency) === normalizeInfoSymbol(component)
+    || (component === 'GLOBAL_INDEX' && normalizeInfoSymbol(item.currency) === 'GI')
+  );
+  const pairSpreadSessions = Object.entries(info?.sessionStats?.pair_spreads || {})
+    .find(([sessionSymbol]) => normalizeInfoSymbol(sessionSymbol) === canonicalSymbol)?.[1] || {};
+  const getSessionSpread = sessionKey => pairSpreadSessions[sessionKey];
+  const getSessionSpreadComparison = sessionKey => {
+    const current = getSessionSpread(sessionKey);
+    if (current?.spread_to_range_pct == null) return null;
+    const peerRatios = Object.entries(info?.sessionStats?.pair_spreads || {})
+      .filter(([peerSymbol]) => {
+        const peer = normalizeInfoSymbol(peerSymbol);
+        if (matrixType !== 'fx' || !fxPair) return true;
+        return peer === fxPair
+          || peer.slice(0, 3) === fxPair.slice(0, 3)
+          || peer.slice(3, 6) === fxPair.slice(0, 3)
+          || peer.slice(0, 3) === fxPair.slice(3, 6)
+          || peer.slice(3, 6) === fxPair.slice(3, 6);
+      })
+      .map(([, values]) => values?.[sessionKey]?.spread_to_range_pct)
+      .filter(value => value != null && Number.isFinite(Number(value)))
+      .map(Number);
+    if (!peerRatios.length) return null;
+    const percentile = Math.round(peerRatios.filter(value => value <= current.spread_to_range_pct).length / peerRatios.length * 100);
+    return {
+      percentile,
+      peerCount: peerRatios.length,
+      assessment: percentile >= 75 ? 'cao' : percentile <= 25 ? 'thấp' : 'trung bình',
+    };
+  };
   const findDvp = () => (info?.dvp?.rows || []).find(row =>
     normalizeInfoSymbol(row.symbol) === canonicalSymbol
   );
@@ -4290,6 +4338,37 @@ function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
               );
             })}
             <div style={{ color: '#64748b', fontSize: '10px', marginTop: '5px' }}>T = Price Trend, F = Money Flow; số liệu là phân vị động lượng có dấu như trong Matrix.</div>
+            <div style={{ borderTop: '1px solid rgba(148,163,184,0.12)', marginTop: '12px', paddingTop: '10px' }}>
+              <h4 style={{ margin: '0 0 8px', color: '#a5f3fc', fontSize: '12px' }}>Động lượng theo phiên</h4>
+              {components.map(component => {
+                const componentSessions = findSessionRanking(component)?.sessions || {};
+                return (
+                  <div key={`session-momentum-${component}`} style={{ marginBottom: '12px' }}>
+                    <strong style={{ display: 'block', color: '#f8fafc', fontSize: '12px', marginBottom: '5px' }}>{component}</strong>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '440px' }}>
+                        <thead><tr style={{ color: '#94a3b8', textAlign: 'left' }}>
+                          <th style={{ padding: '5px 7px', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>Phiên</th>
+                          <th style={{ padding: '5px 7px', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>{matrixHours}h · T / F</th>
+                          <th style={{ padding: '5px 7px', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>{matrixHoursLong}h · T / F</th>
+                        </tr></thead>
+                        <tbody>{(info?.sessionStats?.sessions || []).map(session => {
+                          const short = componentSessions[session.key]?.short;
+                          const long = componentSessions[session.key]?.long;
+                          const cell = value => value ? <><span style={{ color: percentColor(value.trend_percentile) }}>T {formatPercentile(value.trend_percentile)}</span><span style={{ color: percentColor(value.flow_percentile), marginLeft: '8px' }}>F {formatPercentile(value.flow_percentile)}</span></> : <span style={{ color: '#64748b' }}>—</span>;
+                          return <tr key={session.key}>
+                            <td style={{ padding: '6px 7px', color: '#cbd5e1', borderBottom: '1px solid rgba(148,163,184,0.08)' }}>{session.label}</td>
+                            <td style={{ padding: '6px 7px', borderBottom: '1px solid rgba(148,163,184,0.08)', whiteSpace: 'nowrap' }}>{cell(short)}</td>
+                            <td style={{ padding: '6px 7px', borderBottom: '1px solid rgba(148,163,184,0.08)', whiteSpace: 'nowrap' }}>{cell(long)}</td>
+                          </tr>;
+                        })}</tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{ color: '#64748b', fontSize: '10px' }}>T/F là phân vị động lượng có dấu trong từng phiên; thời lượng mẫu dùng cùng cấu hình Matrix.</div>
+            </div>
           </section>
 
           <section style={cardStyle}>
@@ -4318,6 +4397,34 @@ function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
                 <div style={{ color: '#64748b', fontSize: '10px', lineHeight: 1.5, marginTop: '9px' }}>So sánh các cặp FX có chung đồng tiền (hoặc cùng nhóm tài sản); biên độ là trung bình High−Low của nến M5 trong 24 giờ gần nhất.</div>
               </>
             ) : <div style={{ color: '#94a3b8', fontSize: '12px' }}>Chưa lấy được tick và nến để so sánh spread.</div>}
+          </section>
+
+          <section style={cardStyle}>
+            <h3 style={{ margin: '0 0 8px', color: '#fcd34d', fontSize: '14px' }}>Spread trung bình theo phiên</h3>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '440px' }}>
+                <thead><tr style={{ color: '#94a3b8', textAlign: 'left' }}>
+                  <th style={{ padding: '6px 7px', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>Phiên</th>
+                  <th style={{ padding: '6px 7px', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>Spread TB</th>
+                  <th style={{ padding: '6px 7px', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>Spread / biên độ TB</th>
+                  <th style={{ padding: '6px 7px', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>So với nhóm</th>
+                  <th style={{ padding: '6px 7px', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>Số phiên</th>
+                </tr></thead>
+                <tbody>{(info?.sessionStats?.sessions || []).map(session => {
+                  const value = getSessionSpread(session.key);
+                  const comparison = getSessionSpreadComparison(session.key);
+                  const assessmentColor = comparison?.assessment === 'cao' ? '#fb7185' : comparison?.assessment === 'thấp' ? '#4ade80' : '#fbbf24';
+                  return <tr key={session.key}>
+                    <td style={{ padding: '7px', color: '#cbd5e1', borderBottom: '1px solid rgba(148,163,184,0.08)' }}>{session.label}</td>
+                    <td style={{ padding: '7px', color: '#f8fafc', borderBottom: '1px solid rgba(148,163,184,0.08)' }}>{value?.average_spread == null ? (value?.average_spread_points != null ? `${value.average_spread_points} điểm` : '—') : formatPriceValue(value.average_spread)}</td>
+                    <td style={{ padding: '7px', color: '#fbbf24', borderBottom: '1px solid rgba(148,163,184,0.08)' }}>{value?.spread_to_range_pct == null ? '—' : `${Number(value.spread_to_range_pct).toFixed(2)}%`}</td>
+                    <td title={comparison ? `So sánh với ${comparison.peerCount} mã cùng nhóm` : ''} style={{ padding: '7px', color: assessmentColor, borderBottom: '1px solid rgba(148,163,184,0.08)' }}>{comparison ? `P${comparison.percentile} · ${comparison.assessment}` : '—'}</td>
+                    <td style={{ padding: '7px', color: '#94a3b8', borderBottom: '1px solid rgba(148,163,184,0.08)' }}>{value?.samples ?? '—'}</td>
+                  </tr>;
+                })}</tbody>
+              </table>
+            </div>
+            <div style={{ color: '#64748b', fontSize: '10px', lineHeight: 1.5, marginTop: '8px' }}>Trung bình từ nến M5 trong từng phiên của Vol days; spread được so với biên độ High−Low trung bình cùng phiên và xếp phân vị với nhóm tài sản tương ứng. Nếu broker không cung cấp spread lịch sử, mục đó sẽ hiện “—”.</div>
           </section>
         </div>
       </section>
