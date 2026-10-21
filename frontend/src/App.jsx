@@ -4319,7 +4319,7 @@ const getMatrixTypeForSymbol = (sym) => {
 
 const normalizeInfoSymbol = value => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
+function AssetInfoModal({ symbol, timeframe, configs, viewMode, onClose }) {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -4403,7 +4403,7 @@ function AssetInfoModal({ symbol, timeframe, configs, onClose }) {
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '16px' }}>
           <div>
             <h2 style={{ margin: 0, color: '#67e8f9', fontSize: '19px' }}>Thông tin {symbol}</h2>
-            <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>{timeframe} · Currency Matrix: {matrixHours}h / {matrixHoursLong}h</div>
+            <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>{timeframe}{viewMode === 'backtest' ? ' · Backtest đang mở · chỉ số Matrix/spread theo thời gian thực' : ''} · Currency Matrix: {matrixHours}h / {matrixHoursLong}h</div>
           </div>
           <button onClick={onClose} aria-label="Đóng" style={{ border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', background: 'rgba(8,47,73,0.55)', color: '#67e8f9', fontSize: '20px', width: '36px', height: '36px', cursor: 'pointer' }}>×</button>
         </header>
@@ -5065,7 +5065,7 @@ function App() {
   }, [configsLoaded, symbol, configs]);
 
   useEffect(() => {
-    if (viewMode !== 'chart' || !symbol) {
+    if (!['chart', 'backtest'].includes(viewMode) || !symbol) {
       setAssetSpread(null);
       return undefined;
     }
@@ -5099,8 +5099,8 @@ function App() {
   return (
     <div className="dashboard-container">
       <TradingLogPanel isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} apiBase={API_BASE} />
-      {isAssetInfoOpen && viewMode === 'chart' && (
-        <AssetInfoModal symbol={symbol} timeframe={timeframe} configs={configs} onClose={() => setIsAssetInfoOpen(false)} />
+      {isAssetInfoOpen && ['chart', 'backtest'].includes(viewMode) && (
+        <AssetInfoModal symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} onClose={() => setIsAssetInfoOpen(false)} />
       )}
 
       {quickSymbolQuery && (
@@ -5443,15 +5443,15 @@ function App() {
             >
               ☰
             </button>
-            {viewMode === 'chart' ? (
+            {viewMode === 'chart' || viewMode === 'backtest' ? (
               <>
                 <span
                   title={assetSpread?.assessment
-                    ? `Spread ${assetSpread.assessment}: ${Number(assetSpread.current?.spread_to_range_pct || 0).toFixed(2)}% biên độ M5 trung bình`
+                    ? `Spread ${assetSpread.assessment}: ${Number(assetSpread.current?.spread_to_range_pct || 0).toFixed(2)}% biên độ M5 trung bình · tick hiện tại`
                     : 'Đang tải mức spread so với biến động trung bình'}
                   style={{ color: assetSpread?.assessment === 'cao' ? '#fb7185' : assetSpread?.assessment === 'thấp' ? '#4ade80' : assetSpread?.assessment === 'trung bình' ? '#fbbf24' : 'var(--text-primary)', transition: 'color 250ms ease' }}
                 >{symbol}</span>
-                <span>• {timeframe}</span>
+                <span>• {timeframe}{viewMode === 'backtest' ? ' (Backtest Mode)' : ''}</span>
                 <button
                   type="button"
                   onClick={() => setIsAssetInfoOpen(true)}
@@ -5460,7 +5460,7 @@ function App() {
                   style={{ width: '23px', height: '23px', padding: 0, borderRadius: '50%', border: '1px solid rgba(103,232,249,0.65)', background: 'rgba(8,47,73,0.48)', color: '#67e8f9', cursor: 'pointer', fontSize: '13px', fontWeight: 800, lineHeight: '21px' }}
                 >i</button>
               </>
-            ) : viewMode === 'backtest' ? `${symbol} • ${timeframe} (Backtest Mode)` : viewMode === 'catalyst' ? 'Lịch Tin tức Catalyst' : viewMode === 'strategy' ? 'Strategy Builder' : 'Currency Strength Matrix'}
+            ) : viewMode === 'catalyst' ? 'Lịch Tin tức Catalyst' : viewMode === 'strategy' ? 'Strategy Builder' : 'Currency Strength Matrix'}
           </div>
           <div className="toolbar">
               <button onClick={() => setIsLogOpen(true)} className="primary" style={{ boxShadow: '0 0 10px rgba(0,240,255,0.4)', border: '1px solid #00f0ff' }}>[SYS.LOG]</button>
