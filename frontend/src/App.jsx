@@ -4357,6 +4357,11 @@ function AssetInfoModal({ symbol, timeframe, configs, viewMode, historicalSpread
   const findRanking = (response, component) => (response?.ranking || []).find(item =>
     normalizeInfoSymbol(item.currency) === normalizeInfoSymbol(component)
   );
+  const shortPowerRanking = computeCompositeRanking(info?.matrix?.flowShort?.ranking, info?.matrix?.trendShort?.ranking);
+  const longPowerRanking = computeCompositeRanking(info?.matrix?.flowLong?.ranking, info?.matrix?.trendLong?.ranking);
+  const findPower = (ranking, component) => ranking.find(item =>
+    normalizeInfoSymbol(item.currency) === normalizeInfoSymbol(component)
+  )?.powerScore;
   const findSessionRanking = component => (info?.sessionStats?.ranking || []).find(item =>
     normalizeInfoSymbol(item.currency) === normalizeInfoSymbol(component)
     || (component === 'GLOBAL_INDEX' && normalizeInfoSymbol(item.currency) === 'GI')
@@ -4396,6 +4401,7 @@ function AssetInfoModal({ symbol, timeframe, configs, viewMode, historicalSpread
   const spread = spreadData?.current;
   const percentColor = value => value == null ? '#64748b' : value > 0 ? '#4ade80' : value < 0 ? '#fb7185' : '#cbd5e1';
   const formatPercentile = value => value == null ? '—' : `${value > 0 ? '+' : ''}${Number(value).toFixed(1)}%`;
+  const formatPower = value => value == null || !Number.isFinite(Number(value)) ? '—' : `${value > 0 ? '+' : ''}${Number(value).toFixed(1)}`;
   const formatPriceValue = value => value == null ? '—' : Number(value).toPrecision(5).replace(/\.?0+$/, '');
   const cardStyle = { padding: '14px', borderRadius: '10px', background: 'rgba(15,23,42,0.62)', border: '1px solid rgba(34,211,238,0.15)' };
 
@@ -4426,19 +4432,22 @@ function AssetInfoModal({ symbol, timeframe, configs, viewMode, historicalSpread
               const flowShort = findRanking(info?.matrix?.flowShort, component);
               const trendLong = findRanking(info?.matrix?.trendLong, component);
               const flowLong = findRanking(info?.matrix?.flowLong, component);
+              const powerShort = findPower(shortPowerRanking, component);
+              const powerLong = findPower(longPowerRanking, component);
               return (
-                <div key={component} style={{ display: 'grid', gridTemplateColumns: 'minmax(70px, 1fr) repeat(2, minmax(150px, 1.2fr))', gap: '8px', alignItems: 'center', padding: '8px 0', borderTop: '1px solid rgba(148,163,184,0.1)' }}>
+                <div key={component} style={{ display: 'grid', gridTemplateColumns: 'minmax(70px, 1fr) repeat(2, minmax(175px, 1.2fr))', gap: '8px', alignItems: 'center', padding: '8px 0', borderTop: '1px solid rgba(148,163,184,0.1)' }}>
                   <strong style={{ color: '#f8fafc' }}>{component}</strong>
-                  {[{ label: `${matrixHours}h`, trend: trendShort, flow: flowShort }, { label: `${matrixHoursLong}h`, trend: trendLong, flow: flowLong }].map(period => (
+                  {[{ label: `${matrixHours}h`, trend: trendShort, flow: flowShort, power: powerShort }, { label: `${matrixHoursLong}h`, trend: trendLong, flow: flowLong, power: powerLong }].map(period => (
                     <div key={period.label} style={{ color: '#94a3b8', fontSize: '12px', lineHeight: 1.7 }}>
                       <span>{period.label} · </span><span style={{ color: percentColor(period.trend?.mom_percentile) }}>T {formatPercentile(period.trend?.mom_percentile)}</span>
                       <span style={{ marginLeft: '8px', color: percentColor(period.flow?.mom_percentile) }}>F {formatPercentile(period.flow?.mom_percentile)}</span>
+                      <span style={{ marginLeft: '8px', color: percentColor(period.power), fontWeight: 700 }}>P {formatPower(period.power)}</span>
                     </div>
                   ))}
                 </div>
               );
             })}
-            <div style={{ color: '#64748b', fontSize: '10px', marginTop: '5px' }}>T = Price Trend, F = Money Flow; số liệu là phân vị động lượng có dấu như trong Matrix.</div>
+            <div style={{ color: '#64748b', fontSize: '10px', marginTop: '5px' }}>T = Price Trend, F = Money Flow; P dùng cùng công thức Matrix: (0.368 × T + 0.632 × F) × hệ số V.</div>
             <div style={{ borderTop: '1px solid rgba(148,163,184,0.12)', marginTop: '12px', paddingTop: '10px' }}>
               <h4 style={{ margin: '0 0 8px', color: '#a5f3fc', fontSize: '12px' }}>Động lượng theo phiên</h4>
               {components.map(component => {
@@ -4456,7 +4465,7 @@ function AssetInfoModal({ symbol, timeframe, configs, viewMode, historicalSpread
                         <tbody>{(info?.sessionStats?.sessions || []).map(session => {
                           const short = componentSessions[session.key]?.short;
                           const long = componentSessions[session.key]?.long;
-                          const cell = value => value ? <><span style={{ color: percentColor(value.trend_percentile) }}>T {formatPercentile(value.trend_percentile)}</span><span style={{ color: percentColor(value.flow_percentile), marginLeft: '8px' }}>F {formatPercentile(value.flow_percentile)}</span></> : <span style={{ color: '#64748b' }}>—</span>;
+                          const cell = value => value ? <><span style={{ color: percentColor(value.trend_percentile) }}>T {formatPercentile(value.trend_percentile)}</span><span style={{ color: percentColor(value.flow_percentile), marginLeft: '8px' }}>F {formatPercentile(value.flow_percentile)}</span><span style={{ color: percentColor(value.power_score), marginLeft: '8px', fontWeight: 700 }}>P {formatPower(value.power_score)}</span></> : <span style={{ color: '#64748b' }}>—</span>;
                           return <tr key={session.key}>
                             <td style={{ padding: '6px 7px', color: '#cbd5e1', borderBottom: '1px solid rgba(148,163,184,0.08)' }}>{session.label}</td>
                             <td style={{ padding: '6px 7px', borderBottom: '1px solid rgba(148,163,184,0.08)', whiteSpace: 'nowrap' }}>{cell(short)}</td>
@@ -4468,7 +4477,7 @@ function AssetInfoModal({ symbol, timeframe, configs, viewMode, historicalSpread
                   </div>
                 );
               })}
-              <div style={{ color: '#64748b', fontSize: '10px' }}>T/F là phân vị động lượng có dấu trong từng phiên; thời lượng mẫu dùng cùng cấu hình Matrix.</div>
+              <div style={{ color: '#64748b', fontSize: '10px' }}>T/F là phân vị động lượng có dấu trong từng phiên; P = (0.368 × T + 0.632 × F) × hệ số V của phiên.</div>
             </div>
           </section>
 
