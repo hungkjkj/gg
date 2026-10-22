@@ -4878,7 +4878,7 @@ function App() {
           return;
         }
         setSymbol(selectedMatch.name);
-        setViewMode('chart');
+        setViewMode(current => current === 'backtest' ? current : 'chart');
         setSearchSymbol('');
         clearQuickSearch();
         return;
@@ -4901,7 +4901,7 @@ function App() {
 
   const selectQuickSymbol = (match) => {
     setSymbol(match.name);
-    setViewMode('chart');
+    setViewMode(current => current === 'backtest' ? current : 'chart');
     setSearchSymbol('');
     quickSymbolQueryRef.current = '';
     setQuickSymbolQuery('');
