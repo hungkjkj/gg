@@ -4756,9 +4756,11 @@ function App() {
   const [bubblePowerShort, setBubblePowerShort] = useState(null);
   const [bubbleMatrixLoading, setBubbleMatrixLoading] = useState(false);
   const [bubbleMatrixError, setBubbleMatrixError] = useState('');
+  const [bubbleMatrixAsOf, setBubbleMatrixAsOf] = useState(null);
   const [bubbleDvpTrend, setBubbleDvpTrend] = useState(null);
   const [bubbleDvpTrendLoading, setBubbleDvpTrendLoading] = useState(false);
   const [bubbleDvpTrendError, setBubbleDvpTrendError] = useState('');
+  const [bubbleDvpAsOf, setBubbleDvpAsOf] = useState(null);
 
   
   const [configs, setConfigs] = useState(() => ({
@@ -4968,6 +4970,9 @@ function App() {
         ...sessionSettings
       };
       if (viewMode === 'backtest' && window.currentSimulatedTime) params.end_time = window.currentSimulatedTime;
+      const dataAsOf = params.end_time
+        ? { mode: 'backtest', timestamp: Number(params.end_time) }
+        : { mode: viewMode === 'backtest' ? 'backtest-unloaded' : 'live', timestamp: Math.floor(Date.now() / 1000) };
       const shortHours = params.short_hours;
       const longHours = params.long_hours;
       const legacyParams = {
@@ -4997,6 +5002,7 @@ function App() {
           }
         }).then(response => {
           setBubbleDvpTrend(response.data);
+          setBubbleDvpAsOf(dataAsOf);
         }).catch(error => {
           console.error('Error fetching bubble D-VP trend ranking:', error);
           setBubbleDvpTrendError('Không tải được BXH D-VP.');
@@ -5019,6 +5025,7 @@ function App() {
           setBubbleSessionMatrix(sessionStats.data);
           setBubblePowerLong(computeCompositeRanking(flowLong.data?.ranking, trendLong.data?.ranking));
           setBubblePowerShort(computeCompositeRanking(flowShort.data?.ranking, trendShort.data?.ranking));
+          setBubbleMatrixAsOf(dataAsOf);
           finishBubbleFetch();
       }).catch(err => {
           console.error(err);
@@ -5225,9 +5232,11 @@ function App() {
         bubblePowerShort={bubblePowerShort}
         bubbleMatrixLoading={bubbleMatrixLoading}
         bubbleMatrixError={bubbleMatrixError}
+        bubbleMatrixAsOf={bubbleMatrixAsOf}
         bubbleDvpTrend={bubbleDvpTrend}
         bubbleDvpTrendLoading={bubbleDvpTrendLoading}
         bubbleDvpTrendError={bubbleDvpTrendError}
+        bubbleDvpAsOf={bubbleDvpAsOf}
         volMode={configs.volMode}
         handleVolModeToggle={(checked) => setConfigs(prev => ({ ...prev, volMode: checked ? 'mean_vol' : 'normal' }))}
       />

@@ -6,6 +6,18 @@ const ASSISTIVE_BUBBLE_SIZE = 60;
 const ASSISTIVE_VIEWPORT_MARGIN = 12;
 const ASSISTIVE_BOTTOM_MARGIN = 20;
 
+const formatMatrixAsOf = value => {
+  if (!value?.timestamp) return 'Đang chờ dữ liệu';
+  const time = new Date(value.timestamp * 1000).toLocaleString('vi-VN', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    timeZoneName: 'short'
+  });
+  if (value.mode === 'backtest') return `Backtest · tính đến ${time} (giờ giả lập)`;
+  if (value.mode === 'backtest-unloaded') return `Backtest chưa tải mốc · đang dùng dữ liệu MT5 mới nhất (${time})`;
+  return `Live · dữ liệu MT5 mới nhất, tính lúc ${time}`;
+};
+
 const clampAssistivePosition = ({ x, y }) => {
   const maxX = Math.max(ASSISTIVE_VIEWPORT_MARGIN, window.innerWidth - ASSISTIVE_BUBBLE_SIZE - ASSISTIVE_VIEWPORT_MARGIN);
   const maxY = Math.max(ASSISTIVE_VIEWPORT_MARGIN, window.innerHeight - ASSISTIVE_BUBBLE_SIZE - ASSISTIVE_BOTTOM_MARGIN);
@@ -26,9 +38,11 @@ export const AssistiveTouch = ({
   bubblePowerShort,
   bubbleMatrixLoading,
   bubbleMatrixError,
+  bubbleMatrixAsOf,
   bubbleDvpTrend,
   bubbleDvpTrendLoading,
   bubbleDvpTrendError,
+  bubbleDvpAsOf,
   volMode, handleVolModeToggle 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -191,6 +205,7 @@ export const AssistiveTouch = ({
                   {bubbleMatrixLoading && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#fde68a', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.4)', borderRadius: '999px', padding: '3px 7px', fontSize: '10px', fontWeight: 700 }}><span className="matrix-bubble-spinner" />Đang cập nhật</span>}
                 </div>
               </div>
+              <div style={{ color: '#7dd3fc', fontSize: '10px', marginBottom: '5px' }}>Mốc Matrix / phiên: {formatMatrixAsOf(bubbleMatrixAsOf)}</div>
               <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '7px' }}>T/F: phân vị động lượng có dấu · Vol: phân vị volume · P = (0.368 × T + 0.632 × F) × hệ số V</div>
               {bubbleMatrixError && <div style={{ marginBottom: '6px', color: '#fca5a5', fontSize: '10px' }}>{bubbleMatrixError}</div>}
               <div aria-busy={bubbleMatrixLoading} style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'hidden', minWidth: 0, paddingRight: '3px', borderRadius: '8px' }}>
@@ -206,6 +221,7 @@ export const AssistiveTouch = ({
                     <span style={{ color: '#94a3b8', fontSize: '10px' }}>
                       Gap trung bình trong VWAP ± SD · Vol {bubbleDvpTrend?.vol_days || bubbleSessionMatrix?.vol_days || '—'} ngày
                     </span>
+                    {bubbleDvpAsOf && <span style={{ color: '#7dd3fc', fontSize: '10px' }}>Mốc D‑VP: {formatMatrixAsOf(bubbleDvpAsOf)}</span>}
                     {bubbleDvpTrendLoading && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#a5f3fc', fontSize: '10px', fontWeight: 700 }}><span className="matrix-bubble-spinner" />Đang cập nhật</span>}
                   </div>
                 </div>
