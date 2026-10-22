@@ -27,7 +27,11 @@ const fetchAssetSpread = (symbol, matrixType, brokerTimezone, endTime = 0) => {
 const ASSET_INFO_REFRESH_MS = 5 * 60 * 1000;
 const assetInfoCache = new Map();
 
-const buildAssetInfoRequestSet = (symbol, configs = {}) => {
+const getClosedM5Cutoff = timestamp => timestamp > 0
+  ? Math.max(0, Math.floor(timestamp / 300) * 300 - 1)
+  : 0;
+
+const buildAssetInfoRequestSet = (symbol, configs = {}, endTime = 0) => {
   const matrixType = getMatrixTypeForSymbol(symbol);
   const matrixHours = Number(localStorage.getItem('currencyMatrixHours')) || Number(configs.matrixHours) || 24;
   const matrixHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || 89;
@@ -35,12 +39,12 @@ const buildAssetInfoRequestSet = (symbol, configs = {}) => {
     matrix_type: matrixType,
     vol_days: Number(configs.matrixVolDays) || 30,
     brokerTimezone: configs.brokerTimezone || 'Europe/Athens',
+    end_time: endTime,
   };
   const sessionParams = {
     ...commonMatrixParams,
     short_hours: matrixHours,
     long_hours: matrixHoursLong,
-    end_time: 0,
     browserOffsetHours: -new Date().getTimezoneOffset() / 60,
     autoDst: configs.autoDst ?? true,
     asiaStart: configs.asiaStart || '07:00',
@@ -70,11 +74,11 @@ const buildAssetInfoRequestSet = (symbol, configs = {}) => {
     { name: 'trendLong', section: 'matrix', url: `${API_BASE}/api/v1/matrix`, params: { ...commonMatrixParams, n_hours: matrixHoursLong, matrix_mode: 'trend' } },
     { name: 'flowLong', section: 'matrix', url: `${API_BASE}/api/v1/matrix`, params: { ...commonMatrixParams, n_hours: matrixHoursLong, matrix_mode: 'money_flow' } },
     { name: 'dvp', url: `${API_BASE}/api/v1/matrix/dvp-trend`, params: dvpParams },
-    { name: 'spread', url: `${API_BASE}/api/v1/symbol-info/spread`, params: { symbol, matrix_type: matrixType, brokerTimezone: commonMatrixParams.brokerTimezone } },
+    { name: 'spread', url: `${API_BASE}/api/v1/symbol-info/spread`, params: { symbol, matrix_type: matrixType, brokerTimezone: commonMatrixParams.brokerTimezone, end_time: endTime } },
     { name: 'sessionStats', url: `${API_BASE}/api/v1/matrix/session-stats`, params: sessionParams },
   ];
   const cacheKey = `${normalizeInfoSymbol(symbol)}|${JSON.stringify(requests.map(({ name, url, params }) => ({ name, url, params })))}`;
-  return { cacheKey, matrixHours, matrixHoursLong, requests };
+  return { cacheKey, endTime, matrixHours, matrixHoursLong, requests };
 };
 
 const assetInfoStorageKey = cacheKey => {
@@ -95,14 +99,16 @@ const assetInfoSnapshot = entry => ({
     : '',
 });
 
-const subscribeAssetInfo = (symbol, configs, listener) => {
-  const requestSet = buildAssetInfoRequestSet(symbol, configs);
+const subscribeAssetInfo = (symbol, configs, listener, endTime = 0) => {
+  const requestSet = buildAssetInfoRequestSet(symbol, configs, endTime);
   const matrixType = getMatrixTypeForSymbol(symbol);
   const storageKey = assetInfoStorageKey(requestSet.cacheKey);
   let entry = assetInfoCache.get(requestSet.cacheKey);
   if (!entry) {
     let saved = null;
-    try { saved = JSON.parse(localStorage.getItem(storageKey) || 'null'); } catch { /* Ignore a damaged local cache. */ }
+    if (!requestSet.endTime) {
+      try { saved = JSON.parse(localStorage.getItem(storageKey) || 'null'); } catch { /* Ignore a damaged local cache. */ }
+    }
     const data = saved?.data || {};
     entry = {
       data: { matrix: data.matrix || {}, dvp: data.dvp || null, spread: data.spread || null, sessionStats: data.sessionStats || null },
@@ -120,6 +126,7 @@ const subscribeAssetInfo = (symbol, configs, listener) => {
 
   const notify = () => entry.listeners.forEach(callback => callback(assetInfoSnapshot(entry)));
   const persist = () => {
+    if (requestSet.endTime) return;
     try {
       localStorage.setItem(storageKey, JSON.stringify({ data: entry.data, updatedAt: entry.updatedAt, hasData: entry.hasData }));
     } catch (error) {
@@ -134,7 +141,7 @@ const subscribeAssetInfo = (symbol, configs, listener) => {
     notify();
     requestSet.requests.forEach(request => {
       const requestPromise = request.name === 'spread'
-        ? fetchAssetSpread(symbol, matrixType, request.params.brokerTimezone)
+        ? fetchAssetSpread(symbol, matrixType, request.params.brokerTimezone, Number(request.params.end_time) || 0)
         : axios.get(request.url, { params: request.params }).then(response => response.data);
       requestPromise.then(value => {
         if (request.section === 'matrix') entry.data.matrix = { ...entry.data.matrix, [request.name]: value };
@@ -152,12 +159,20 @@ const subscribeAssetInfo = (symbol, configs, listener) => {
           persist();
         }
         notify();
+        if (requestSet.endTime && entry.pending <= 0 && entry.listeners.size === 0) {
+          assetInfoCache.delete(requestSet.cacheKey);
+        }
       });
     });
   };
 
-  if (!entry.refreshing && (!entry.updatedAt || Date.now() - entry.updatedAt >= ASSET_INFO_REFRESH_MS)) refresh();
-  return () => entry.listeners.delete(listener);
+  if (!entry.refreshing && (!entry.updatedAt || (!requestSet.endTime && Date.now() - entry.updatedAt >= ASSET_INFO_REFRESH_MS))) refresh();
+  return () => {
+    entry.listeners.delete(listener);
+    if (requestSet.endTime && entry.listeners.size === 0 && !entry.refreshing) {
+      assetInfoCache.delete(requestSet.cacheKey);
+    }
+  };
 };
 
 const customTimeFormatter = (time) => {
@@ -4320,27 +4335,41 @@ const getMatrixTypeForSymbol = (sym) => {
 
 const normalizeInfoSymbol = value => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-function AssetInfoModal({ symbol, timeframe, configs, viewMode, historicalSpread, onClose }) {
+function AssetInfoModal({ symbol, timeframe, configs, viewMode, onClose }) {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastUpdatedAt, setLastUpdatedAt] = useState(0);
+  const [replayTimestamp, setReplayTimestamp] = useState(() => Number(window.currentSimulatedTime) || 0);
   const matrixType = getMatrixTypeForSymbol(symbol);
   const canonicalSymbol = normalizeInfoSymbol(symbol);
   const matrixHours = Number(localStorage.getItem('currencyMatrixHours')) || Number(configs.matrixHours) || 24;
   const matrixHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || 89;
+  const replayEndTime = viewMode === 'backtest' ? getClosedM5Cutoff(replayTimestamp) : 0;
+
+  useEffect(() => {
+    const updateReplayTimestamp = () => setReplayTimestamp(Number(window.currentSimulatedTime) || 0);
+    window.addEventListener('simulatedTimeChanged', updateReplayTimestamp);
+    updateReplayTimestamp();
+    return () => window.removeEventListener('simulatedTimeChanged', updateReplayTimestamp);
+  }, []);
 
   useEffect(() => {
     setInfo(null);
     setError('');
+    if (viewMode === 'backtest' && !replayEndTime) {
+      setLoading(true);
+      setLastUpdatedAt(0);
+      return undefined;
+    }
     const handleUpdate = snapshot => {
       setInfo(snapshot.data);
       setLoading(snapshot.loading);
       setError(snapshot.error);
       setLastUpdatedAt(snapshot.updatedAt);
     };
-    return subscribeAssetInfo(symbol, configs, handleUpdate);
-  }, [symbol, matrixType, matrixHours, matrixHoursLong, configs]);
+    return subscribeAssetInfo(symbol, configs, handleUpdate, replayEndTime);
+  }, [symbol, matrixType, matrixHours, matrixHoursLong, configs, viewMode, replayEndTime]);
 
   useEffect(() => {
     const handleKeyDown = event => { if (event.key === 'Escape') onClose(); };
@@ -4397,7 +4426,10 @@ function AssetInfoModal({ symbol, timeframe, configs, viewMode, historicalSpread
     normalizeInfoSymbol(row.symbol) === canonicalSymbol
   );
   const dvpRow = findDvp();
-  const spreadData = viewMode === 'backtest' ? historicalSpread : info?.spread;
+  const spreadData = info?.spread;
+  const replayDataLabel = replayEndTime
+    ? new Date((replayEndTime + 1) * 1000).toLocaleString()
+    : '';
   const spread = spreadData?.current;
   const percentColor = value => value == null ? '#64748b' : value > 0 ? '#4ade80' : value < 0 ? '#fb7185' : '#cbd5e1';
   const formatPercentile = value => value == null ? '—' : `${value > 0 ? '+' : ''}${Number(value).toFixed(1)}%`;
@@ -4411,13 +4443,15 @@ function AssetInfoModal({ symbol, timeframe, configs, viewMode, historicalSpread
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '16px' }}>
           <div>
             <h2 style={{ margin: 0, color: '#67e8f9', fontSize: '19px' }}>Thông tin {symbol}</h2>
-            <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>{timeframe}{viewMode === 'backtest' ? ' · Backtest · Matrix theo live, spread theo nến M5 giả lập' : ''} · Currency Matrix: {matrixHours}h / {matrixHoursLong}h</div>
+            <div style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>{timeframe}{viewMode === 'backtest' ? ` · Backtest · Matrix/D‑VP/spread theo lịch sử đến nến M5 đóng ${replayDataLabel || '(đang chờ thời gian giả lập)'}` : ''} · Currency Matrix: {matrixHours}h / {matrixHoursLong}h</div>
           </div>
           <button onClick={onClose} aria-label="Đóng" style={{ border: '1px solid rgba(34,211,238,0.3)', borderRadius: '8px', background: 'rgba(8,47,73,0.55)', color: '#67e8f9', fontSize: '20px', width: '36px', height: '36px', cursor: 'pointer' }}>×</button>
         </header>
 
         {loading && <div style={{ padding: '9px 12px', marginBottom: '14px', borderRadius: '8px', color: '#7dd3fc', background: 'rgba(8,145,178,0.12)' }}>
-          {info && (info.dvp || info.spread || info.sessionStats || Object.keys(info.matrix || {}).length)
+          {viewMode === 'backtest'
+            ? `Đang tính dữ liệu theo thời gian backtest${replayDataLabel ? ` đến nến M5 đóng ${replayDataLabel}` : ''}…`
+            : info && (info.dvp || info.spread || info.sessionStats || Object.keys(info.matrix || {}).length)
             ? <>Đang cập nhật nền; vẫn hiển thị dữ liệu đã lưu{lastUpdatedAt ? ` lúc ${new Date(lastUpdatedAt).toLocaleTimeString()}` : ''}.</>
             : 'Đang tải Matrix, D‑VP và dữ liệu spread…'}
         </div>}
@@ -5069,7 +5103,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!configsLoaded || !symbol) return undefined;
+    if (!configsLoaded || !symbol || viewMode !== 'chart') return undefined;
     const unsubscribe = subscribeAssetInfo(symbol, configs, () => {});
     const refreshIfStale = () => {
       const release = subscribeAssetInfo(symbol, configs, () => {});
@@ -5080,7 +5114,7 @@ function App() {
       clearInterval(intervalId);
       unsubscribe();
     };
-  }, [configsLoaded, symbol, configs]);
+  }, [configsLoaded, symbol, configs, viewMode]);
 
   useEffect(() => {
     if (!['chart', 'backtest'].includes(viewMode) || !symbol) {
@@ -5119,7 +5153,7 @@ function App() {
       lastRequestAt = Date.now();
       fetchAssetSpread(symbol, matrixType, brokerTimezone, requestTimeBucket)
         .then(data => {
-          if (active) setAssetSpread(data);
+          if (active && requestTimeBucket === pendingTimeBucket) setAssetSpread(data);
           lastRequestedTimeBucket = requestTimeBucket;
         })
         .catch(error => console.warn(`Could not load historical spread status for ${symbol}:`, error))
@@ -5130,14 +5164,14 @@ function App() {
     };
     const scheduleHistoricalSpreadRefresh = () => {
       if (throttleTimer || inFlight || pendingTimeBucket === lastRequestedTimeBucket) return;
-      const remainingThrottle = Math.max(0, 15000 - (Date.now() - lastRequestAt));
+      const remainingThrottle = Math.max(0, 3000 - (Date.now() - lastRequestAt));
       if (remainingThrottle > 0) throttleTimer = setTimeout(runHistoricalSpreadRequest, remainingThrottle);
       else runHistoricalSpreadRequest();
     };
     const refreshHistoricalSpread = () => {
       const simulatedTime = Number(window.currentSimulatedTime) || 0;
       if (!simulatedTime) return;
-      pendingTimeBucket = Math.floor(simulatedTime / 300) * 300;
+      pendingTimeBucket = getClosedM5Cutoff(simulatedTime);
       scheduleHistoricalSpreadRefresh();
     };
     refreshHistoricalSpread();
@@ -5163,7 +5197,7 @@ function App() {
     <div className="dashboard-container">
       <TradingLogPanel isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} apiBase={API_BASE} />
       {isAssetInfoOpen && ['chart', 'backtest'].includes(viewMode) && (
-        <AssetInfoModal symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} historicalSpread={assetSpread} onClose={() => setIsAssetInfoOpen(false)} />
+        <AssetInfoModal symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} onClose={() => setIsAssetInfoOpen(false)} />
       )}
 
       {quickSymbolQuery && (
