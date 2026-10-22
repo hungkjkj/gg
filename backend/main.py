@@ -1180,7 +1180,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
         }
         
 
-    return {
+    return JSONResponse(content=_json_safe({
         "symbol": symbol, 
         "timeframe": timeframe, 
         "data": records,
@@ -1188,7 +1188,7 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
             "vp_boxes": vp_boxes,
             "vol_stats": vol_stats
         }
-    }
+    }))
 
 MATRIX_PROGRESS = {"currency": 0.0, "crypto": 0.0, "metals": 0.0}
 _MATRIX_CACHE = {}
@@ -2277,7 +2277,7 @@ def get_market_flow_matrix(
     cache_key = (short_hours, long_hours, vol_days, int(end_time or 0), brokerTimezone)
     now = time.time()
     if not force and cache_key in _MARKET_FLOW_CACHE and now - _MARKET_FLOW_CACHE_TIME.get(cache_key, 0) < 30:
-        return _MARKET_FLOW_CACHE[cache_key]
+        return JSONResponse(content=_json_safe(_MARKET_FLOW_CACHE[cache_key]))
 
     try:
         with open(CONFIG_FILE, "r") as config_file:
@@ -2476,7 +2476,7 @@ def get_market_flow_matrix(
     _MARKET_FLOW_CACHE[cache_key] = result
     _MARKET_FLOW_CACHE_TIME[cache_key] = now
     MATRIX_PROGRESS["market_flows"] = 100.0
-    return result
+    return JSONResponse(content=_json_safe(result))
 
 # Serve Frontend SPA
 FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
