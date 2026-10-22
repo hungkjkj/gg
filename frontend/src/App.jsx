@@ -26,6 +26,10 @@ const fetchAssetSpread = (symbol, matrixType, brokerTimezone, endTime = 0) => {
 
 const ASSET_INFO_REFRESH_MS = 5 * 60 * 1000;
 const assetInfoCache = new Map();
+const getStoredPositiveMatrixHours = key => {
+  const stored = Number(localStorage.getItem(key));
+  return Number.isFinite(stored) && stored > 0 ? stored : 0;
+};
 
 const getClosedM5Cutoff = timestamp => timestamp > 0
   ? Math.max(0, Math.floor(timestamp / 300) * 300 - 1)
@@ -34,7 +38,7 @@ const getClosedM5Cutoff = timestamp => timestamp > 0
 const buildAssetInfoRequestSet = (symbol, configs = {}, endTime = 0) => {
   const matrixType = getMatrixTypeForSymbol(symbol);
   const matrixHours = Number(localStorage.getItem('currencyMatrixHours')) || Number(configs.matrixHours) || 24;
-  const matrixHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || 89;
+  const matrixHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || Number(configs.matrixHoursLong) || 89;
   const commonMatrixParams = {
     matrix_type: matrixType,
     vol_days: Number(configs.matrixVolDays) || 30,
@@ -3439,7 +3443,7 @@ const DvpTrendMatrix = ({ data, loading, error, progress, volDays, sessionSettin
   </div>
 );
 
-const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, initialMatrixVolDays, onSaveMatrixSettings, symbol, sessionSettings }) => {
+const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, initialMatrixHoursLong, initialMatrixVolDays, onSaveMatrixSettings, symbol, sessionSettings }) => {
   const [sessionMatrixData, setSessionMatrixData] = useState(null);
   const [legacyPowerLong, setLegacyPowerLong] = useState(null);
   const [legacyPowerShort, setLegacyPowerShort] = useState(null);
@@ -3453,12 +3457,16 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
   const [dvpTrendError, setDvpTrendError] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [matrixHours, setMatrixHours] = useState(initialMatrixHours || Number(localStorage.getItem('currencyMatrixHours')) || 24);
-  const [matrixHoursLong, setMatrixHoursLong] = useState(Number(localStorage.getItem('currencyMatrixHoursLong')) || 89);
+  const [matrixHours, setMatrixHours] = useState(() => getStoredPositiveMatrixHours('currencyMatrixHours') || Number(initialMatrixHours) || 24);
+  const [matrixHoursLong, setMatrixHoursLong] = useState(() => getStoredPositiveMatrixHours('currencyMatrixHoursLong') || Number(initialMatrixHoursLong) || 89);
   const [matrixVolDays, setMatrixVolDays] = useState(initialMatrixVolDays || Number(localStorage.getItem('currencyMatrixVolDays')) || 30);
   const [matrixType, setMatrixType] = useState((localStorage.getItem('matrixType') === 'currency' ? 'fx' : localStorage.getItem('matrixType')) || 'fx');
   const simulatedTimeRef = useRef(simulatedTime);
   simulatedTimeRef.current = simulatedTime;
+  const matrixSettingsRef = useRef({ matrixHours, matrixHoursLong, matrixVolDays });
+  matrixSettingsRef.current = { matrixHours, matrixHoursLong, matrixVolDays };
+  const saveMatrixSettingsRef = useRef(onSaveMatrixSettings);
+  saveMatrixSettingsRef.current = onSaveMatrixSettings;
 
   // Tự động đổi nhóm tài sản theo symbol đang xem
   useEffect(() => {
@@ -3470,9 +3478,29 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
   }, [symbol]);
 
   useEffect(() => {
-    if (initialMatrixHours) setMatrixHours(initialMatrixHours);
+    const storedHours = getStoredPositiveMatrixHours('currencyMatrixHours');
+    const storedHoursLong = getStoredPositiveMatrixHours('currencyMatrixHoursLong');
+    if (storedHours) setMatrixHours(storedHours);
+    else if (initialMatrixHours) setMatrixHours(initialMatrixHours);
+    if (storedHoursLong) setMatrixHoursLong(storedHoursLong);
+    else if (initialMatrixHoursLong) setMatrixHoursLong(initialMatrixHoursLong);
     if (initialMatrixVolDays) setMatrixVolDays(initialMatrixVolDays);
-  }, [initialMatrixHours, initialMatrixVolDays]);
+  }, [initialMatrixHours, initialMatrixHoursLong, initialMatrixVolDays]);
+
+  const persistMatrixSettings = () => {
+    const current = matrixSettingsRef.current;
+    const hours = Number(current.matrixHours) > 0
+      ? Number(current.matrixHours)
+      : getStoredPositiveMatrixHours('currencyMatrixHours') || Number(initialMatrixHours) || 24;
+    const hoursLong = Number(current.matrixHoursLong) > 0
+      ? Number(current.matrixHoursLong)
+      : getStoredPositiveMatrixHours('currencyMatrixHoursLong') || Number(initialMatrixHoursLong) || 89;
+    setMatrixHours(hours);
+    setMatrixHoursLong(hoursLong);
+    localStorage.setItem('currencyMatrixHours', String(hours));
+    localStorage.setItem('currencyMatrixHoursLong', String(hoursLong));
+    saveMatrixSettingsRef.current?.(hours, hoursLong, current.matrixVolDays);
+  };
 
   useEffect(() => {
     let interval;
@@ -3521,8 +3549,9 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
 
 
   const fetchMatrix = async (force = false) => {
-    if (force && onSaveMatrixSettings) {
-      onSaveMatrixSettings(matrixHours, matrixVolDays);
+    const { matrixHours: activeMatrixHours, matrixHoursLong: activeMatrixHoursLong, matrixVolDays: activeMatrixVolDays } = matrixSettingsRef.current;
+    if (force && saveMatrixSettingsRef.current) {
+      saveMatrixSettingsRef.current(activeMatrixHours, activeMatrixHoursLong, activeMatrixVolDays);
     }
     const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
     const sessionParams = {
@@ -3537,7 +3566,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       autoDst: sessionSettings?.autoDst ?? true,
       browserOffsetHours
     };
-    const cacheSignature = JSON.stringify({ matrixMetricVersion: 3, matrixHours, matrixHoursLong, matrixVolDays, brokerTimezone, ...sessionParams });
+    const cacheSignature = JSON.stringify({ matrixMetricVersion: 3, matrixHours: activeMatrixHours, matrixHoursLong: activeMatrixHoursLong, matrixVolDays: activeMatrixVolDays, brokerTimezone, ...sessionParams });
 
     // Không dùng cache nếu đang ở chế độ backtest
     if (!force && !simulatedTime) {
@@ -3560,17 +3589,17 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
     
     setLoading(true);
     try {
-      const commonParams = { vol_days: matrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone };
+      const commonParams = { vol_days: activeMatrixVolDays, matrix_type: matrixType, end_time: simulatedTime || 0, brokerTimezone };
       const [flowShort, flowLong, trendShort, trendLong, sessionStats] = await Promise.all([
-        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...commonParams, n_hours: matrixHours, matrix_mode: 'money_flow' } }),
-        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...commonParams, n_hours: matrixHoursLong, matrix_mode: 'money_flow' } }),
-        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...commonParams, n_hours: matrixHours, matrix_mode: 'trend' } }),
-        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...commonParams, n_hours: matrixHoursLong, matrix_mode: 'trend' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...commonParams, n_hours: activeMatrixHours, matrix_mode: 'money_flow' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...commonParams, n_hours: activeMatrixHoursLong, matrix_mode: 'money_flow' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...commonParams, n_hours: activeMatrixHours, matrix_mode: 'trend' } }),
+        axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...commonParams, n_hours: activeMatrixHoursLong, matrix_mode: 'trend' } }),
         axios.get(`${API_BASE}/api/v1/matrix/session-stats`, {
           params: {
-            short_hours: matrixHours,
-            long_hours: matrixHoursLong,
-            vol_days: matrixVolDays,
+            short_hours: activeMatrixHours,
+            long_hours: activeMatrixHoursLong,
+            vol_days: activeMatrixVolDays,
             matrix_type: matrixType,
             end_time: simulatedTime || 0,
             brokerTimezone,
@@ -3589,9 +3618,9 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
           localStorage.setItem(`matrixCacheTime_${matrixType}`, Date.now().toString());
           localStorage.setItem(`matrixCacheSignature_${matrixType}`, cacheSignature);
       }
-      localStorage.setItem('currencyMatrixHours', matrixHours.toString());
-      localStorage.setItem('currencyMatrixHoursLong', matrixHoursLong.toString());
-      localStorage.setItem('currencyMatrixVolDays', matrixVolDays.toString());
+      localStorage.setItem('currencyMatrixHours', activeMatrixHours.toString());
+      localStorage.setItem('currencyMatrixHoursLong', activeMatrixHoursLong.toString());
+      localStorage.setItem('currencyMatrixVolDays', activeMatrixVolDays.toString());
       localStorage.setItem('matrixType', matrixType);
     } catch (err) {
       console.error("Error fetching matrix:", err);
@@ -3601,15 +3630,16 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
   };
 
   const fetchMarketFlow = async (force = false) => {
-    if (force && onSaveMatrixSettings) onSaveMatrixSettings(matrixHours, matrixVolDays);
+    const { matrixHours: activeMatrixHours, matrixHoursLong: activeMatrixHoursLong, matrixVolDays: activeMatrixVolDays } = matrixSettingsRef.current;
+    if (force && saveMatrixSettingsRef.current) saveMatrixSettingsRef.current(activeMatrixHours, activeMatrixHoursLong, activeMatrixVolDays);
     setMarketFlowLoading(true);
     setMarketFlowError('');
     try {
       const res = await axios.get(`${API_BASE}/api/v1/matrix/market-flows`, {
         params: {
-          short_hours: matrixHours,
-          long_hours: matrixHoursLong,
-          vol_days: matrixVolDays,
+          short_hours: activeMatrixHours,
+          long_hours: activeMatrixHoursLong,
+          vol_days: activeMatrixVolDays,
           end_time: simulatedTime || 0,
           brokerTimezone,
           force
@@ -3625,14 +3655,15 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
   };
 
   const fetchDvpTrend = async (force = false) => {
-    if (force && onSaveMatrixSettings) onSaveMatrixSettings(matrixHours, matrixVolDays);
+    const { matrixHours: activeMatrixHours, matrixHoursLong: activeMatrixHoursLong, matrixVolDays: activeMatrixVolDays } = matrixSettingsRef.current;
+    if (force && saveMatrixSettingsRef.current) saveMatrixSettingsRef.current(activeMatrixHours, activeMatrixHoursLong, activeMatrixVolDays);
     setDvpTrendLoading(true);
     setDvpTrendError('');
     try {
       const res = await axios.get(`${API_BASE}/api/v1/matrix/dvp-trend`, {
         params: {
           matrix_type: matrixType,
-          vol_days: matrixVolDays,
+          vol_days: activeMatrixVolDays,
           end_time: simulatedTimeRef.current || 0,
           brokerTimezone,
           dvp_lookback_days: sessionSettings?.dvpLookbackDays,
@@ -3751,7 +3782,9 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         <input 
           type="number" 
           value={matrixHours} 
-          onChange={e => { const val = Number(e.target.value); setMatrixHours(val); localStorage.setItem('currencyMatrixHours', val.toString()); }}
+          min="1"
+          onChange={e => { const val = Number(e.target.value); setMatrixHours(val); if (val > 0) localStorage.setItem('currencyMatrixHours', val.toString()); }}
+          onBlur={persistMatrixSettings}
           style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '70px' }}
         />
         
@@ -3759,7 +3792,9 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         <input 
           type="number" 
           value={matrixHoursLong} 
-          onChange={e => { const val = Number(e.target.value); setMatrixHoursLong(val); localStorage.setItem('currencyMatrixHoursLong', val.toString()); }}
+          min="1"
+          onChange={e => { const val = Number(e.target.value); setMatrixHoursLong(val); if (val > 0) localStorage.setItem('currencyMatrixHoursLong', val.toString()); }}
+          onBlur={persistMatrixSettings}
           style={{ padding: '5px 10px', borderRadius: '5px', border: '1px solid #4b5563', background: '#374151', color: 'white', width: '70px' }}
         />
         
@@ -4344,7 +4379,7 @@ function AssetInfoModal({ symbol, timeframe, configs, viewMode, onClose }) {
   const matrixType = getMatrixTypeForSymbol(symbol);
   const canonicalSymbol = normalizeInfoSymbol(symbol);
   const matrixHours = Number(localStorage.getItem('currencyMatrixHours')) || Number(configs.matrixHours) || 24;
-  const matrixHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || 89;
+  const matrixHoursLong = Number(localStorage.getItem('currencyMatrixHoursLong')) || Number(configs.matrixHoursLong) || 89;
   const replayEndTime = viewMode === 'backtest' ? getClosedM5Cutoff(replayTimestamp) : 0;
 
   useEffect(() => {
@@ -4660,8 +4695,10 @@ function App() {
   
   const knownTriggeredRef = useRef(new Set());
 
-  const handleSaveMatrixSettings = (hours, volDays) => {
-    const newConfigs = { ...configs, matrixHours: hours, matrixVolDays: volDays };
+  const handleSaveMatrixSettings = (hours, hoursLong, volDays) => {
+    const newConfigs = { ...configs, matrixHours: hours, matrixHoursLong: hoursLong, matrixVolDays: volDays };
+    localStorage.setItem('currencyMatrixHours', String(hours));
+    localStorage.setItem('currencyMatrixHoursLong', String(hoursLong));
     setConfigs(newConfigs);
     axios.post(`${API_BASE}/api/v1/configs`, newConfigs)
       .catch(err => console.error("Error saving configs to backend", err));
@@ -4822,6 +4859,7 @@ function App() {
     maVolLength: 120,
     smaMomLength: 10,
     matrixHours: 24,
+    matrixHoursLong: 89,
     matrixVolDays: 30,
     volPct1: 85.0,
     volPct2: 75.0,
@@ -4997,7 +5035,7 @@ function App() {
       };
       const params = {
         short_hours: Number(localStorage.getItem('currencyMatrixHours')) || configs.matrixHours || 24,
-        long_hours: Number(localStorage.getItem('currencyMatrixHoursLong')) || 89,
+        long_hours: Number(localStorage.getItem('currencyMatrixHoursLong')) || configs.matrixHoursLong || 89,
         vol_days: configs.matrixVolDays || 30,
         matrix_type: matrixType,
         brokerTimezone: configs.brokerTimezone || 'Europe/Athens',
@@ -5078,7 +5116,7 @@ function App() {
       if (unlockTimer) clearTimeout(unlockTimer);
       window.removeEventListener('simulatedTimeChanged', fetchBubbleMatrix);
     };
-  }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixVolDays, configs.dvpLookbackDays, configs.vwapLength, configs.vwapMult, configs.pct1, configs.gridMode, configs.fixedPips, configs.rowCount, configs.timeoutHours, configs.asiaStart, configs.asiaEnd, configs.euroStart, configs.euroEnd, configs.preUsStart, configs.preUsEnd, configs.usStart, configs.usEnd, configs.autoDst, symbol]);
+  }, [showMatrixBubble, viewMode, configs.brokerTimezone, configs.matrixHours, configs.matrixHoursLong, configs.matrixVolDays, configs.dvpLookbackDays, configs.vwapLength, configs.vwapMult, configs.pct1, configs.gridMode, configs.fixedPips, configs.rowCount, configs.timeoutHours, configs.asiaStart, configs.asiaEnd, configs.euroStart, configs.euroEnd, configs.preUsStart, configs.preUsEnd, configs.usStart, configs.usEnd, configs.autoDst, symbol]);
 
   useEffect(() => {
     axios.get(`${API_BASE}/api/v1/symbols`)
@@ -5576,6 +5614,7 @@ function App() {
                 simulatedTime={null} 
                 brokerTimezone={configs.brokerTimezone || 'Europe/Athens'} 
                 initialMatrixHours={configs.matrixHours} 
+                initialMatrixHoursLong={configs.matrixHoursLong}
                 initialMatrixVolDays={configs.matrixVolDays} 
                 onSaveMatrixSettings={handleSaveMatrixSettings}
                 symbol={symbol}
