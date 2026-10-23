@@ -3456,6 +3456,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
   const [dvpTrendLoading, setDvpTrendLoading] = useState(false);
   const [dvpTrendError, setDvpTrendError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hasLoadedMatrix, setHasLoadedMatrix] = useState(false);
   const [progress, setProgress] = useState(0);
   const [matrixHours, setMatrixHours] = useState(() => getStoredPositiveMatrixHours('currencyMatrixHours') || Number(initialMatrixHours) || 24);
   const [matrixHoursLong, setMatrixHoursLong] = useState(() => getStoredPositiveMatrixHours('currencyMatrixHoursLong') || Number(initialMatrixHoursLong) || 89);
@@ -3581,6 +3582,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
               setSessionMatrixData(parsed.session);
               setLegacyPowerLong(parsed.powerLong);
               setLegacyPowerShort(parsed.powerShort);
+              setHasLoadedMatrix(true);
               return;
             }
         }
@@ -3612,6 +3614,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       setSessionMatrixData(sessionStats.data);
       setLegacyPowerLong(powerLong);
       setLegacyPowerShort(powerShort);
+      setHasLoadedMatrix(true);
       
       if (!simulatedTime) {
           localStorage.setItem(`matrixCache_${matrixType}`, JSON.stringify({ session: sessionStats.data, powerLong, powerShort }));
@@ -3721,7 +3724,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
   return (
     <div style={{ padding: '20px', display: 'flex', gap: '40px', color: 'var(--text-primary)', flexDirection: 'column', position: 'relative' }}>
       
-      {loading && matrixView === 'groups' && (
+      {loading && matrixView === 'groups' && !hasLoadedMatrix && (
         <div style={{
           position: 'absolute', top: '60px', left: 0, right: 0, bottom: 0,
           background: 'rgba(15, 23, 42, 0.7)', zIndex: 10,
@@ -3811,6 +3814,12 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
         >
           🔄 Tính lại / Làm mới
         </button>
+        {loading && matrixView === 'groups' && hasLoadedMatrix && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#fde68a', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.4)', borderRadius: '999px', padding: '4px 8px', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+            <span style={{ width: '11px', height: '11px', flex: '0 0 auto', boxSizing: 'border-box', border: '2px solid rgba(125,211,252,0.25)', borderTopColor: '#67e8f9', borderRadius: '50%', animation: 'spin 0.75s linear infinite' }} />
+            Đang cập nhật
+          </span>
+        )}
         <span style={{ fontSize: '12px', color: '#9ca3af', marginLeft: 'auto' }}>
           {matrixView === 'groups' ? '*Dữ liệu tự động lưu đệm (cache) trong 1 phút để tránh kẹt API.' : matrixView === 'market_flows' ? '*So sánh GI theo cùng cửa sổ và Vol days; dữ liệu tự làm mới mỗi 5 phút.' : '*Xếp hạng khoảng cách D-VP trong dải VWAP/SD; tự làm mới mỗi 5 phút.'}
         </span>
