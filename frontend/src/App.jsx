@@ -296,6 +296,20 @@ const getUsSessionEndChartTime = (latestChartTime, sessionConfig) => {
   return sessionEndUtc + timeShiftSeconds;
 };
 
+const getNextDayChartTimeAtHour = (latestChartTime, hour, sessionConfig) => {
+  if (!Number.isFinite(Number(latestChartTime)) || !Number.isFinite(Number(hour))) return null;
+
+  const timeShiftSeconds = (Number(sessionConfig?.timeShiftHours) || 0) * 3600;
+  const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
+  const latestUtc = Number(latestChartTime) - timeShiftSeconds;
+  const latestLocal = new Date((latestUtc + browserOffsetHours * 3600) * 1000);
+  const nextLocalDayStart = Date.UTC(
+    latestLocal.getUTCFullYear(), latestLocal.getUTCMonth(), latestLocal.getUTCDate() + 1
+  ) / 1000;
+
+  return nextLocalDayStart + Number(hour) * 3600 - browserOffsetHours * 3600 + timeShiftSeconds;
+};
+
 const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
   const momFlipDataRef = useRef([]);
   const [momFlipDataVersion, setMomFlipDataVersion] = useState(0);
@@ -780,8 +794,11 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       const usSessionEnd = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
         ? getUsSessionEndChartTime(currentTime, configs)
         : null;
+      const nextDayFourAm = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
+        ? getNextDayChartTimeAtHour(currentTime, 4, configs)
+        : null;
       const minimumFutureHorizon = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
-        ? currentTime + 12 * 60 * 60
+        ? Math.max(currentTime + 12 * 60 * 60, nextDayFourAm || currentTime)
         : currentTime;
       const timelineTargetTime = Math.max(
         maxFutureTime,
