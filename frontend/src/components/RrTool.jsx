@@ -93,7 +93,9 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
       place(stopDragRef.current, left, yStop - 7, width, 14);
       place(startHandleRef.current, left - 6, boxTop, 12, boxBottom - boxTop);
       place(endHandleRef.current, left + width - 6, boxTop, 12, boxBottom - boxTop);
-      place(moveHandleRef.current, left + width / 2 - 10, (boxTop + boxBottom) / 2 - 10, 20, 20);
+      // Keep the whole-box drag handle close to entry instead of centered
+      // between SL and TP, where it can be far away on a tall RR drawing.
+      place(moveHandleRef.current, left + width / 2 - 10, yEntry - 26, 20, 20);
       if (deleteHintRef.current) deleteHintRef.current.style.top = `${Math.min(targetTop, stopTop) - 20}px`;
       containerRef.current.style.visibility = 'visible';
     } catch (e) {
@@ -419,7 +421,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
       <div
         ref={moveHandleRef}
         title="Nhấn giữ và kéo để di chuyển toàn bộ RR"
-        style={{ position: 'absolute', zIndex: 54, pointerEvents: 'auto', cursor: 'move', borderRadius: '50%', border: '1px solid #67e8f9', background: 'rgba(8,47,73,0.92)', color: '#cffafe', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px', fontWeight: 700, boxShadow: '0 0 8px rgba(34,211,238,0.65)' }}
+        style={{ position: 'absolute', zIndex: 54, pointerEvents: 'auto', cursor: 'move', borderRadius: '50%', border: '1px solid #67e8f9', background: 'rgba(8,47,73,0.92)', color: '#cffafe', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px', fontWeight: 700, boxShadow: '0 0 8px rgba(34,211,238,0.65)', opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', transition: 'opacity 100ms ease' }}
         onMouseDown={startWholeMove}
         onContextMenu={openContextMenu}
       >✥</div>
