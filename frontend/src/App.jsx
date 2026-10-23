@@ -780,8 +780,12 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       const usSessionEnd = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
         ? getUsSessionEndChartTime(currentTime, configs)
         : null;
+      const minimumFutureHorizon = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
+        ? currentTime + 12 * 60 * 60
+        : currentTime;
       const timelineTargetTime = Math.max(
         maxFutureTime,
+        minimumFutureHorizon,
         usSessionEnd ? usSessionEnd + tfSec * 2 : currentTime
       );
       let requiredBars = Math.ceil((timelineTargetTime - currentTime) / tfSec);
