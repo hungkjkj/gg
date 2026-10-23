@@ -4,9 +4,10 @@ import smtplib
 import asyncio
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from runtime_paths import get_data_file
 
-ALERTS_FILE = os.path.join(os.path.dirname(__file__), "alerts.json")
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), "app_configs.json")
+ALERTS_FILE = get_data_file("alerts.json")
+CONFIG_FILE = get_data_file("app_configs.json")
 alerts_data = []
 
 def load_alerts():
@@ -39,7 +40,7 @@ def delete_alert(alert_id):
     alerts_data = [a for a in alerts_data if str(a.get("id")) != str(alert_id)]
     save_alerts()
 
-STRATEGIES_FILE = os.path.join(os.path.dirname(__file__), "strategies.json")
+STRATEGIES_FILE = get_data_file("strategies.json")
 strategies_data = []
 
 def load_strategies():

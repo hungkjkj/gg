@@ -10,6 +10,7 @@ import numpy as np
 from typing import List, Optional
 import concurrent.futures
 import threading
+from runtime_paths import get_data_file, get_data_dir, get_frontend_dist_dir
 
 # Nháº­p cÃ¡c hÃ m tá»« service MT5
 import mt5_service
@@ -79,9 +80,8 @@ import json
 def health_check():
     return {"status": "ok", "time": time.time()}
 
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), "app_configs.json")
-USER_DATA_ROOT = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), ".local", "share")
-TRADING_LOGS_FILE = os.path.join(USER_DATA_ROOT, "TOOL TRADE", "trading_logs.json")
+CONFIG_FILE = get_data_file("app_configs.json")
+TRADING_LOGS_FILE = os.path.join(get_data_dir(), "trading_logs.json")
 TRADING_LOGS_LOCK = threading.Lock()
 
 
@@ -2479,7 +2479,7 @@ def get_market_flow_matrix(
     return JSONResponse(content=_json_safe(result))
 
 # Serve Frontend SPA
-FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
+FRONTEND_DIST = get_frontend_dist_dir()
 if os.path.exists(FRONTEND_DIST):
     # Phá»¥c vá»¥ thÆ° má»¥c assets (CSS, JS)
     app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")

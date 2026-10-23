@@ -4,9 +4,11 @@ import time
 import requests
 import sys
 import os
+from pathlib import Path
 
-# Add backend directory to sys.path so modules can be found
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
+if not getattr(sys, "frozen", False):
+    # Add backend directory to sys.path for source/development runs.
+    sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend"))
 
 import socket
 
@@ -47,45 +49,85 @@ def check_server(url, health_url=None, process=None, timeout=60):
         time.sleep(0.5)
     return False
 
-if __name__ == '__main__':
+
+def show_startup_error(message):
+    if getattr(sys, "frozen", False) and os.name == "nt":
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, message, "TOOL TRADE MT5", 0x10)
+    else:
+        print(message)
+
+def run_app():
     # Bật server chạy trên một process riêng biệt để tránh kẹt giao diện UI
     print("Khởi động backend server trên tiến trình riêng...")
-    backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend")
+    packaged = getattr(sys, "frozen", False)
+    install_dir = Path(sys.executable).resolve().parent if packaged else Path(__file__).resolve().parent
+    backend_dir = install_dir / "backend"
     port = find_free_port()
     print(f"Cổng khả dụng: {port}")
-    backend_process = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
-        cwd=backend_dir
-    )
-    
+    if packaged:
+        backend_executable = backend_dir / "ToolTradeBackend.exe"
+        if not backend_executable.is_file():
+            show_startup_error(f"Không tìm thấy backend của ứng dụng tại:\n{backend_executable}\n\nHãy chạy lại bộ cài TOOL TRADE.")
+            return 1
+        launch_command = [str(backend_executable), str(port)]
+        environment = os.environ.copy()
+        local_app_data = environment.get("LOCALAPPDATA") or str(Path.home())
+        environment["TOOL_TRADE_DATA_DIR"] = str(Path(local_app_data) / "TOOL TRADE")
+        creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    else:
+        launch_command = [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"]
+        environment = None
+        creation_flags = 0
+
+    backend_process = None
     try:
+        backend_process = subprocess.Popen(
+            launch_command,
+            cwd=str(backend_dir),
+            env=environment,
+            creationflags=creation_flags,
+        )
         url = f"http://127.0.0.1:{port}/?_v={int(time.time())}"
         health_url = f"http://127.0.0.1:{port}/api/v1/health"
         print("Đang kiểm tra trạng thái khởi động backend...")
         
         if not check_server(url, health_url=health_url, process=backend_process, timeout=60):
-            print("Lỗi: Backend server không khởi động kịp thời gian quy định (Timeout 60s).")
-            backend_process.terminate()
-            sys.exit(1)
+            show_startup_error("Không khởi động được backend trong 60 giây. Hãy kiểm tra MT5 và thử mở lại ứng dụng.")
+            return 1
             
         print("Backend đã hoạt động! Đang mở cửa sổ ứng dụng Desktop...")
 
-        # Mở cửa sổ Desktop bằng pywebview
-        webview.create_window(
-            'TOOL TRADE MT5', 
-            url, 
-            width=1200, 
-            height=800,
-            min_size=(800, 600)
-        )
-        
-        # Bắt đầu vòng lặp sự kiện giao diện người dùng
-        webview.start()
+        try:
+            # Create and start the desktop window after the local backend is ready.
+            webview.create_window(
+                'TOOL TRADE MT5',
+                url,
+                width=1200,
+                height=800,
+                min_size=(800, 600)
+            )
+            webview.start()
+        except Exception as error:
+            show_startup_error(
+                "Không thể mở giao diện ứng dụng. Hãy đảm bảo Microsoft Edge WebView2 Runtime đã được cài đặt.\n\n"
+                f"Chi tiết: {error}"
+            )
+            return 1
+        return 0
+    except Exception as error:
+        show_startup_error(f"Không thể khởi động TOOL TRADE MT5.\n\nChi tiết: {error}")
+        return 1
     finally:
         # Tự động tắt server khi app đóng lại
-        print("Đang đóng ứng dụng, tắt tiến trình backend...")
-        backend_process.terminate()
-        try:
-            backend_process.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            backend_process.kill()
+        if backend_process and backend_process.poll() is None:
+            print("Đang đóng ứng dụng, tắt tiến trình backend...")
+            backend_process.terminate()
+            try:
+                backend_process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                backend_process.kill()
+
+
+if __name__ == '__main__':
+    sys.exit(run_app())

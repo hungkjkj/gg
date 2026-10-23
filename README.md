@@ -1,42 +1,30 @@
-# TOOL TRADE MT5 - Hướng Dẫn Sử Dụng
+# TOOL TRADE MT5
 
-Đây là hệ thống Tool Trade dựa trên nền tảng MetaTrader 5 (MT5). Hệ thống này đã được đóng gói thành một Ứng dụng Desktop độc lập (Desktop App) vô cùng tiện lợi và có thể dễ dàng chạy trên bất kỳ máy tính Windows nào.
+Ứng dụng phân tích giao dịch kết nối với MetaTrader 5, gồm giao diện desktop, biểu đồ, Currency Matrix, cảnh báo và các công cụ phân tích.
 
-## YÊU CẦU HỆ THỐNG
-1. Máy tính chạy hệ điều hành Windows.
-2. Đã cài đặt phần mềm **MetaTrader 5 (MT5)** và đang đăng nhập vào một tài khoản giao dịch.
-3. Đã cài đặt **Python 3.10** trở lên. 
-*(Nếu chưa có Python, vui lòng tải từ python.org và nhớ tick vào ô **"Add Python to PATH"** lúc cài đặt).*
+## Cài đặt trên máy Windows khác
 
----
+Máy chạy ứng dụng không cần cài Python hoặc Node.js. Tải và giải nén `TOOL-TRADE-Installer.zip`, sau đó chạy `Install.bat`. Bộ cài sẽ chép ứng dụng vào thư mục người dùng, tạo shortcut và cài Microsoft Edge WebView2 Runtime nếu máy còn thiếu và có kết nối Internet.
 
-## HƯỚNG DẪN CÀI ĐẶT
+Ứng dụng cần MetaTrader 5 của broker được cài riêng và đăng nhập tài khoản để lấy dữ liệu thị trường. Không gộp MT5 vào bộ cài vì mỗi broker có phiên bản terminal và máy chủ riêng. `EA/DataServer.mq5` chỉ là thành phần dự phòng tùy chọn.
 
-### Bước 1: Cài đặt Expert Advisor (EA) vào MT5
-Hệ thống sử dụng một EA có tên là `DataServer.mq5` làm phương án dự phòng (fallback) để xuất dữ liệu khi Python API bị lỗi.
-1. Mở phần mềm MT5 lên.
-2. Bấm vào menu **File -> Open Data Folder**.
-3. Truy cập vào thư mục `MQL5\Experts\`.
-4. Copy file `DataServer.mq5` từ thư mục `EA` của Tool Trade này và dán vào thư mục `Experts` vừa mở.
-5. Mở thẻ **Navigator** trong MT5 (bấm Ctrl+N), chuột phải vào mục **Expert Advisors** và chọn **Refresh**.
-6. Kéo thả EA `DataServer` vào bất kỳ biểu đồ nào trên MT5 để kích hoạt (chỉ cần chạy trên 1 biểu đồ là đủ). Đảm bảo nút "Algo Trading" trên thanh công cụ MT5 đang bật (màu xanh).
+Cài đặt, cảnh báo, chiến lược và nhật ký được lưu trong `%LOCALAPPDATA%\TOOL TRADE`.
 
-### Bước 2: Khởi động Tool Trade
-1. Đảm bảo MT5 vẫn đang mở và đang chạy.
-2. Click đúp chuột vào file `start.bat` trong thư mục Tool Trade này.
-3. Trong lần đầu tiên chạy, hệ thống sẽ mất khoảng 1-2 phút để tự động tải các thư viện cần thiết.
-4. Một cửa sổ phần mềm độc lập sẽ tự động bật lên hiển thị Biểu đồ và Tin tức.
+## Tạo bộ cài Windows
 
----
+Trên máy build Windows 64-bit, chạy PowerShell:
 
-## CÁC TÍNH NĂNG CHÍNH
-- **Đồng bộ với MT5:** Tự động nhận diện phần mềm MT5 đang chạy để trích xuất dữ liệu giá.
-- **Biểu đồ mượt mà:** Khả năng zoom, di chuyển mượt mà.
-- **Phân tích Khối lượng & Động lượng:** Chỉ báo tuỳ chỉnh dưới dạng heatmap, lưới điểm, và bộ lọc màu nến thông minh theo dòng tiền.
-- **Tin tức Forex Factory:** Tự động lấy tin tức và đính kèm trực tiếp lên trục thời gian của biểu đồ (hiển thị quả bóng tin tức).
-- **Tùy biến giờ giấc:** Bảng thông tin Settings cho phép người dùng nhập tay `timeShiftHours` để đồng bộ giờ sàn (Broker) về đúng giờ địa phương mong muốn.
+```powershell
+& .\packaging\build_windows.ps1
+```
 
----
+Script tự build giao diện, đóng gói frontend/backend thành ứng dụng độc lập và tạo:
 
-Chúc bạn giao dịch thành công!
-"# gg" 
+- `release/windows/TOOL-TRADE-Installer.zip` để chuyển sang máy khác.
+- `release/windows/TOOL-TRADE-Installer/` để chạy thử bộ cài trực tiếp.
+
+Máy build cần Node.js và Python 3.12; script sử dụng `.venv` hoặc tạo môi trường build riêng. Các yêu cầu này chỉ dành cho máy đóng gói, không dành cho máy cài ứng dụng.
+
+## Chạy từ mã nguồn
+
+Khi phát triển, backend chạy bằng Python/FastAPI và frontend bằng React/Vite. Dùng `Start_TKH.bat` để chạy backend theo cách hiện tại.
