@@ -7,6 +7,7 @@ import MarketFlowMatrix from './components/MarketFlowMatrix';
 import { computeCompositeRanking } from './utils/matrixUtils';
 import StrategyBuilderTab from './components/StrategyBuilderTab';
 import RrTool from './components/RrTool';
+import ChartDrawingOverlay from './components/ChartDrawingTools';
 import TradingLogPanel from './components/TradingLogPanel';
 import './index.css';
 
@@ -353,7 +354,113 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       closeContextMenu();
   };
   
-  const [rrTools, setRrTools] = useState([]);
+  const [rrToolsBySymbol, setRrToolsBySymbol] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('userChartRrTools') || '{}');
+      return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  const rrTools = rrToolsBySymbol[symbol] || [];
+
+  useEffect(() => {
+    try { localStorage.setItem('userChartRrTools', JSON.stringify(rrToolsBySymbol)); } catch (e) {}
+  }, [rrToolsBySymbol]);
+
+  const [chartDrawingsBySymbol, setChartDrawingsBySymbol] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('userChartDrawingTools') || '{}');
+      return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  const [chartDrawingMode, setChartDrawingMode] = useState(null);
+  const [hasPendingChartDrawingAnchor, setHasPendingChartDrawingAnchor] = useState(false);
+  const chartDrawingModeRef = useRef(null);
+  const pendingChartDrawingAnchorRef = useRef(null);
+  const currentChartDrawings = chartDrawingsBySymbol[symbol] || { fibonacci: [], percent: [] };
+  const visibleChartDrawings = [
+    ...(currentChartDrawings.fibonacci || []),
+    ...(currentChartDrawings.percent || []),
+  ];
+
+  const persistChartDrawings = updater => {
+    setChartDrawingsBySymbol(updater);
+  };
+
+  useEffect(() => {
+    try { localStorage.setItem('userChartDrawingTools', JSON.stringify(chartDrawingsBySymbol)); } catch (e) {}
+  }, [chartDrawingsBySymbol]);
+
+  const addChartDrawing = (type, start, end) => {
+    const key = type === 'fibonacci' ? 'fibonacci' : 'percent';
+    const drawing = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type,
+      start,
+      end,
+    };
+    const ownerSymbol = symbolRef.current;
+    persistChartDrawings(previous => {
+      const current = previous[ownerSymbol] || { fibonacci: [], percent: [] };
+      return {
+        ...previous,
+        [ownerSymbol]: { ...current, [key]: [...(current[key] || []), drawing] },
+      };
+    });
+  };
+
+  const deleteChartDrawing = id => {
+    const ownerSymbol = symbolRef.current;
+    persistChartDrawings(previous => {
+      const current = previous[ownerSymbol] || { fibonacci: [], percent: [] };
+      return {
+        ...previous,
+        [ownerSymbol]: {
+          ...current,
+          fibonacci: (current.fibonacci || []).filter(drawing => drawing.id !== id),
+          percent: (current.percent || []).filter(drawing => drawing.id !== id),
+        },
+      };
+    });
+  };
+
+  const clearChartDrawings = () => {
+    const ownerSymbol = symbolRef.current;
+    persistChartDrawings(previous => ({
+      ...previous,
+      [ownerSymbol]: { fibonacci: [], percent: [] },
+    }));
+  };
+
+  const toggleChartDrawingMode = mode => {
+    const nextMode = chartDrawingModeRef.current === mode ? null : mode;
+    chartDrawingModeRef.current = nextMode;
+    pendingChartDrawingAnchorRef.current = null;
+    setChartDrawingMode(nextMode);
+    setHasPendingChartDrawingAnchor(false);
+  };
+
+  useEffect(() => {
+    const cancelDrawing = event => {
+      if (event.key !== 'Escape' || !chartDrawingModeRef.current) return;
+      chartDrawingModeRef.current = null;
+      pendingChartDrawingAnchorRef.current = null;
+      setChartDrawingMode(null);
+      setHasPendingChartDrawingAnchor(false);
+    };
+    window.addEventListener('keydown', cancelDrawing);
+    return () => window.removeEventListener('keydown', cancelDrawing);
+  }, []);
+
+  useEffect(() => {
+    chartDrawingModeRef.current = null;
+    pendingChartDrawingAnchorRef.current = null;
+    setChartDrawingMode(null);
+    setHasPendingChartDrawingAnchor(false);
+  }, [symbol, timeframe]);
 
   const addRrTool = (type, price, logical, time) => {
     const offset = price * 0.002;
@@ -371,15 +478,27 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       logical: logical || 0,
       endLogical: (logical || 0) + 20
     };
-    setRrTools(prev => [...prev, newTool]);
+    const ownerSymbol = symbolRef.current;
+    setRrToolsBySymbol(previous => ({
+      ...previous,
+      [ownerSymbol]: [...(previous[ownerSymbol] || []), newTool],
+    }));
   };
 
   const updateRrTool = (id, updates) => {
-    setRrTools(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    const ownerSymbol = symbolRef.current;
+    setRrToolsBySymbol(previous => ({
+      ...previous,
+      [ownerSymbol]: (previous[ownerSymbol] || []).map(t => t.id === id ? { ...t, ...updates } : t),
+    }));
   };
 
   const deleteRrTool = (id) => {
-    setRrTools(prev => prev.filter(t => t.id !== id));
+    const ownerSymbol = symbolRef.current;
+    setRrToolsBySymbol(previous => ({
+      ...previous,
+      [ownerSymbol]: (previous[ownerSymbol] || []).filter(t => t.id !== id),
+    }));
   };
 
   const [customAlertModal, setCustomAlertModal] = useState(null);
@@ -1219,6 +1338,34 @@ useEffect(() => {
       };
 
       chart.subscribeClick((param) => {
+        const drawingMode = chartDrawingModeRef.current;
+        if (drawingMode) {
+          if (!param.point || !candlestickSeriesRef.current) return;
+          const price = candlestickSeriesRef.current.coordinateToPrice(param.point.y);
+          const timeScale = chart.timeScale();
+          const rawTime = param.time ?? timeScale.coordinateToTime(param.point.x);
+          const time = typeof rawTime === 'number'
+            ? Math.floor(rawTime)
+            : rawTime && typeof rawTime === 'object'
+              ? Math.floor(Date.UTC(rawTime.year, rawTime.month - 1, rawTime.day) / 1000)
+              : null;
+          const logical = timeScale.coordinateToLogical(param.point.x);
+          if (!Number.isFinite(price) || !Number.isFinite(time)) return;
+          const anchor = { time, price, logical: Number.isFinite(logical) ? logical : 0 };
+          const start = pendingChartDrawingAnchorRef.current;
+          if (!start) {
+            pendingChartDrawingAnchorRef.current = anchor;
+            setHasPendingChartDrawingAnchor(true);
+          } else {
+            addChartDrawing(drawingMode, start, anchor);
+            pendingChartDrawingAnchorRef.current = null;
+            chartDrawingModeRef.current = null;
+            setHasPendingChartDrawingAnchor(false);
+            setChartDrawingMode(null);
+          }
+          return;
+        }
+
         // Xử lý click cho quả bóng tin tức
         if (param.time && newsDataRef.current) {
           const events = newsDataRef.current.filter(ev => ev.time === param.time);
@@ -3057,6 +3204,40 @@ useEffect(() => {
         {/* Main Chart */}
         <div style={{ flex: 3, position: 'relative', width: '100%', overflow: 'hidden' }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
+          <div style={{ position: 'absolute', top: '10px', right: '12px', zIndex: 14, display: 'flex', alignItems: 'center', gap: '6px', padding: '5px', borderRadius: '8px', border: '1px solid rgba(34,211,238,0.25)', background: 'rgba(2,6,23,0.9)', boxShadow: '0 4px 14px rgba(0,0,0,0.28)', pointerEvents: 'auto' }}>
+            <span style={{ padding: '0 4px', color: '#94a3b8', fontSize: '10px', fontWeight: 700, whiteSpace: 'nowrap' }}>Vẽ</span>
+            {[
+              { mode: 'fibonacci', label: 'Fibo', title: 'Vẽ Fibonacci retracement bằng hai lần bấm' },
+              { mode: 'percent', label: 'Đo %', title: 'Đo thay đổi giá và phần trăm bằng hai lần bấm' },
+            ].map(option => (
+              <button
+                key={option.mode}
+                type="button"
+                aria-pressed={chartDrawingMode === option.mode}
+                title={option.title}
+                onClick={() => toggleChartDrawingMode(option.mode)}
+                style={{ padding: '5px 9px', borderRadius: '6px', border: `1px solid ${chartDrawingMode === option.mode ? '#22d3ee' : 'rgba(148,163,184,0.28)'}`, background: chartDrawingMode === option.mode ? 'rgba(8,145,178,0.3)' : 'rgba(15,23,42,0.8)', color: chartDrawingMode === option.mode ? '#67e8f9' : '#cbd5e1', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                {option.label}
+              </button>
+            ))}
+            {visibleChartDrawings.length > 0 && (
+              <button type="button" title="Xóa toàn bộ bản vẽ của tài sản này" onClick={clearChartDrawings} style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid rgba(251,113,133,0.4)', background: 'rgba(127,29,29,0.22)', color: '#fda4af', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>Xóa</button>
+            )}
+          </div>
+          {chartDrawingMode && (
+            <div style={{ position: 'absolute', top: '52px', right: '12px', zIndex: 14, padding: '6px 9px', border: '1px solid rgba(34,211,238,0.28)', borderRadius: '6px', background: 'rgba(2,6,23,0.9)', color: '#bae6fd', fontSize: '10px', pointerEvents: 'none' }}>
+              {hasPendingChartDrawingAnchor ? 'Bấm điểm kết thúc · Esc để hủy' : 'Bấm điểm bắt đầu trên chart · Esc để hủy'}
+            </div>
+          )}
+          <ChartDrawingOverlay
+            chart={chartReady ? chartRef.current : null}
+            series={candlestickSeriesRef.current}
+            drawings={visibleChartDrawings}
+            symbol={symbol}
+            lastUpdateSignal={lastUpdateSignal}
+            onDelete={deleteChartDrawing}
+          />
           <div ref={sessionSdTooltipRef} style={{ display: 'none', position: 'absolute', zIndex: 12, pointerEvents: 'none', padding: '5px 8px', border: '1px solid', borderRadius: '6px', background: 'rgba(2, 6, 23, 0.94)', fontSize: '11px', fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }} />
           {(currentSdPosition !== null || currentSessionSdPosition !== null || sessionSdPositions.length > 0) && (viewMode !== 'backtest' || simulatedTimeRef.current > 0) && (
             <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 8, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '5px', pointerEvents: 'auto' }}>
