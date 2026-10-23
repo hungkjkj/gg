@@ -774,8 +774,17 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       if (!currentTime || currentTime === 0) currentTime = baseTime;
       currentTime = currentTime - (currentTime % tfSec);
       
-      // Calculate how many bars we need to reach maxFutureTime, minimum 150
-      let requiredBars = Math.ceil((maxFutureTime - currentTime) / tfSec);
+      // Keep enough future timeline points to interpolate projected session
+      // boxes as well as news markers. On M1, the 150-bar minimum is only 2.5h
+      // and can end before the configured US session closes.
+      const usSessionEnd = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
+        ? getUsSessionEndChartTime(currentTime, configs)
+        : null;
+      const timelineTargetTime = Math.max(
+        maxFutureTime,
+        usSessionEnd ? usSessionEnd + tfSec * 2 : currentTime
+      );
+      let requiredBars = Math.ceil((timelineTargetTime - currentTime) / tfSec);
       if (requiredBars < 150) requiredBars = 150;
       
       const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
