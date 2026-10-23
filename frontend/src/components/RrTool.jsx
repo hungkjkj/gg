@@ -3,8 +3,10 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestContextMenu }) => {
   const containerRef = useRef(null);
   const targetBoxRef = useRef(null);
+  const targetDragRef = useRef(null);
   const entryLineRef = useRef(null);
   const stopBoxRef = useRef(null);
+  const stopDragRef = useRef(null);
   const startHandleRef = useRef(null);
   const endHandleRef = useRef(null);
   const moveHandleRef = useRef(null);
@@ -85,6 +87,10 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
       place(targetBoxRef.current, left, targetTop, width, targetBottom - targetTop);
       place(entryLineRef.current, left, yEntry - 2, width, 4);
       place(stopBoxRef.current, left, stopTop, width, stopBottom - stopTop);
+      // Give the SL/TP boundaries a generous hit area so users can drag the
+      // price levels directly without accidentally moving the whole RR box.
+      place(targetDragRef.current, left, yTarget - 7, width, 14);
+      place(stopDragRef.current, left, yStop - 7, width, 14);
       place(startHandleRef.current, left - 6, boxTop, 12, boxBottom - boxTop);
       place(endHandleRef.current, left + width - 6, boxTop, 12, boxBottom - boxTop);
       place(moveHandleRef.current, left + width / 2 - 10, (boxTop + boxBottom) / 2 - 10, 20, 20);
@@ -294,12 +300,11 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
           pointerEvents: 'auto',
           cursor: 'move'
         }}
-        title="Nhấn giữ và kéo để di chuyển RR; giữ Shift để chỉnh riêng Target"
+        title="Kéo phần thân để di chuyển toàn bộ RR; kéo đường Target để chỉnh mức chốt lời"
         onMouseDown={event => {
           event.stopPropagation();
           if (event.button !== 0) return;
-          if (event.shiftKey) setIsDragging('target');
-          else startWholeMove(event);
+          startWholeMove(event);
         }}
         onContextMenu={openContextMenu}
       >
@@ -318,7 +323,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
           cursor: 'move',
           zIndex: 51
         }}
-        title="Nhấn giữ và kéo để di chuyển RR; giữ Shift để chỉnh riêng điểm vào"
+        title="Kéo để di chuyển toàn bộ RR; giữ Shift để chỉnh riêng điểm vào"
         onMouseDown={event => {
           event.stopPropagation();
           if (event.button !== 0) return;
@@ -346,12 +351,11 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
           pointerEvents: 'auto',
           cursor: 'move'
         }}
-        title="Nhấn giữ và kéo để di chuyển RR; giữ Shift để chỉnh riêng Stop"
+        title="Kéo phần thân để di chuyển toàn bộ RR; kéo đường Stop để chỉnh mức dừng lỗ"
         onMouseDown={event => {
           event.stopPropagation();
           if (event.button !== 0) return;
-          if (event.shiftKey) setIsDragging('stop');
-          else startWholeMove(event);
+          startWholeMove(event);
         }}
         onContextMenu={openContextMenu}
       >
@@ -359,6 +363,30 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
           Stop: {tool.stopPrice.toFixed(5)}
         </div>
       </div>
+
+      {/* Dedicated, wider hit areas for the price boundaries. */}
+      <div
+        ref={targetDragRef}
+        title="Kéo để chỉnh riêng mức chốt lời (TP)"
+        style={{ position: 'absolute', zIndex: 52, pointerEvents: 'auto', cursor: 'ns-resize', background: 'transparent' }}
+        onMouseDown={event => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.button === 0) setIsDragging('target');
+        }}
+        onContextMenu={openContextMenu}
+      />
+      <div
+        ref={stopDragRef}
+        title="Kéo để chỉnh riêng mức dừng lỗ (SL)"
+        style={{ position: 'absolute', zIndex: 52, pointerEvents: 'auto', cursor: 'ns-resize', background: 'transparent' }}
+        onMouseDown={event => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.button === 0) setIsDragging('stop');
+        }}
+        onContextMenu={openContextMenu}
+      />
 
       {/* TIME RANGE HANDLES */}
       <div
