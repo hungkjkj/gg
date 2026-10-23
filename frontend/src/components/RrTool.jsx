@@ -95,7 +95,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
       place(endHandleRef.current, left + width - 6, boxTop, 12, boxBottom - boxTop);
       // Keep the whole-box drag handle close to entry instead of centered
       // between SL and TP, where it can be far away on a tall RR drawing.
-      place(moveHandleRef.current, left + width / 2 - 10, yEntry - 26, 20, 20);
+      place(moveHandleRef.current, left + width - 28, yEntry - 26, 20, 20);
       if (deleteHintRef.current) deleteHintRef.current.style.top = `${Math.min(targetTop, stopTop) - 20}px`;
       containerRef.current.style.visibility = 'visible';
     } catch (e) {
