@@ -3575,16 +3575,21 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       const cachedTime = localStorage.getItem(`matrixCacheTime_${matrixType}`);
       const cachedSignature = localStorage.getItem(`matrixCacheSignature_${matrixType}`);
       if (cached && cachedTime && cachedSignature === cacheSignature) {
-        const age = Date.now() - parseInt(cachedTime);
-        if (age < 60 * 1000) {
-            const parsed = JSON.parse(cached);
-            if (parsed.session && parsed.powerLong && parsed.powerShort) {
-              setSessionMatrixData(parsed.session);
-              setLegacyPowerLong(parsed.powerLong);
-              setLegacyPowerShort(parsed.powerShort);
-              setHasLoadedMatrix(true);
-              return;
-            }
+        try {
+          const age = Date.now() - parseInt(cachedTime, 10);
+          const parsed = JSON.parse(cached);
+          if (parsed.session && parsed.powerLong && parsed.powerShort) {
+            // Hydrate matching cached data even after its short freshness TTL.
+            // When revisiting this tab, keep the last usable matrix visible and
+            // show the compact refresh indicator while a new snapshot is fetched.
+            setSessionMatrixData(parsed.session);
+            setLegacyPowerLong(parsed.powerLong);
+            setLegacyPowerShort(parsed.powerShort);
+            setHasLoadedMatrix(true);
+            if (Number.isFinite(age) && age >= 0 && age < 60 * 1000) return;
+          }
+        } catch (error) {
+          console.warn('Could not restore cached currency matrix:', error);
         }
       }
     }
