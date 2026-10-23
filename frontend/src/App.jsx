@@ -260,6 +260,42 @@ const getTimeZoneOffsetMinutes = (timestamp, timeZone) => {
     }
 };
 
+// Return the displayed-chart timestamp for the configured US session close on
+// the latest candle's local day. This gives the live viewport enough room to
+// show the upcoming session preview instead of clipping it after a few bars.
+const getUsSessionEndChartTime = (latestChartTime, sessionConfig) => {
+  if (!Number.isFinite(Number(latestChartTime))) return null;
+
+  const timeShiftSeconds = (Number(sessionConfig?.timeShiftHours) || 0) * 3600;
+  const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
+  const latestUtc = Number(latestChartTime) - timeShiftSeconds;
+  const latestLocal = new Date((latestUtc + browserOffsetHours * 3600) * 1000);
+  const localDayStart = Date.UTC(
+    latestLocal.getUTCFullYear(), latestLocal.getUTCMonth(), latestLocal.getUTCDate()
+  ) / 1000;
+  const toMinutes = value => {
+    const [hours, minutes] = String(value).split(':').map(Number);
+    return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : NaN;
+  };
+  const startMinutes = toMinutes(sessionConfig?.usStart || '07:30');
+  const endMinutes = toMinutes(sessionConfig?.usEnd || '11:00');
+  const durationMinutes = (endMinutes - startMinutes + 1440) % 1440;
+  if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || durationMinutes <= 0) return null;
+
+  const approximateStartUtc = localDayStart + startMinutes * 60 - browserOffsetHours * 3600;
+  const dstShiftMinutes = sessionConfig?.autoDst === false
+    ? 0
+    : getTimeZoneOffsetMinutes(approximateStartUtc, 'America/New_York') - (-240);
+  const adjustedStartMinutes = (startMinutes - dstShiftMinutes + 1440) % 1440;
+  const adjustedEndMinutes = (endMinutes - dstShiftMinutes + 1440) % 1440;
+  const sessionStartUtc = localDayStart + adjustedStartMinutes * 60 - browserOffsetHours * 3600;
+  let sessionEndUtc = localDayStart + adjustedEndMinutes * 60 - browserOffsetHours * 3600;
+  if (sessionEndUtc <= sessionStartUtc) sessionEndUtc += 24 * 3600;
+  if (sessionEndUtc <= latestUtc) return null;
+
+  return sessionEndUtc + timeShiftSeconds;
+};
+
 const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
   const momFlipDataRef = useRef([]);
   const [momFlipDataVersion, setMomFlipDataVersion] = useState(0);
@@ -1998,11 +2034,15 @@ useEffect(() => {
             const visibleBars = 50;
             const futureBars = 5;
             const timeframeSeconds = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
-            const startIndex = Math.max(0, data.length - visibleBars + futureBars);
             const latestTime = data[data.length - 1].time;
+            const startIndex = Math.max(0, data.length - visibleBars);
+            const defaultTo = latestTime + timeframeSeconds * futureBars;
+            const usSessionEnd = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
+              ? getUsSessionEndChartTime(latestTime, configsRef.current)
+              : null;
             const range = {
                 from: data[startIndex].time,
-                to: latestTime + timeframeSeconds * futureBars,
+                to: Math.max(defaultTo, usSessionEnd ? usSessionEnd + timeframeSeconds * 2 : latestTime + 1),
             };
 
             chartRef.current.timeScale().setVisibleRange(range);
@@ -2856,12 +2896,15 @@ useEffect(() => {
             const tfSec = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
             const getLatestViewportRange = (futureCount = futureBars) => {
                 if (totalCandles === 0) return null;
-                const startIndex = Math.max(0, totalCandles - visibleBars + futureCount);
+                const startIndex = Math.max(0, totalCandles - visibleBars);
                 const latestCandleTime = candlePoints[totalCandles - 1].time;
-                const futureTime = viewportFutureTimes[futureCount - 1]?.time || latestCandleTime + tfSec * futureCount;
+                const defaultFutureTime = viewportFutureTimes[futureCount - 1]?.time || latestCandleTime + tfSec * futureCount;
+                const usSessionEnd = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
+                  ? getUsSessionEndChartTime(latestCandleTime, configsRef.current)
+                  : null;
                 return {
                     from: candlePoints[startIndex].time,
-                    to: Math.max(futureTime, latestCandleTime + 1),
+                    to: Math.max(defaultFutureTime, usSessionEnd ? usSessionEnd + tfSec * 2 : latestCandleTime + 1),
                 };
             };
 
