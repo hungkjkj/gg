@@ -311,7 +311,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
         }}
         onContextMenu={openContextMenu}
       >
-        <div style={{ position: 'absolute', top: '-25px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(8, 153, 129, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap', opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', pointerEvents: 'none', transition: 'opacity 100ms ease' }}>
+        <div style={{ position: 'absolute', top: '-34px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(8, 153, 129, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap', opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', pointerEvents: 'none', transition: 'opacity 100ms ease' }}>
           Target: {tool.targetPrice.toFixed(5)}
         </div>
       </div>
@@ -363,7 +363,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
         }}
         onContextMenu={openContextMenu}
       >
-        <div style={{ position: 'absolute', bottom: '-25px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(242, 54, 69, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap', opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', pointerEvents: 'none', transition: 'opacity 100ms ease' }}>
+        <div style={{ position: 'absolute', bottom: '-34px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(242, 54, 69, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap', opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', pointerEvents: 'none', transition: 'opacity 100ms ease' }}>
           Stop: {tool.stopPrice.toFixed(5)}
         </div>
       </div>
