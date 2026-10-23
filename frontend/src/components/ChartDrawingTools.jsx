@@ -23,6 +23,7 @@ export const ChartDrawingOverlay = ({ chart, series, drawings = [], symbol, last
   // pan, zoom, resize, or chart data update.
   const [, setLayoutRevision] = useState(0);
   const [dragging, setDragging] = useState(null);
+  const [hoveredDrawingId, setHoveredDrawingId] = useState(null);
   const latestPropsRef = useRef({ chart, series, onUpdate });
   latestPropsRef.current = { chart, series, onUpdate };
 
@@ -242,13 +243,17 @@ export const ChartDrawingOverlay = ({ chart, series, drawings = [], symbol, last
           const boxWidth = Math.max(2, Math.abs(end.x - start.x));
           const boxHeight = Math.max(2, Math.abs(end.y - start.y));
           const labelWidth = 168;
-          const labelX = Math.max(2, Math.min(width - labelWidth - 2, right + 8));
-          const labelY = Math.max(4, Math.min(height - 38, end.y - 18));
+          const labelX = left + (boxWidth - labelWidth) / 2;
+          const labelY = top + (boxHeight - 34) / 2;
           const bars = Math.abs(Number(drawing.end.logical || 0) - Number(drawing.start.logical || 0));
           const signedPercent = `${percent > 0 ? '+' : ''}${percent.toFixed(2)}%`;
           const signedDelta = `${delta > 0 ? '+' : ''}${formatPrice(delta, symbol)}`;
           return (
-            <g key={drawing.id}>
+            <g
+              key={drawing.id}
+              onMouseEnter={() => setHoveredDrawingId(drawing.id)}
+              onMouseLeave={() => setHoveredDrawingId(current => current === drawing.id ? null : current)}
+            >
               <rect
                 x={left} y={top} width={boxWidth} height={boxHeight}
                 fill={color} fillOpacity="0.12" stroke={color} strokeWidth="1.2" strokeDasharray="5 3"
@@ -263,19 +268,20 @@ export const ChartDrawingOverlay = ({ chart, series, drawings = [], symbol, last
                 onMouseDown={event => handleMoveStart(event, drawing)}
                 onContextMenu={event => handleOpenContextMenu(event, drawing)}
               />
-              <rect
-                x={labelX} y={labelY} width={labelWidth} height="34" rx="5"
-                fill="rgba(2,6,23,0.93)" stroke={color}
-                style={{ pointerEvents: 'all', cursor: 'move' }}
-                onMouseDown={event => handleMoveStart(event, drawing)}
-                onContextMenu={event => handleOpenContextMenu(event, drawing)}
-              />
-              <text x={labelX + 7} y={labelY + 14} fill={color} fontSize="11" fontWeight="700" fontFamily="sans-serif" pointerEvents="none">
-                {`${signedPercent}  (Δ ${signedDelta})`}
-              </text>
-              <text x={labelX + 7} y={labelY + 27} fill="#cbd5e1" fontSize="9" fontFamily="sans-serif" pointerEvents="none">
-                {`${bars.toFixed(0)} nến · ${formatPrice(drawing.start.price, symbol)} → ${formatPrice(drawing.end.price, symbol)}`}
-              </text>
+              {hoveredDrawingId === drawing.id && (
+                <g pointerEvents="none">
+                  <rect
+                    x={labelX} y={labelY} width={labelWidth} height="34" rx="5"
+                    fill="rgba(2,6,23,0.93)" stroke={color}
+                  />
+                  <text x={labelX + 7} y={labelY + 14} fill={color} fontSize="11" fontWeight="700" fontFamily="sans-serif">
+                    {`${signedPercent}  (Δ ${signedDelta})`}
+                  </text>
+                  <text x={labelX + 7} y={labelY + 27} fill="#cbd5e1" fontSize="9" fontFamily="sans-serif">
+                    {`${bars.toFixed(0)} nến · ${formatPrice(drawing.start.price, symbol)} → ${formatPrice(drawing.end.price, symbol)}`}
+                  </text>
+                </g>
+              )}
               {renderAnchorHandle(drawing, 'start', start, color)}
               {renderAnchorHandle(drawing, 'end', end, color)}
             </g>
