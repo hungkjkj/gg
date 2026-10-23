@@ -592,7 +592,6 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const askPriceLineRef = useRef(null);
   
   const savedTimeRangeRef = useRef(null);
-  const savedViewportAtLatestRef = useRef(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const isScrolledRef = useRef(false);
   
@@ -2148,20 +2147,16 @@ useEffect(() => {
         const hasPreviousCandles = previousCandles.some(item => Number.isFinite(item.close));
         if (resetViewport) {
             savedTimeRangeRef.current = null;
-            savedViewportAtLatestRef.current = null;
         } else if (hasPreviousCandles && chartRef.current) {
             try {
                 savedTimeRangeRef.current = chartRef.current.timeScale().getVisibleRange();
-                savedViewportAtLatestRef.current = !isScrolledRef.current;
             } catch (e) {
                 console.error("Không thể lấy Viewport hiện tại:", e);
                 savedTimeRangeRef.current = null;
-                savedViewportAtLatestRef.current = null;
             }
         } else {
             // Không khôi phục viewport rỗng của chart khi app vừa mở.
             savedTimeRangeRef.current = null;
-            savedViewportAtLatestRef.current = null;
         }
     }
 
@@ -2927,18 +2922,20 @@ useEffect(() => {
             } else if (savedTimeRangeRef.current) {
                 try {
                     let rangeToRestore = savedTimeRangeRef.current;
+                    const latestCandleTime = totalCandles > 0 ? candlePoints[totalCandles - 1].time : 0;
+                    const savedToTime = typeof rangeToRestore.to === 'object'
+                      ? Date.UTC(rangeToRestore.to.year, rangeToRestore.to.month - 1, rangeToRestore.to.day) / 1000
+                      : Number(rangeToRestore.to);
+                    const savedViewportIncludesLatest = Number.isFinite(savedToTime) &&
+                      savedToTime >= latestCandleTime - tfSec * 5;
                     if (
-                      savedViewportAtLatestRef.current &&
+                      savedViewportIncludesLatest &&
                       viewMode === 'chart' &&
                       !['D1', 'W1', 'MN1'].includes(timeframe) &&
                       totalCandles > 0
                     ) {
-                      const latestCandleTime = candlePoints[totalCandles - 1].time;
                       const usSessionEnd = getUsSessionEndChartTime(latestCandleTime, configsRef.current);
                       if (usSessionEnd) {
-                        const savedToTime = typeof rangeToRestore.to === 'object'
-                          ? Date.UTC(rangeToRestore.to.year, rangeToRestore.to.month - 1, rangeToRestore.to.day) / 1000
-                          : Number(rangeToRestore.to);
                         if (Number.isFinite(savedToTime)) {
                           rangeToRestore = {
                             ...rangeToRestore,
@@ -2993,7 +2990,6 @@ useEffect(() => {
             
             // Xóa bộ nhớ tạm viewport sau khi đã áp dụng xong
             savedTimeRangeRef.current = null;
-            savedViewportAtLatestRef.current = null;
           }
         }
         
