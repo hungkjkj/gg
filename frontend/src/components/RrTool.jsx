@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
-const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) => {
+const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestContextMenu }) => {
   const containerRef = useRef(null);
   const targetBoxRef = useRef(null);
   const entryLineRef = useRef(null);
   const stopBoxRef = useRef(null);
   const startHandleRef = useRef(null);
   const endHandleRef = useRef(null);
+  const moveHandleRef = useRef(null);
   const deleteHintRef = useRef(null);
   const frameRef = useRef(null);
   const latestPropsRef = useRef({ tool, chart, series, onUpdate });
@@ -86,6 +87,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
       place(stopBoxRef.current, left, stopTop, width, stopBottom - stopTop);
       place(startHandleRef.current, left - 6, boxTop, 12, boxBottom - boxTop);
       place(endHandleRef.current, left + width - 6, boxTop, 12, boxBottom - boxTop);
+      place(moveHandleRef.current, left + width / 2 - 10, (boxTop + boxBottom) / 2 - 10, 20, 20);
       if (deleteHintRef.current) deleteHintRef.current.style.top = `${Math.min(targetTop, stopTop) - 20}px`;
       containerRef.current.style.visibility = 'visible';
     } catch (e) {
@@ -133,6 +135,49 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
     const handleMouseMove = event => {
       const current = latestPropsRef.current;
       const rect = chart.chartElement().getBoundingClientRect();
+      if (typeof isDragging === 'object' && isDragging.type === 'move') {
+        const timeScale = chart.timeScale();
+        const pointerLogical = timeScale.coordinateToLogical(event.clientX - rect.left);
+        const pointerPrice = series.coordinateToPrice(event.clientY - rect.top);
+        if (pointerLogical == null || pointerPrice == null) return;
+
+        const original = isDragging.toolSnapshot;
+        const originalStartLogical = Number.isFinite(original.logical)
+          ? original.logical
+          : timeScale.coordinateToLogical(timeScale.timeToCoordinate(original.time));
+        const originalEndLogical = Number.isFinite(original.endLogical)
+          ? original.endLogical
+          : timeScale.coordinateToLogical(timeScale.timeToCoordinate(original.endTime));
+        if (!Number.isFinite(originalStartLogical) || !Number.isFinite(originalEndLogical)) return;
+
+        const deltaLogical = Math.round(pointerLogical) - isDragging.initialLogical;
+        const startLogical = Math.round(originalStartLogical + deltaLogical);
+        const endLogical = Math.round(originalEndLogical + deltaLogical);
+        const getTime = logical => {
+          const x = timeScale.logicalToCoordinate(logical);
+          const rawTime = x == null ? null : timeScale.coordinateToTime(x);
+          if (typeof rawTime === 'number') return Math.floor(rawTime);
+          if (rawTime && typeof rawTime === 'object') return Math.floor(Date.UTC(rawTime.year, rawTime.month - 1, rawTime.day) / 1000);
+          return null;
+        };
+        const time = getTime(startLogical);
+        const endTime = getTime(endLogical);
+        if (time == null || endTime == null) return;
+
+        const deltaPrice = pointerPrice - isDragging.initialPrice;
+        current.onUpdate(current.tool.id, {
+          time,
+          endTime,
+          logical: startLogical,
+          endLogical,
+          barsCount: Math.max(1, endLogical - startLogical),
+          entryPrice: original.entryPrice + deltaPrice,
+          targetPrice: original.targetPrice + deltaPrice,
+          stopPrice: original.stopPrice + deltaPrice,
+        });
+        return;
+      }
+
       if (isDragging === 'start' || isDragging === 'end') {
         const timeScale = chart.timeScale();
         const pointerX = event.clientX - rect.left;
@@ -202,6 +247,23 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
   const risk = Math.abs(tool.entryPrice - tool.stopPrice);
   const reward = Math.abs(tool.targetPrice - tool.entryPrice);
   const rrRatio = risk > 0 ? (reward / risk).toFixed(2) : '∞';
+  const startWholeMove = event => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!chart || !series) return;
+    const rect = chart.chartElement().getBoundingClientRect();
+    const timeScale = chart.timeScale();
+    const initialLogical = timeScale.coordinateToLogical(event.clientX - rect.left);
+    const initialPrice = series.coordinateToPrice(event.clientY - rect.top);
+    if (initialLogical == null || initialPrice == null) return;
+    setIsDragging({ type: 'move', initialLogical: Math.round(initialLogical), initialPrice, toolSnapshot: tool });
+  };
+  const openContextMenu = event => {
+    event.preventDefault();
+    event.stopPropagation();
+    onRequestContextMenu?.(event, tool);
+  };
 
   return (
     <div
@@ -230,10 +292,16 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
           borderLeft: '1px solid rgba(8, 153, 129, 0.3)',
           borderRight: '1px solid rgba(8, 153, 129, 0.3)',
           pointerEvents: 'auto',
-          cursor: 'pointer'
+          cursor: 'move'
         }}
-        onMouseDown={event => { event.stopPropagation(); setIsDragging('target'); }}
-        onContextMenu={event => { event.preventDefault(); onDelete(); }}
+        title="Nhấn giữ và kéo để di chuyển RR; giữ Shift để chỉnh riêng Target"
+        onMouseDown={event => {
+          event.stopPropagation();
+          if (event.button !== 0) return;
+          if (event.shiftKey) setIsDragging('target');
+          else startWholeMove(event);
+        }}
+        onContextMenu={openContextMenu}
       >
         <div style={{ position: 'absolute', top: '-25px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(8, 153, 129, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap', opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', pointerEvents: 'none', transition: 'opacity 100ms ease' }}>
           Target: {tool.targetPrice.toFixed(5)}
@@ -247,11 +315,17 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
           position: 'absolute',
           background: 'transparent',
           pointerEvents: 'auto',
-          cursor: 'ns-resize',
+          cursor: 'move',
           zIndex: 51
         }}
-        onMouseDown={event => { event.stopPropagation(); setIsDragging('entry'); }}
-        onContextMenu={event => { event.preventDefault(); onDelete(); }}
+        title="Nhấn giữ và kéo để di chuyển RR; giữ Shift để chỉnh riêng điểm vào"
+        onMouseDown={event => {
+          event.stopPropagation();
+          if (event.button !== 0) return;
+          if (event.shiftKey) setIsDragging('entry');
+          else startWholeMove(event);
+        }}
+        onContextMenu={openContextMenu}
       >
         <div style={{ position: 'absolute', top: 2, left: 0, width: '100%', height: '1px', background: 'rgba(120, 123, 134, 1)' }} />
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(30, 34, 45, 0.9)', color: 'white', border: '1px solid #787b86', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap', zIndex: 52, opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', pointerEvents: 'none', transition: 'opacity 100ms ease' }}>
@@ -270,10 +344,16 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
           borderLeft: '1px solid rgba(242, 54, 69, 0.3)',
           borderRight: '1px solid rgba(242, 54, 69, 0.3)',
           pointerEvents: 'auto',
-          cursor: 'pointer'
+          cursor: 'move'
         }}
-        onMouseDown={event => { event.stopPropagation(); setIsDragging('stop'); }}
-        onContextMenu={event => { event.preventDefault(); onDelete(); }}
+        title="Nhấn giữ và kéo để di chuyển RR; giữ Shift để chỉnh riêng Stop"
+        onMouseDown={event => {
+          event.stopPropagation();
+          if (event.button !== 0) return;
+          if (event.shiftKey) setIsDragging('stop');
+          else startWholeMove(event);
+        }}
+        onContextMenu={openContextMenu}
       >
         <div style={{ position: 'absolute', bottom: '-25px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(242, 54, 69, 0.9)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', whiteSpace: 'nowrap', opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', pointerEvents: 'none', transition: 'opacity 100ms ease' }}>
           Stop: {tool.stopPrice.toFixed(5)}
@@ -285,7 +365,8 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
         ref={startHandleRef}
         title="Kéo để đổi thời điểm bắt đầu"
         style={{ position: 'absolute', zIndex: 53, pointerEvents: 'auto', cursor: 'ew-resize', background: 'rgba(56, 189, 248, 0.08)' }}
-        onMouseDown={event => { event.stopPropagation(); setIsDragging('start'); }}
+        onMouseDown={event => { event.stopPropagation(); if (event.button === 0) setIsDragging('start'); }}
+        onContextMenu={openContextMenu}
       >
         <div style={{ position: 'absolute', top: '50%', left: '50%', width: '4px', height: '28px', transform: 'translate(-50%, -50%)', borderRadius: '3px', background: '#38bdf8', boxShadow: '0 0 8px rgba(56,189,248,0.9)', pointerEvents: 'none' }} />
       </div>
@@ -293,13 +374,22 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onDelete, onUpdate }) =
         ref={endHandleRef}
         title="Kéo để đổi thời điểm kết thúc"
         style={{ position: 'absolute', zIndex: 53, pointerEvents: 'auto', cursor: 'ew-resize', background: 'rgba(56, 189, 248, 0.08)' }}
-        onMouseDown={event => { event.stopPropagation(); setIsDragging('end'); }}
+        onMouseDown={event => { event.stopPropagation(); if (event.button === 0) setIsDragging('end'); }}
+        onContextMenu={openContextMenu}
       >
         <div style={{ position: 'absolute', top: '50%', left: '50%', width: '4px', height: '28px', transform: 'translate(-50%, -50%)', borderRadius: '3px', background: '#38bdf8', boxShadow: '0 0 8px rgba(56,189,248,0.9)', pointerEvents: 'none' }} />
       </div>
 
+      <div
+        ref={moveHandleRef}
+        title="Nhấn giữ và kéo để di chuyển toàn bộ RR"
+        style={{ position: 'absolute', zIndex: 54, pointerEvents: 'auto', cursor: 'move', borderRadius: '50%', border: '1px solid #67e8f9', background: 'rgba(8,47,73,0.92)', color: '#cffafe', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px', fontWeight: 700, boxShadow: '0 0 8px rgba(34,211,238,0.65)' }}
+        onMouseDown={startWholeMove}
+        onContextMenu={openContextMenu}
+      >✥</div>
+
       <div ref={deleteHintRef} style={{ position: 'absolute', right: 0, background: 'rgba(0,0,0,0.5)', color: '#ccc', fontSize: '9px', padding: '1px 3px', pointerEvents: 'none', opacity: isHovered ? 1 : 0, visibility: isHovered ? 'visible' : 'hidden', transition: 'opacity 100ms ease' }}>
-        Right-click to delete
+        Nhấp phải để sao chép hoặc xóa
       </div>
     </div>
   );

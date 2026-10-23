@@ -316,6 +316,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   }, [symbol, timeframe]);
   
   const [contextMenu, setContextMenu] = useState(null);
+  const [drawingActionMenu, setDrawingActionMenu] = useState(null);
   
   const [drawnLines, setDrawnLines] = useState(() => {
      try { return JSON.parse(localStorage.getItem('userDrawnLines')) || []; }
@@ -412,7 +413,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     });
   };
 
-  const deleteChartDrawing = id => {
+  const updateChartDrawing = (id, updates) => {
     const ownerSymbol = symbolRef.current;
     persistChartDrawings(previous => {
       const current = previous[ownerSymbol] || { fibonacci: [], percent: [] };
@@ -420,27 +421,41 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
         ...previous,
         [ownerSymbol]: {
           ...current,
-          fibonacci: (current.fibonacci || []).filter(drawing => drawing.id !== id),
-          percent: (current.percent || []).filter(drawing => drawing.id !== id),
+          fibonacci: (current.fibonacci || []).map(drawing => drawing.id === id ? { ...drawing, ...updates } : drawing),
+          percent: (current.percent || []).map(drawing => drawing.id === id ? { ...drawing, ...updates } : drawing),
         },
       };
     });
   };
 
-  const clearChartDrawings = () => {
-    const ownerSymbol = symbolRef.current;
-    persistChartDrawings(previous => ({
-      ...previous,
-      [ownerSymbol]: { fibonacci: [], percent: [] },
-    }));
+  const normalizeDrawingTime = rawTime => {
+    if (typeof rawTime === 'number') return Math.floor(rawTime);
+    if (rawTime && typeof rawTime === 'object') {
+      return Math.floor(Date.UTC(rawTime.year, rawTime.month - 1, rawTime.day) / 1000);
+    }
+    return null;
   };
 
-  const toggleChartDrawingMode = mode => {
-    const nextMode = chartDrawingModeRef.current === mode ? null : mode;
-    chartDrawingModeRef.current = nextMode;
-    pendingChartDrawingAnchorRef.current = null;
-    setChartDrawingMode(nextMode);
-    setHasPendingChartDrawingAnchor(false);
+  const startChartDrawingFromContext = mode => {
+    if (!contextMenu) return;
+    const logical = Number.isFinite(contextMenu.logical) ? Math.round(contextMenu.logical) : 0;
+    let time = normalizeDrawingTime(contextMenu.time);
+    if (!Number.isFinite(time) && chartRef.current) {
+      const timeScale = chartRef.current.timeScale();
+      const x = timeScale.logicalToCoordinate(logical);
+      time = normalizeDrawingTime(x == null ? null : timeScale.coordinateToTime(x));
+    }
+    if (!Number.isFinite(time) || !Number.isFinite(contextMenu.price)) return;
+    const anchor = {
+      time,
+      price: contextMenu.price,
+      logical,
+    };
+    chartDrawingModeRef.current = mode;
+    pendingChartDrawingAnchorRef.current = anchor;
+    setChartDrawingMode(mode);
+    setHasPendingChartDrawingAnchor(true);
+    closeContextMenu();
   };
 
   useEffect(() => {
@@ -490,14 +505,6 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     setRrToolsBySymbol(previous => ({
       ...previous,
       [ownerSymbol]: (previous[ownerSymbol] || []).map(t => t.id === id ? { ...t, ...updates } : t),
-    }));
-  };
-
-  const deleteRrTool = (id) => {
-    const ownerSymbol = symbolRef.current;
-    setRrToolsBySymbol(previous => ({
-      ...previous,
-      [ownerSymbol]: (previous[ownerSymbol] || []).filter(t => t.id !== id),
     }));
   };
 
@@ -850,7 +857,104 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     }
   };
   
-  const closeContextMenu = () => setContextMenu(null);
+  const closeContextMenu = () => {
+    setContextMenu(null);
+    setDrawingActionMenu(null);
+  };
+
+  const openDrawingActionMenu = (event, kind, drawingId) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const menuWidth = 150;
+    const menuHeight = 82;
+    setContextMenu(null);
+    setDrawingActionMenu({
+      x: Math.max(4, Math.min(event.clientX, window.innerWidth - menuWidth - 4)),
+      y: Math.max(4, Math.min(event.clientY, window.innerHeight - menuHeight - 4)),
+      kind,
+      drawingId,
+      symbol: symbolRef.current,
+    });
+  };
+
+  const deleteDrawingFromActionMenu = () => {
+    if (!drawingActionMenu) return;
+    const { kind, drawingId, symbol: ownerSymbol } = drawingActionMenu;
+    if (kind === 'rr') {
+      setRrToolsBySymbol(previous => ({
+        ...previous,
+        [ownerSymbol]: (previous[ownerSymbol] || []).filter(tool => tool.id !== drawingId),
+      }));
+    } else {
+      persistChartDrawings(previous => {
+        const current = previous[ownerSymbol] || { fibonacci: [], percent: [] };
+        return {
+          ...previous,
+          [ownerSymbol]: {
+            ...current,
+            fibonacci: (current.fibonacci || []).filter(drawing => drawing.id !== drawingId),
+            percent: (current.percent || []).filter(drawing => drawing.id !== drawingId),
+          },
+        };
+      });
+    }
+    setDrawingActionMenu(null);
+  };
+
+  const copyDrawingFromActionMenu = () => {
+    if (!drawingActionMenu) return;
+    const { kind, drawingId, symbol: ownerSymbol } = drawingActionMenu;
+    const barSeconds = timeframe === 'M1' ? 60 : timeframe === 'M3' ? 180 : timeframe === 'M5' ? 300 : timeframe === 'M15' ? 900 : timeframe === 'M30' ? 1800 : timeframe === 'H1' ? 3600 : timeframe === 'H2' ? 7200 : timeframe === 'H4' ? 14400 : timeframe === 'H8' ? 28800 : timeframe === 'D1' ? 86400 : 3600;
+    const timeScale = chartRef.current?.timeScale();
+    const shiftAnchor = anchor => {
+      const currentLogical = anchor.logical != null && Number.isFinite(Number(anchor.logical))
+        ? Number(anchor.logical)
+        : timeScale?.coordinateToLogical(timeScale.timeToCoordinate(anchor.time));
+      const logical = Number.isFinite(currentLogical) ? currentLogical + 4 : anchor.logical;
+      const x = Number.isFinite(logical) ? timeScale?.logicalToCoordinate(logical) : null;
+      const mappedTime = normalizeDrawingTime(x == null ? null : timeScale?.coordinateToTime(x));
+      const fallbackTime = anchor.time != null && Number.isFinite(Number(anchor.time)) ? Number(anchor.time) + 4 * barSeconds : anchor.time;
+      return {
+        ...anchor,
+        time: Number.isFinite(mappedTime) ? mappedTime : fallbackTime,
+        logical,
+      };
+    };
+    const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    if (kind === 'rr') {
+      const source = (rrToolsBySymbol[ownerSymbol] || []).find(tool => tool.id === drawingId);
+      if (source) {
+        const startAnchor = shiftAnchor({ time: source.time, logical: source.logical });
+        const endAnchor = shiftAnchor({ time: source.endTime, logical: source.endLogical });
+        setRrToolsBySymbol(previous => ({
+          ...previous,
+          [ownerSymbol]: [...(previous[ownerSymbol] || []), {
+            ...source,
+            id: newId,
+            time: startAnchor.time,
+            endTime: endAnchor.time,
+            logical: startAnchor.logical,
+            endLogical: endAnchor.logical,
+          }],
+        }));
+      }
+    } else {
+      const current = chartDrawingsBySymbol[ownerSymbol] || { fibonacci: [], percent: [] };
+      const source = [...(current.fibonacci || []), ...(current.percent || [])].find(drawing => drawing.id === drawingId);
+      if (source) {
+        const key = source.type === 'fibonacci' ? 'fibonacci' : 'percent';
+        persistChartDrawings(previous => {
+          const latest = previous[ownerSymbol] || { fibonacci: [], percent: [] };
+          return {
+            ...previous,
+            [ownerSymbol]: { ...latest, [key]: [...(latest[key] || []), { ...source, id: newId, start: shiftAnchor(source.start), end: shiftAnchor(source.end) }] },
+          };
+        });
+      }
+    }
+    setDrawingActionMenu(null);
+  };
 
   useEffect(() => {
     document.addEventListener('click', closeContextMenu);
@@ -1344,12 +1448,9 @@ useEffect(() => {
           const price = candlestickSeriesRef.current.coordinateToPrice(param.point.y);
           const timeScale = chart.timeScale();
           const rawTime = param.time ?? timeScale.coordinateToTime(param.point.x);
-          const time = typeof rawTime === 'number'
-            ? Math.floor(rawTime)
-            : rawTime && typeof rawTime === 'object'
-              ? Math.floor(Date.UTC(rawTime.year, rawTime.month - 1, rawTime.day) / 1000)
-              : null;
-          const logical = timeScale.coordinateToLogical(param.point.x);
+          const time = normalizeDrawingTime(rawTime);
+          const rawLogical = timeScale.coordinateToLogical(param.point.x);
+          const logical = Number.isFinite(rawLogical) ? Math.round(rawLogical) : 0;
           if (!Number.isFinite(price) || !Number.isFinite(time)) return;
           const anchor = { time, price, logical: Number.isFinite(logical) ? logical : 0 };
           const start = pendingChartDrawingAnchorRef.current;
@@ -3204,30 +3305,9 @@ useEffect(() => {
         {/* Main Chart */}
         <div style={{ flex: 3, position: 'relative', width: '100%', overflow: 'hidden' }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
-          <div style={{ position: 'absolute', top: '10px', right: '12px', zIndex: 14, display: 'flex', alignItems: 'center', gap: '6px', padding: '5px', borderRadius: '8px', border: '1px solid rgba(34,211,238,0.25)', background: 'rgba(2,6,23,0.9)', boxShadow: '0 4px 14px rgba(0,0,0,0.28)', pointerEvents: 'auto' }}>
-            <span style={{ padding: '0 4px', color: '#94a3b8', fontSize: '10px', fontWeight: 700, whiteSpace: 'nowrap' }}>Vẽ</span>
-            {[
-              { mode: 'fibonacci', label: 'Fibo', title: 'Vẽ Fibonacci retracement bằng hai lần bấm' },
-              { mode: 'percent', label: 'Đo %', title: 'Đo thay đổi giá và phần trăm bằng hai lần bấm' },
-            ].map(option => (
-              <button
-                key={option.mode}
-                type="button"
-                aria-pressed={chartDrawingMode === option.mode}
-                title={option.title}
-                onClick={() => toggleChartDrawingMode(option.mode)}
-                style={{ padding: '5px 9px', borderRadius: '6px', border: `1px solid ${chartDrawingMode === option.mode ? '#22d3ee' : 'rgba(148,163,184,0.28)'}`, background: chartDrawingMode === option.mode ? 'rgba(8,145,178,0.3)' : 'rgba(15,23,42,0.8)', color: chartDrawingMode === option.mode ? '#67e8f9' : '#cbd5e1', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-              >
-                {option.label}
-              </button>
-            ))}
-            {visibleChartDrawings.length > 0 && (
-              <button type="button" title="Xóa toàn bộ bản vẽ của tài sản này" onClick={clearChartDrawings} style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid rgba(251,113,133,0.4)', background: 'rgba(127,29,29,0.22)', color: '#fda4af', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>Xóa</button>
-            )}
-          </div>
           {chartDrawingMode && (
-            <div style={{ position: 'absolute', top: '52px', right: '12px', zIndex: 14, padding: '6px 9px', border: '1px solid rgba(34,211,238,0.28)', borderRadius: '6px', background: 'rgba(2,6,23,0.9)', color: '#bae6fd', fontSize: '10px', pointerEvents: 'none' }}>
-              {hasPendingChartDrawingAnchor ? 'Bấm điểm kết thúc · Esc để hủy' : 'Bấm điểm bắt đầu trên chart · Esc để hủy'}
+            <div style={{ position: 'absolute', top: '10px', right: '12px', zIndex: 14, padding: '6px 9px', border: '1px solid rgba(34,211,238,0.28)', borderRadius: '6px', background: 'rgba(2,6,23,0.9)', color: '#bae6fd', fontSize: '10px', pointerEvents: 'none' }}>
+              {hasPendingChartDrawingAnchor ? 'Bấm điểm kết thúc · Esc để hủy' : 'Bấm điểm bắt đầu · Esc để hủy'}
             </div>
           )}
           <ChartDrawingOverlay
@@ -3236,7 +3316,8 @@ useEffect(() => {
             drawings={visibleChartDrawings}
             symbol={symbol}
             lastUpdateSignal={lastUpdateSignal}
-            onDelete={deleteChartDrawing}
+            onUpdate={updateChartDrawing}
+            onRequestContextMenu={(event, drawing) => openDrawingActionMenu(event, 'chart', drawing.id)}
           />
           <div ref={sessionSdTooltipRef} style={{ display: 'none', position: 'absolute', zIndex: 12, pointerEvents: 'none', padding: '5px 8px', border: '1px solid', borderRadius: '6px', background: 'rgba(2, 6, 23, 0.94)', fontSize: '11px', fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }} />
           {(currentSdPosition !== null || currentSessionSdPosition !== null || sessionSdPositions.length > 0) && (viewMode !== 'backtest' || simulatedTimeRef.current > 0) && (
@@ -3345,8 +3426,8 @@ useEffect(() => {
               chart={chartRef.current} 
               series={candlestickSeriesRef.current} 
               lastUpdateSignal={lastUpdateSignal}
-              onDelete={() => deleteRrTool(tool.id)} 
-              onUpdate={updateRrTool} 
+              onUpdate={updateRrTool}
+              onRequestContextMenu={event => openDrawingActionMenu(event, 'rr', tool.id)}
             />
           ))}
         </div>
@@ -3450,6 +3531,18 @@ useEffect(() => {
             >
               ➖ Kẻ đường ngang...
             </div>
+            <div
+              className="context-menu-item"
+              onClick={() => startChartDrawingFromContext('fibonacci')}
+            >
+              📐 Vẽ Fibonacci
+            </div>
+            <div
+              className="context-menu-item"
+              onClick={() => startChartDrawingFromContext('percent')}
+            >
+              📏 Đo biến đổi %
+            </div>
             {drawnLines.filter(l => l.symbol === symbol).length > 0 && (
                 <div 
                   className="context-menu-item"
@@ -3478,6 +3571,28 @@ useEffect(() => {
             >
               📉 Thêm RR Bán (Short)
             </div>
+          </div>
+        )}
+
+        {drawingActionMenu && (
+          <div
+            className="custom-context-menu-wrapper"
+            onClick={event => event.stopPropagation()}
+            style={{
+              position: 'fixed',
+              top: drawingActionMenu.y,
+              left: drawingActionMenu.x,
+              background: 'var(--bg-panel)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
+              padding: '5px 0',
+              zIndex: 1001,
+              minWidth: '145px',
+            }}
+          >
+            <div className="context-menu-item" onClick={copyDrawingFromActionMenu}>📄 Sao chép bản vẽ</div>
+            <div className="context-menu-item" style={{ color: '#fb7185' }} onClick={deleteDrawingFromActionMenu}>🗑️ Xóa bản vẽ</div>
           </div>
         )}
 
