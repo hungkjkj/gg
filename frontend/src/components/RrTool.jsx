@@ -298,13 +298,14 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
           borderLeft: '1px solid rgba(8, 153, 129, 0.3)',
           borderRight: '1px solid rgba(8, 153, 129, 0.3)',
           pointerEvents: 'auto',
-          cursor: 'move'
+          cursor: 'ns-resize'
         }}
-        title="Kéo phần thân để di chuyển toàn bộ RR; kéo đường Target để chỉnh mức chốt lời"
+        title="Kéo bất kỳ đâu trong vùng xanh để chỉnh TP; giữ Shift để di chuyển toàn bộ RR"
         onMouseDown={event => {
           event.stopPropagation();
           if (event.button !== 0) return;
-          startWholeMove(event);
+          if (event.shiftKey) startWholeMove(event);
+          else setIsDragging('target');
         }}
         onContextMenu={openContextMenu}
       >
@@ -349,13 +350,14 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
           borderLeft: '1px solid rgba(242, 54, 69, 0.3)',
           borderRight: '1px solid rgba(242, 54, 69, 0.3)',
           pointerEvents: 'auto',
-          cursor: 'move'
+          cursor: 'ns-resize'
         }}
-        title="Kéo phần thân để di chuyển toàn bộ RR; kéo đường Stop để chỉnh mức dừng lỗ"
+        title="Kéo bất kỳ đâu trong vùng đỏ để chỉnh SL; giữ Shift để di chuyển toàn bộ RR"
         onMouseDown={event => {
           event.stopPropagation();
           if (event.button !== 0) return;
-          startWholeMove(event);
+          if (event.shiftKey) startWholeMove(event);
+          else setIsDragging('stop');
         }}
         onContextMenu={openContextMenu}
       >
@@ -367,23 +369,29 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
       {/* Dedicated, wider hit areas for the price boundaries. */}
       <div
         ref={targetDragRef}
-        title="Kéo để chỉnh riêng mức chốt lời (TP)"
+        title="Kéo để chỉnh mức chốt lời (TP); giữ Shift để di chuyển toàn bộ RR"
         style={{ position: 'absolute', zIndex: 52, pointerEvents: 'auto', cursor: 'ns-resize', background: 'transparent' }}
         onMouseDown={event => {
           event.preventDefault();
           event.stopPropagation();
-          if (event.button === 0) setIsDragging('target');
+          if (event.button === 0) {
+            if (event.shiftKey) startWholeMove(event);
+            else setIsDragging('target');
+          }
         }}
         onContextMenu={openContextMenu}
       />
       <div
         ref={stopDragRef}
-        title="Kéo để chỉnh riêng mức dừng lỗ (SL)"
+        title="Kéo để chỉnh mức dừng lỗ (SL); giữ Shift để di chuyển toàn bộ RR"
         style={{ position: 'absolute', zIndex: 52, pointerEvents: 'auto', cursor: 'ns-resize', background: 'transparent' }}
         onMouseDown={event => {
           event.preventDefault();
           event.stopPropagation();
-          if (event.button === 0) setIsDragging('stop');
+          if (event.button === 0) {
+            if (event.shiftKey) startWholeMove(event);
+            else setIsDragging('stop');
+          }
         }}
         onContextMenu={openContextMenu}
       />
