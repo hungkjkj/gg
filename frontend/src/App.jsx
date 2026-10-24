@@ -310,7 +310,7 @@ const getNextDayChartTimeAtHour = (latestChartTime, hour, sessionConfig) => {
   return nextLocalDayStart + Number(hour) * 3600 - browserOffsetHours * 3600 + timeShiftSeconds;
 };
 
-const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true }) => {
+const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true, shortcutsBlocked = false }) => {
   const momFlipDataRef = useRef([]);
   const [momFlipDataVersion, setMomFlipDataVersion] = useState(0);
   const [momFlipDataRevision, setMomFlipDataRevision] = useState(0);
@@ -549,6 +549,48 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       [ownerSymbol]: [...(previous[ownerSymbol] || []), newTool],
     }));
   };
+  const addRrToolRef = useRef(addRrTool);
+  addRrToolRef.current = addRrTool;
+
+  useEffect(() => {
+    const isEditableTarget = target => target instanceof HTMLElement && (
+      target.isContentEditable
+      || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+      || target.closest('[contenteditable="true"], [role="textbox"]')
+    );
+    const handleRrShortcut = event => {
+      if (!['F3', 'F4'].includes(event.key) || event.repeat || event.isComposing) return;
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isEditableTarget(event.target)) return;
+      if (shortcutsBlocked || !['chart', 'backtest'].includes(viewMode)) return;
+
+      const seriesData = candlestickSeriesRef.current?.data?.() || [];
+      let latestCandle = null;
+      for (let index = seriesData.length - 1; index >= 0; index -= 1) {
+        const item = seriesData[index];
+        if (Number.isFinite(Number(item?.close)) && Number.isFinite(normalizeDrawingTime(item?.time))) {
+          latestCandle = item;
+          break;
+        }
+      }
+      if (!latestCandle || Number(latestCandle.close) <= 0) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      const chart = chartRef.current;
+      const timeScale = chart?.timeScale?.();
+      const coordinate = timeScale?.timeToCoordinate?.(latestCandle.time);
+      const logicalCoordinate = Number.isFinite(coordinate)
+        ? timeScale?.coordinateToLogical?.(coordinate)
+        : null;
+      const candleIndex = seriesData.indexOf(latestCandle);
+      const logical = Number.isFinite(logicalCoordinate) ? logicalCoordinate : candleIndex;
+      const candleTime = normalizeDrawingTime(latestCandle.time);
+      addRrToolRef.current(event.key === 'F3' ? 'long' : 'short', Number(latestCandle.close), logical, candleTime);
+    };
+
+    window.addEventListener('keydown', handleRrShortcut, true);
+    return () => window.removeEventListener('keydown', handleRrShortcut, true);
+  }, [shortcutsBlocked, viewMode]);
 
   const updateRrTool = (id, updates) => {
     const ownerSymbol = symbolRef.current;
@@ -5093,6 +5135,61 @@ const getQuickSymbolMatches = (query, symbols) => {
     .slice(0, 8);
 };
 
+function ShortcutHelpModal({ onClose }) {
+  const shortcuts = [
+    ['F1', 'Mở / đóng bảng hướng dẫn phím tắt'],
+    ['F2', 'Mở / đóng thông tin cặp tài sản (chart và backtest)'],
+    ['F3', 'Thêm RR Long tại giá đóng cửa nến mới nhất đang hiển thị'],
+    ['F4', 'Thêm RR Short tại giá đóng cửa nến mới nhất đang hiển thị'],
+    ['Ctrl + 1', 'Chuyển sang chart'],
+    ['Ctrl + 2', 'Chuyển sang Currency Matrix'],
+    ['Ctrl + 3', 'Chuyển sang backtest'],
+    ['Ctrl + 4', 'Chuyển sang Catalyst'],
+  ];
+
+  return (
+    <div
+      role="presentation"
+      onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}
+      style={{ position: 'fixed', inset: 0, zIndex: 10050, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px', background: 'rgba(1,5,16,0.78)', backdropFilter: 'blur(5px)' }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shortcut-help-title"
+        style={{ width: 'min(620px, 100%)', maxHeight: 'min(82vh, 720px)', overflow: 'auto', padding: '22px', border: '1px solid rgba(0,240,255,0.55)', borderRadius: '14px', background: '#081225', color: '#e2e8f0', boxShadow: '0 18px 60px rgba(0,0,0,0.65), 0 0 30px rgba(0,240,255,0.12)' }}
+      >
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '16px' }}>
+          <div>
+            <h2 id="shortcut-help-title" style={{ margin: 0, color: '#67e8f9', fontSize: '21px' }}>Phím tắt</h2>
+            <p style={{ margin: '6px 0 0', color: '#94a3b8', fontSize: '13px' }}>Nhấn F1 để mở hoặc đóng bảng này.</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Đóng hướng dẫn phím tắt" style={{ width: '38px', height: '38px', borderRadius: '9px', border: '1px solid rgba(0,240,255,0.4)', background: 'rgba(8,47,73,0.55)', color: '#67e8f9', cursor: 'pointer', fontSize: '20px', fontWeight: 800 }}>×</button>
+        </header>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+          <thead>
+            <tr style={{ color: '#7dd3fc', textAlign: 'left' }}>
+              <th scope="col" style={{ padding: '10px 8px', borderBottom: '1px solid rgba(148,163,184,0.25)', width: '125px' }}>Phím</th>
+              <th scope="col" style={{ padding: '10px 8px', borderBottom: '1px solid rgba(148,163,184,0.25)' }}>Chức năng</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shortcuts.map(([keys, description]) => (
+              <tr key={keys}>
+                <th scope="row" style={{ padding: '11px 8px', borderBottom: '1px solid rgba(148,163,184,0.12)', textAlign: 'left' }}><kbd style={{ display: 'inline-block', padding: '4px 8px', borderRadius: '6px', border: '1px solid rgba(103,232,249,0.35)', background: 'rgba(15,23,42,0.9)', color: '#a5f3fc', font: '600 12px ui-monospace, monospace', whiteSpace: 'nowrap' }}>{keys}</kbd></th>
+                <td style={{ padding: '11px 8px', borderBottom: '1px solid rgba(148,163,184,0.12)', color: '#cbd5e1' }}>{description}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p style={{ margin: '15px 0 0', color: '#94a3b8', fontSize: '12px', lineHeight: 1.6 }}>
+          F3/F4 tạo RR theo giá Close của nến mới nhất đang hiển thị; trong backtest là nến tại thời điểm mô phỏng. Thông số RR theo mặc định hiện tại của công cụ.
+        </p>
+      </section>
+    </div>
+  );
+}
+
 function App() {
   const [symbol, setSymbol] = useState('EURUSD');
   const [searchSymbol, setSearchSymbol] = useState('');
@@ -5199,11 +5296,46 @@ function App() {
 
   const [timeframe, setTimeframe] = useState('H1');
   const [viewMode, setViewMode] = useState('chart'); // 'chart' hoặc 'matrix'
+  const viewModeRef = useRef(viewMode);
+  viewModeRef.current = viewMode;
+  const [isShortcutHelpOpen, setIsShortcutHelpOpen] = useState(false);
+  const shortcutHelpOpenRef = useRef(isShortcutHelpOpen);
+  shortcutHelpOpenRef.current = isShortcutHelpOpen;
 
   useEffect(() => {
     const featureByShortcut = { '1': 'chart', '2': 'matrix', '3': 'backtest', '4': 'catalyst' };
     const handleFeatureShortcut = (event) => {
-      if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+      if (event.repeat || event.isComposing || event.altKey || event.metaKey) return;
+
+      if (event.key === 'F1' && !event.ctrlKey && !event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsShortcutHelpOpen(previous => !previous);
+        return;
+      }
+
+      if (event.key === 'Escape' && shortcutHelpOpenRef.current) {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsShortcutHelpOpen(false);
+        return;
+      }
+
+      if (event.key === 'F2' && !event.ctrlKey && !event.shiftKey) {
+        if (shortcutHelpOpenRef.current || !['chart', 'backtest'].includes(viewModeRef.current)) return;
+        const target = event.target;
+        if (target instanceof HTMLElement && (
+          target.isContentEditable
+          || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+          || target.closest('[contenteditable="true"], [role="textbox"]')
+        )) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setIsAssetInfoOpen(previous => !previous);
+        return;
+      }
+
+      if (!event.ctrlKey || event.shiftKey) return;
       const target = event.target;
       if (target instanceof HTMLElement && (
         target.isContentEditable
@@ -5640,6 +5772,7 @@ function App() {
   return (
     <div className="dashboard-container">
       <TradingLogPanel isOpen={isLogOpen} onClose={() => setIsLogOpen(false)} apiBase={API_BASE} />
+      {isShortcutHelpOpen && <ShortcutHelpModal onClose={() => setIsShortcutHelpOpen(false)} />}
       {isAssetInfoOpen && ['chart', 'backtest'].includes(viewMode) && (
         <AssetInfoModal symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} onClose={() => setIsAssetInfoOpen(false)} />
       )}
@@ -6014,7 +6147,7 @@ function App() {
         <div className="chart-container">
           <div className={`chart-wrapper theme-${chartTheme}`} style={{ overflow: (viewMode === 'matrix' || viewMode === 'catalyst' || viewMode === 'strategy') ? 'auto' : 'hidden' }}>
             {viewMode === 'chart' || viewMode === 'backtest' ? (
-              <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} chartTheme={chartTheme} showSdBands={showSdBands} showMomFlipChart={showMomFlipChart} showVolChart={showVolChart} showMomChart={showMomChart} />
+              <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} chartTheme={chartTheme} showSdBands={showSdBands} showMomFlipChart={showMomFlipChart} showVolChart={showVolChart} showMomChart={showMomChart} shortcutsBlocked={isShortcutHelpOpen || isAssetInfoOpen || isLogOpen || showSettings || Boolean(quickSymbolQuery)} />
             ) : viewMode === 'matrix' ? (
               <MatrixComponent 
                 simulatedTime={null} 

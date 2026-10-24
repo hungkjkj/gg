@@ -28,3 +28,9 @@ out.txt
 *.njsproj
 *.sln
 *.sw?
+
+/backend/app_configs.json
+/backend/email_config.json
+/backend/alerts.json
+/backend/strategies.json
+/backend/trading_logs.json
