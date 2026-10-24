@@ -260,41 +260,90 @@ const getTimeZoneOffsetMinutes = (timestamp, timeZone) => {
     }
 };
 
-// Return the displayed-chart timestamp for the configured US session close on
-// the latest candle's local day. This gives the live viewport enough room to
-// show the upcoming session preview instead of clipping it after a few bars.
-const getUsSessionEndChartTime = (latestChartTime, sessionConfig) => {
-  if (!Number.isFinite(Number(latestChartTime))) return null;
+const SESSION_BOX_DEFINITIONS = [
+  { name: 'Á', startKey: 'asiaStart', endKey: 'asiaEnd', fallback: ['07:00', '11:00'], color: 'rgba(139, 69, 19, 0.18)', timezone: 'Asia/Tokyo', summerOffset: 540 },
+  { name: 'Âu', startKey: 'euroStart', endKey: 'euroEnd', fallback: ['07:00', '09:00'], color: 'rgba(139, 0, 139, 0.18)', timezone: 'Europe/London', summerOffset: 60 },
+  { name: 'Pre-US', startKey: 'preUsStart', endKey: 'preUsEnd', fallback: ['16:00', '19:00'], color: 'rgba(255, 193, 7, 0.20)', timezone: 'America/New_York', summerOffset: -240 },
+  { name: 'Mỹ', startKey: 'usStart', endKey: 'usEnd', fallback: ['07:30', '11:00'], color: 'rgba(0, 0, 139, 0.18)', timezone: 'America/New_York', summerOffset: -240 },
+];
 
-  const timeShiftSeconds = (Number(sessionConfig?.timeShiftHours) || 0) * 3600;
-  const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
-  const latestUtc = Number(latestChartTime) - timeShiftSeconds;
-  const latestLocal = new Date((latestUtc + browserOffsetHours * 3600) * 1000);
-  const localDayStart = Date.UTC(
-    latestLocal.getUTCFullYear(), latestLocal.getUTCMonth(), latestLocal.getUTCDate()
-  ) / 1000;
+const getSessionWindowForLocalDay = (definition, localDayStart, sessionConfig, browserOffsetHours) => {
   const toMinutes = value => {
     const [hours, minutes] = String(value).split(':').map(Number);
     return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : NaN;
   };
-  const startMinutes = toMinutes(sessionConfig?.usStart || '07:30');
-  const endMinutes = toMinutes(sessionConfig?.usEnd || '11:00');
+  const startText = sessionConfig?.[definition.startKey] || definition.fallback[0];
+  const endText = sessionConfig?.[definition.endKey] || definition.fallback[1];
+  const startMinutes = toMinutes(startText);
+  const endMinutes = toMinutes(endText);
   const durationMinutes = (endMinutes - startMinutes + 1440) % 1440;
   if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || durationMinutes <= 0) return null;
 
+  const timeShiftSeconds = (Number(sessionConfig?.timeShiftHours) || 0) * 3600;
   const approximateStartUtc = localDayStart + startMinutes * 60 - browserOffsetHours * 3600;
   const dstShiftMinutes = sessionConfig?.autoDst === false
     ? 0
-    : getTimeZoneOffsetMinutes(approximateStartUtc, 'America/New_York') - (-240);
+    : getTimeZoneOffsetMinutes(approximateStartUtc, definition.timezone) - definition.summerOffset;
   const adjustedStartMinutes = (startMinutes - dstShiftMinutes + 1440) % 1440;
   const adjustedEndMinutes = (endMinutes - dstShiftMinutes + 1440) % 1440;
-  const sessionStartUtc = localDayStart + adjustedStartMinutes * 60 - browserOffsetHours * 3600;
-  let sessionEndUtc = localDayStart + adjustedEndMinutes * 60 - browserOffsetHours * 3600;
-  if (sessionEndUtc <= sessionStartUtc) sessionEndUtc += 24 * 3600;
-  if (sessionEndUtc <= latestUtc) return null;
+  const startUtc = localDayStart + adjustedStartMinutes * 60 - browserOffsetHours * 3600;
+  let endUtc = localDayStart + adjustedEndMinutes * 60 - browserOffsetHours * 3600;
+  if (endUtc <= startUtc) endUtc += 24 * 3600;
 
-  return sessionEndUtc + timeShiftSeconds;
+  return {
+    startUtc,
+    endUtc,
+    start: startUtc + timeShiftSeconds,
+    end: endUtc + timeShiftSeconds,
+  };
 };
+
+const isForexSessionTimeOpen = timestamp => {
+  const date = new Date(timestamp * 1000);
+  const day = date.getUTCDay();
+  const hour = date.getUTCHours();
+  return !((day === 5 && hour >= 22) || day === 6 || (day === 0 && hour < 21));
+};
+
+// Find all still-upcoming configured sessions on the next tradable local day.
+// Reused by both the timeline extender and the session-box preview so they
+// agree on the same replay/live date and daylight-saving adjustment.
+const getUpcomingSessionWindows = (latestChartTime, sessionConfig, isCrypto = false) => {
+  const chartTime = Number(latestChartTime);
+  if (!Number.isFinite(chartTime)) return { dayStart: null, windows: [] };
+
+  const timeShiftSeconds = (Number(sessionConfig?.timeShiftHours) || 0) * 3600;
+  const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
+  const latestUtc = chartTime - timeShiftSeconds;
+  const latestLocal = new Date((latestUtc + browserOffsetHours * 3600) * 1000);
+  const firstLocalDay = Date.UTC(
+    latestLocal.getUTCFullYear(), latestLocal.getUTCMonth(), latestLocal.getUTCDate()
+  ) / 1000;
+
+  for (let dayOffset = 0; dayOffset < 8; dayOffset++) {
+    const dayStart = firstLocalDay + dayOffset * 86400;
+    const windows = SESSION_BOX_DEFINITIONS
+      .map(definition => {
+        const window = getSessionWindowForLocalDay(definition, dayStart, sessionConfig, browserOffsetHours);
+        return window ? { ...window, name: definition.name, color: definition.color } : null;
+      })
+      .filter(window => window && window.end > chartTime && (isCrypto || isForexSessionTimeOpen(window.startUtc)));
+
+    if (windows.length > 0) return { dayStart, windows };
+  }
+
+  return { dayStart: null, windows: [] };
+};
+
+const getUsSessionEndChartTime = (latestChartTime, sessionConfig, isCrypto = false) =>
+  getUpcomingSessionWindows(latestChartTime, sessionConfig, isCrypto)
+    .windows.find(session => session.name === 'Mỹ')?.end ?? null;
+
+const getUpcomingSessionEndChartTime = (latestChartTime, sessionConfig, isCrypto = false) =>
+  getUpcomingSessionWindows(latestChartTime, sessionConfig, isCrypto).windows.reduce(
+    (latestEnd, session) => Math.max(latestEnd, session.end),
+    null
+  );
 
 const getNextDayChartTimeAtHour = (latestChartTime, hour, sessionConfig) => {
   if (!Number.isFinite(Number(latestChartTime)) || !Number.isFinite(Number(hour))) return null;
@@ -841,34 +890,45 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
          });
       }
       
-      let baseTime = (viewMode === 'backtest' && window.currentSimulatedTime) ? window.currentSimulatedTime : Math.floor(Date.now() / 1000);
+      const timeShiftSeconds = (Number(configs.timeShiftHours) || 0) * 3600;
+      let baseTime = (viewMode === 'backtest' && window.currentSimulatedTime)
+        ? Number(window.currentSimulatedTime) + timeShiftSeconds
+        : Math.floor(Date.now() / 1000);
       if (maxFutureTime === 0) maxFutureTime = baseTime + 86400;
       
-      let currentTime = lastUpdateTimeRef.current;
+      let currentTime = viewMode === 'backtest' && window.currentSimulatedTime
+        ? baseTime
+        : lastUpdateTimeRef.current;
       if (!currentTime || currentTime === 0) currentTime = baseTime;
       currentTime = currentTime - (currentTime % tfSec);
       
-      // Keep enough future timeline points to interpolate projected session
-      // boxes as well as news markers. On M1, the 150-bar minimum is only 2.5h
-      // and can end before the configured US session closes.
-      const usSessionEnd = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
-        ? getUsSessionEndChartTime(currentTime, configs)
-        : null;
-      const nextDayFourAm = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
+      const isCrypto = /BTC|ETH|SOL|XRP|CRYPTO/i.test(symbol);
+      const canProjectSessions = ['chart', 'backtest'].includes(viewMode)
+        && !['D1', 'W1', 'MN1'].includes(timeframe);
+      const upcomingSessions = canProjectSessions
+        ? getUpcomingSessionWindows(currentTime, configs, isCrypto).windows
+        : [];
+      const upcomingSessionEnd = upcomingSessions.reduce(
+        (latestEnd, session) => Math.max(latestEnd, session.end),
+        currentTime
+      );
+      // Both live and replay charts reserve enough space for the next trading
+      // day's full sessions. A fixed 150-bar minimum clipped US boxes whenever
+      // the next session began several hours after the replay cursor.
+      const nextDayFourAm = canProjectSessions
         ? getNextDayChartTimeAtHour(currentTime, 4, configs)
         : null;
-      const minimumFutureHorizon = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
-        ? Math.max(currentTime + 12 * 60 * 60, nextDayFourAm || currentTime)
+      const minimumFutureHorizon = canProjectSessions
+        ? Math.max(currentTime + 12 * 60 * 60, nextDayFourAm || currentTime, upcomingSessionEnd)
         : currentTime;
       const timelineTargetTime = Math.max(
         maxFutureTime,
         minimumFutureHorizon,
-        usSessionEnd ? usSessionEnd + tfSec * 2 : currentTime
+        upcomingSessionEnd > currentTime ? upcomingSessionEnd + tfSec * 2 : currentTime
       );
       let requiredBars = Math.ceil((timelineTargetTime - currentTime) / tfSec);
       if (requiredBars < 150) requiredBars = 150;
       
-      const isCrypto = symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("SOL") || symbol.includes("XRP") || symbol.includes("CRYPTO");
       const futureTimes = generateFutureTimeline(currentTime, tfSec, requiredBars, isCrypto, configs.timeShiftHours || 0);
 
       
@@ -933,13 +993,13 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
 
   useEffect(() => {
     applyTimelineAndMarkers();
-  }, [newsData, chartReady, timeframe]);
+  }, [newsData, chartReady, timeframe, viewMode, symbol, configs.timeShiftHours, configs.autoDst, configs.asiaStart, configs.asiaEnd, configs.euroStart, configs.euroEnd, configs.preUsStart, configs.preUsEnd, configs.usStart, configs.usEnd]);
 
   // Expose applyTimelineAndMarkers for manual calls when volStats changes
   useEffect(() => {
     window.updateTimelineForVLines = applyTimelineAndMarkers;
     return () => { window.updateTimelineForVLines = null; };
-  }, [newsData, chartReady, timeframe]);
+  }, [newsData, chartReady, timeframe, viewMode, symbol, configs.timeShiftHours, configs.autoDst, configs.asiaStart, configs.asiaEnd, configs.euroStart, configs.euroEnd, configs.preUsStart, configs.preUsEnd, configs.usStart, configs.usEnd]);
 
   
   const lastClickTimeRef = useRef(0);
@@ -1940,69 +2000,66 @@ useEffect(() => {
           const latestCandle = rawCandlesRef.current && rawCandlesRef.current.length > 0
             ? rawCandlesRef.current[rawCandlesRef.current.length - 1]
             : null;
-          if (latestCandle && Number.isFinite(Number(latestCandle.time))) {
-            const timeShiftSeconds = (Number(sessionConfig.timeShiftHours) || 0) * 3600;
-            const browserOffsetHours = -new Date().getTimezoneOffset() / 60;
-            const latestUtc = Number(latestCandle.time) - timeShiftSeconds;
-            const latestLocal = new Date((latestUtc + browserOffsetHours * 3600) * 1000);
-            const localDayStart = Date.UTC(
-              latestLocal.getUTCFullYear(), latestLocal.getUTCMonth(), latestLocal.getUTCDate()
-            ) / 1000;
-            const minuteOfDay = value => {
-              const [hours, minutes] = String(value).split(':').map(Number);
-              return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : NaN;
-            };
-            const configuredSessions = [
-              { name: 'Á', startKey: 'asiaStart', endKey: 'asiaEnd', fallback: ['07:00', '11:00'], color: 'rgba(139, 69, 19, 0.18)', timezone: 'Asia/Tokyo', summerOffset: 540 },
-              { name: 'Âu', startKey: 'euroStart', endKey: 'euroEnd', fallback: ['07:00', '09:00'], color: 'rgba(139, 0, 139, 0.18)', timezone: 'Europe/London', summerOffset: 60 },
-              { name: 'Pre-US', startKey: 'preUsStart', endKey: 'preUsEnd', fallback: ['16:00', '19:00'], color: 'rgba(255, 193, 7, 0.20)', timezone: 'America/New_York', summerOffset: -240 },
-              { name: 'Mỹ', startKey: 'usStart', endKey: 'usEnd', fallback: ['07:30', '11:00'], color: 'rgba(0, 0, 139, 0.18)', timezone: 'America/New_York', summerOffset: -240 }
-            ];
-            for (const definition of configuredSessions) {
-              const startText = sessionConfig[definition.startKey] || definition.fallback[0];
-              const endText = sessionConfig[definition.endKey] || definition.fallback[1];
-              const startMinutes = minuteOfDay(startText);
-              const endMinutes = minuteOfDay(endText);
-              if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) continue;
-
-              const approximateStartUtc = localDayStart + startMinutes * 60 - browserOffsetHours * 3600;
-              const dstShiftMinutes = sessionConfig.autoDst === false
-                ? 0
-                : getTimeZoneOffsetMinutes(approximateStartUtc, definition.timezone) - definition.summerOffset;
-              const adjustedStartMinutes = (startMinutes - dstShiftMinutes + 1440) % 1440;
-              const adjustedEndMinutes = (endMinutes - dstShiftMinutes + 1440) % 1440;
-              const durationMinutes = (endMinutes - startMinutes + 1440) % 1440;
-              if (durationMinutes <= 0) continue;
-
-              const startUtc = localDayStart + adjustedStartMinutes * 60 - browserOffsetHours * 3600;
-              let endUtc = localDayStart + adjustedEndMinutes * 60 - browserOffsetHours * 3600;
-              if (endUtc <= startUtc) endUtc += 24 * 3600;
-              if (endUtc <= latestUtc) continue;
-
-              const chartStart = startUtc + timeShiftSeconds;
-              const chartEnd = endUtc + timeShiftSeconds;
+          const timeShiftSeconds = (Number(sessionConfig.timeShiftHours) || 0) * 3600;
+          const replayTime = Number(window.currentSimulatedTime);
+          const sessionAnchorTime = viewMode === 'backtest' && Number.isFinite(replayTime) && replayTime > 0
+            ? replayTime + timeShiftSeconds
+            : Number(latestCandle?.time);
+          if (Number.isFinite(sessionAnchorTime)) {
+            const isCrypto = /BTC|ETH|SOL|XRP|CRYPTO/i.test(symbol);
+            const { windows } = getUpcomingSessionWindows(sessionAnchorTime, sessionConfig, isCrypto);
+            for (const sessionWindow of windows) {
               const hasExistingSession = sessions.some(session =>
-                session.name === definition.name && session.time >= chartStart && session.time < chartEnd
+                session.name === sessionWindow.name &&
+                session.time >= sessionWindow.start &&
+                session.time < sessionWindow.end
               );
-              if (startUtc <= latestUtc && hasExistingSession) continue;
+              if (sessionWindow.start <= sessionAnchorTime && hasExistingSession) continue;
 
-              // A synthetic start lets the same renderer draw the whole configured
-              // session before its first candle arrives, for live and backtest.
-              sessions.push({ time: chartStart, color: definition.color, name: definition.name });
+              // Project the next tradable day's configured windows even when
+              // the replay cursor is on a weekend or today's session is over.
+              sessions.push({
+                time: sessionWindow.start,
+                color: sessionWindow.color,
+                name: sessionWindow.name,
+                sessionKey: `preview:${sessionWindow.name}:${sessionWindow.start}`,
+              });
             }
           }
           sessions.sort((a, b) => a.time - b.time);
-          for (let i = 0; i < sessions.length;) {
-             const first = sessions[i];
-             let last = first;
-             let next = i + 1;
-             while (next < sessions.length &&
-                    sessions[next].color === first.color &&
-                    sessions[next].name === first.name &&
-                    sessions[next].time - last.time <= maxSessionGap) {
-               last = sessions[next];
-               next++;
-             }
+          const sessionGroupsByKey = new Map();
+          const unkeyedSessions = [];
+          sessions.forEach(session => {
+            if (!session.sessionKey) {
+              unkeyedSessions.push(session);
+              return;
+            }
+            const group = sessionGroupsByKey.get(session.sessionKey);
+            if (!group) {
+              sessionGroupsByKey.set(session.sessionKey, { first: session, last: session });
+              return;
+            }
+            if (session.time < group.first.time) group.first = session;
+            if (session.time > group.last.time) group.last = session;
+          });
+          const sessionGroups = Array.from(sessionGroupsByKey.values());
+          for (let i = 0; i < unkeyedSessions.length;) {
+            const first = unkeyedSessions[i];
+            let last = first;
+            let next = i + 1;
+            while (next < unkeyedSessions.length &&
+                   unkeyedSessions[next].color === first.color &&
+                   unkeyedSessions[next].name === first.name &&
+                   unkeyedSessions[next].time - last.time <= maxSessionGap) {
+              last = unkeyedSessions[next];
+              next++;
+            }
+            sessionGroups.push({ first, last });
+            i = next;
+          }
+          sessionGroups.sort((a, b) => a.first.time - b.first.time);
+
+          for (const { first, last } of sessionGroups) {
 
              const configuredDuration = getSessionDurationSeconds(first);
              const sessionEndTime = Math.max(
@@ -2075,7 +2132,6 @@ useEffect(() => {
                  ctx.restore();
                }
              }
-             i = next;
           }
         }
         
@@ -2191,7 +2247,7 @@ useEffect(() => {
             const startIndex = Math.max(0, data.length - visibleBars);
             const defaultTo = latestTime + timeframeSeconds * futureBars;
             const usSessionEnd = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
-              ? getUsSessionEndChartTime(latestTime, configsRef.current)
+              ? getUsSessionEndChartTime(latestTime, configsRef.current, /BTC|ETH|SOL|XRP|CRYPTO/i.test(symbol))
               : null;
             const range = {
                 from: data[startIndex].time,
@@ -2760,7 +2816,8 @@ useEffect(() => {
         const newSessionData = rawData.filter(i => i.session_color).map(i => ({
           time: i.time,
           color: i.session_color,
-          name: i.session_name
+          name: i.session_name,
+          sessionKey: i.session_key || null,
         }));
         
         if (isPolling) {
@@ -3052,12 +3109,15 @@ useEffect(() => {
                 const startIndex = Math.max(0, totalCandles - visibleBars);
                 const latestCandleTime = candlePoints[totalCandles - 1].time;
                 const defaultFutureTime = viewportFutureTimes[futureCount - 1]?.time || latestCandleTime + tfSec * futureCount;
-                const usSessionEnd = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
-                  ? getUsSessionEndChartTime(latestCandleTime, configsRef.current)
+                const sessionAnchorTime = viewMode === 'backtest' && targetEndTime > 0
+                  ? targetEndTime + timeShiftSeconds
+                  : latestCandleTime;
+                const upcomingSessionEnd = ['chart', 'backtest'].includes(viewMode) && !['D1', 'W1', 'MN1'].includes(timeframe)
+                  ? getUpcomingSessionEndChartTime(sessionAnchorTime, configsRef.current, /BTC|ETH|SOL|XRP|CRYPTO/i.test(symbol))
                   : null;
                 return {
                     from: candlePoints[startIndex].time,
-                    to: Math.max(defaultFutureTime, usSessionEnd ? usSessionEnd + tfSec * 2 : latestCandleTime + 1),
+                  to: Math.max(defaultFutureTime, upcomingSessionEnd ? upcomingSessionEnd + tfSec * 2 : latestCandleTime + 1),
                 };
             };
 
@@ -3067,8 +3127,18 @@ useEffect(() => {
                 const startIndex = Math.max(0, totalCandles - 1 - halfBars);
                 const from = candlePoints[startIndex].time;
                 const lastCandleTime = candlePoints[totalCandles - 1].time;
-                const to = viewportFutureTimes[halfBars - 1]?.time || lastCandleTime + tfSec * halfBars;
-                const range = { from, to: Math.max(to, lastCandleTime + 1) };
+                const replayChartTime = viewMode === 'backtest' && targetEndTime > 0
+                  ? targetEndTime + timeShiftSeconds
+                  : lastCandleTime;
+                const upcomingSessionEnd = ['chart', 'backtest'].includes(viewMode) && !['D1', 'W1', 'MN1'].includes(timeframe)
+                  ? getUpcomingSessionEndChartTime(replayChartTime, configsRef.current, /BTC|ETH|SOL|XRP|CRYPTO/i.test(symbol))
+                  : null;
+                const nextDayFourAm = ['chart', 'backtest'].includes(viewMode) && !['D1', 'W1', 'MN1'].includes(timeframe)
+                  ? getNextDayChartTimeAtHour(replayChartTime, 4, configsRef.current)
+                  : null;
+                const defaultTo = viewportFutureTimes[halfBars - 1]?.time || lastCandleTime + tfSec * halfBars;
+                const sessionTo = upcomingSessionEnd ? upcomingSessionEnd + tfSec * 2 : lastCandleTime + 1;
+                const range = { from, to: Math.max(defaultTo, sessionTo, nextDayFourAm || lastCandleTime + 1, lastCandleTime + 1) };
                 chartRef.current.timeScale().setVisibleRange(range);
                 if (momentumChartRef.current) momentumChartRef.current.timeScale().setVisibleRange(range);
                 if (volumeChartRef.current) volumeChartRef.current.timeScale().setVisibleRange(range);
@@ -3087,7 +3157,7 @@ useEffect(() => {
                       !['D1', 'W1', 'MN1'].includes(timeframe) &&
                       totalCandles > 0
                     ) {
-                      const usSessionEnd = getUsSessionEndChartTime(latestCandleTime, configsRef.current);
+                      const usSessionEnd = getUsSessionEndChartTime(latestCandleTime, configsRef.current, /BTC|ETH|SOL|XRP|CRYPTO/i.test(symbol));
                       if (usSessionEnd) {
                         if (Number.isFinite(savedToTime)) {
                           rangeToRestore = {
