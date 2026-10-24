@@ -551,6 +551,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   };
   const addRrToolRef = useRef(addRrTool);
   addRrToolRef.current = addRrTool;
+  const clearAllDrawingsForSymbolRef = useRef(null);
 
   useEffect(() => {
     const isEditableTarget = target => target instanceof HTMLElement && (
@@ -559,6 +560,14 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       || target.closest('[contenteditable="true"], [role="textbox"]')
     );
     const handleRrShortcut = event => {
+      if (event.key === 'F5' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+        && ['chart', 'backtest'].includes(viewMode)) {
+        event.preventDefault();
+        if (shortcutsBlocked || event.repeat || event.isComposing || isEditableTarget(event.target)) return;
+        event.stopPropagation();
+        clearAllDrawingsForSymbolRef.current?.(symbolRef.current);
+        return;
+      }
       if (!['F3', 'F4'].includes(event.key) || event.repeat || event.isComposing) return;
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isEditableTarget(event.target)) return;
       if (shortcutsBlocked || !['chart', 'backtest'].includes(viewMode)) return;
@@ -1015,6 +1024,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     setHasPendingChartDrawingAnchor(false);
     closeContextMenu();
   };
+  clearAllDrawingsForSymbolRef.current = clearAllDrawingsForSymbol;
 
   const openDrawingActionMenu = (event, kind, drawingId) => {
     event.preventDefault();
@@ -5196,6 +5206,7 @@ function ShortcutHelpModal({ onClose }) {
     ['F2', 'Mở / đóng thông tin cặp tài sản (chart và backtest)'],
     ['F3', 'Thêm RR Long tại giá đóng cửa nến mới nhất đang hiển thị'],
     ['F4', 'Thêm RR Short tại giá đóng cửa nến mới nhất đang hiển thị'],
+    ['F5', 'Xóa mọi bản vẽ thủ công của tài sản hiện tại (có xác nhận)'],
     ['Ctrl + 1', 'Chuyển sang chart'],
     ['Ctrl + 2', 'Chuyển sang Currency Matrix'],
     ['Ctrl + 3', 'Chuyển sang backtest'],
@@ -5238,7 +5249,7 @@ function ShortcutHelpModal({ onClose }) {
           </tbody>
         </table>
         <p style={{ margin: '15px 0 0', color: '#94a3b8', fontSize: '12px', lineHeight: 1.6 }}>
-          F3/F4 tạo RR theo giá Close của nến mới nhất đang hiển thị; trong backtest là nến tại thời điểm mô phỏng. Thông số RR theo mặc định hiện tại của công cụ.
+          F3/F4 tạo RR theo giá Close của nến mới nhất đang hiển thị; trong backtest là nến tại thời điểm mô phỏng. F5 chỉ xóa bản vẽ thủ công của tài sản hiện tại sau khi xác nhận; chỉ báo và tài sản khác được giữ nguyên.
         </p>
       </section>
     </div>
