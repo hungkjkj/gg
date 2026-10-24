@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import axios from 'axios';
 import { AssistiveTouch, MomFlipChartComponent } from './components/MomFlip';
@@ -696,6 +696,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const [backtestNewsStatus, setBacktestNewsStatus] = useState('Chưa tải');
   const simulatedTimeRef = useRef(0);
   const isPlayingRef = useRef(false);
+  const backtestNewsRequestRef = useRef(0);
   const lastMaVolColorRef = useRef(null);
   const lastHl2ColorRef = useRef(null);
   const lastBandwidthRef = useRef(null);
@@ -3281,6 +3282,8 @@ useEffect(() => {
     };
 
   useEffect(() => {
+    if (viewMode !== 'backtest') backtestNewsRequestRef.current += 1;
+
     // Lọc các configs thực sự cần gọi lại Backend MT5 (bỏ qua volMode vì được updateVolumeSeries xử lý trực tiếp)
     const { emailSender, emailPassword, emailReceiver, volMode, ...backendConfigs } = configs;
     const backendKey = JSON.stringify({ symbol, timeframe, viewMode, chartTheme, backendConfigs });
@@ -3306,30 +3309,11 @@ useEffect(() => {
     } else if (viewMode === 'backtest' && simulatedTimeRef.current) {
       // Khi đổi symbol hoặc timeframe trong lúc backtest
       fetchData(false, simulatedTimeRef.current);
-      // Tải lại tin tức cho cặp tiền mới
-      setBacktestNewsStatus('Đang tải tin...');
-      axios.get(`${API_BASE}/api/v1/news/backtest`, {
-        params: { symbol, timestamp: simulatedTimeRef.current }
-      }).then(response => {
-        if (response.data.status === 'success') {
-          let finalData = response.data.data;
-          if (configs.timeShiftHours) {
-            finalData = finalData.map(item => ({
-               ...item,
-               time: item.time + (configs.timeShiftHours * 3600)
-            }));
-          }
-          setNewsData(finalData);
-          setBacktestNewsStatus(finalData.length ? `${finalData.length} tin` : '0 tin — kiểm tra Forex Factory/VPN');
-        } else {
-          setBacktestNewsStatus('Không tải được tin');
-        }
-      }).catch(e => {
-        console.error(e);
-        setBacktestNewsStatus('Lỗi kết nối nguồn tin');
-      });
+      // News is optional. Load it in the background so a blocked source never
+      // holds chart refresh or the backtest playback loop.
+      requestBacktestNews(simulatedTimeRef.current);
     }
-  }, [symbol, timeframe, configs, viewMode, chartTheme]);
+  }, [symbol, timeframe, configs, viewMode, chartTheme, requestBacktestNews]);
 
   // Backtest Playback Loop
   const getWeekMonday = (timestamp) => {
@@ -3340,6 +3324,43 @@ useEffect(() => {
     d.setUTCHours(0, 0, 0, 0);
     return Math.floor(d.getTime() / 1000);
   };
+
+  const requestBacktestNews = useCallback((timestamp, { merge = false } = {}) => {
+    const requestId = ++backtestNewsRequestRef.current;
+    const requestSymbol = symbolRef.current;
+    const timeShiftSeconds = (Number(configsRef.current?.timeShiftHours) || 0) * 3600;
+    setBacktestNewsStatus('Đang tải lịch tin…');
+
+    axios.get(`${API_BASE}/api/v1/news/backtest`, {
+      params: { symbol: requestSymbol, timestamp },
+      timeout: 12000,
+    }).then(response => {
+      if (requestId !== backtestNewsRequestRef.current || symbolRef.current !== requestSymbol) return;
+      if (response.data.status !== 'success') {
+        setBacktestNewsStatus('Không có lịch tin — đã bỏ qua');
+        return;
+      }
+
+      let finalData = Array.isArray(response.data.data) ? response.data.data : [];
+      if (timeShiftSeconds) {
+        finalData = finalData.map(item => ({ ...item, time: item.time + timeShiftSeconds }));
+      }
+      if (merge) {
+        setNewsData(previous => {
+          const existingKeys = new Set(previous.map(event => `${event.time}_${event.title}`));
+          return [...previous, ...finalData.filter(event => !existingKeys.has(`${event.time}_${event.title}`))];
+        });
+      } else {
+        setNewsData(finalData);
+      }
+      setBacktestNewsStatus(finalData.length
+        ? (merge ? 'Đã cập nhật lịch tin' : `${finalData.length} tin`)
+        : 'Không có tin — backtest tiếp tục');
+    }).catch(() => {
+      if (requestId !== backtestNewsRequestRef.current || symbolRef.current !== requestSymbol) return;
+      setBacktestNewsStatus('Nguồn tin không khả dụng — đã bỏ qua');
+    });
+  }, []);
 
   useEffect(() => {
     let timeoutId;
@@ -3405,37 +3426,7 @@ useEffect(() => {
       const currentMonday = getWeekMonday(simulatedTimeRef.current);
       if (currentMonday !== backtestWeekRef.current) {
         backtestWeekRef.current = currentMonday;
-        try {
-          const response = await axios.get(`${API_BASE}/api/v1/news/backtest`, {
-            params: { symbol, timestamp: simulatedTimeRef.current }
-          });
-          if (response.data.status === 'success') {
-            let newEvents = response.data.data;
-            if (configs.timeShiftHours) {
-              newEvents = newEvents.map(item => ({
-                 ...item,
-                 time: item.time + (configs.timeShiftHours * 3600)
-              }));
-            }
-            setNewsData(prev => {
-              const existingKeys = new Set(prev.map(e => `${e.time}_${e.title}`));
-              const merged = [...prev];
-              newEvents.forEach(ev => {
-                const key = `${ev.time}_${ev.title}`;
-                if (!existingKeys.has(key)) {
-                  merged.push(ev);
-                }
-              });
-              return merged;
-            });
-            setBacktestNewsStatus(newEvents.length ? 'Đã cập nhật lịch tin' : '0 tin — kiểm tra Forex Factory/VPN');
-          } else {
-            setBacktestNewsStatus('Không tải được tin');
-          }
-        } catch (e) {
-          console.error("Failed to fetch next week news", e);
-          setBacktestNewsStatus('Lỗi kết nối nguồn tin');
-        }
+        requestBacktestNews(simulatedTimeRef.current, { merge: true });
       }
       
       // Luôn dùng polling (safeUpdate) cho mượt vì candlesPerTick = 1
@@ -3453,9 +3444,9 @@ useEffect(() => {
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [viewMode, isPlaying, timeframe]);
+  }, [viewMode, isPlaying, timeframe, requestBacktestNews]);
 
-  const handleLoadBacktest = async () => {
+  const handleLoadBacktest = () => {
     if (!backtestDate) {
       alert("Vui lòng chọn ngày giờ Backtest!");
       return;
@@ -3471,29 +3462,8 @@ useEffect(() => {
     setNewsData([]);
     setBacktestNewsStatus('Đang tải tin...');
     fetchData(false, targetTimestamp, false, true);
-    
-    // Tải tin tức lịch sử cho backtest
-    try {
-      const response = await axios.get(`${API_BASE}/api/v1/news/backtest`, {
-        params: { symbol, timestamp: targetTimestamp }
-      });
-      if (response.data.status === 'success') {
-        let finalData = response.data.data;
-        if (configs.timeShiftHours) {
-          finalData = finalData.map(item => ({
-             ...item,
-             time: item.time + (configs.timeShiftHours * 3600)
-          }));
-        }
-        setNewsData(finalData);
-        setBacktestNewsStatus(finalData.length ? `${finalData.length} tin` : '0 tin — kiểm tra Forex Factory/VPN');
-      } else {
-        setBacktestNewsStatus('Không tải được tin');
-      }
-    } catch (e) {
-      console.error("Failed to fetch backtest news", e);
-      setBacktestNewsStatus('Lỗi kết nối nguồn tin');
-    }
+    // Do not await optional news: candle data and controls remain responsive.
+    requestBacktestNews(targetTimestamp);
   };
   
   const togglePlay = () => {

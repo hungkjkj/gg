@@ -6,8 +6,8 @@ import re
 import time
 import json
 import os
+import threading
 
-import os
 CACHE_FILE = os.path.join(os.path.dirname(__file__), "news_cache.json")
 
 def load_cache():
@@ -27,6 +27,9 @@ def save_cache(cache):
         pass
 
 HISTORY_CACHE_FILE = os.path.join(os.path.dirname(__file__), "news_history_cache.json")
+HISTORY_FAILURE_CACHE_FILE = os.path.join(os.path.dirname(__file__), "news_history_failure_cache.json")
+HISTORY_FAILURE_COOLDOWN_SECONDS = 30 * 60
+HISTORY_FETCH_LOCK = threading.Lock()
 
 def load_history_cache():
     if os.path.exists(HISTORY_CACHE_FILE):
@@ -44,7 +47,23 @@ def save_history_cache(cache):
     except:
         pass
 
+def load_history_failure_cache():
+    try:
+        with open(HISTORY_FAILURE_CACHE_FILE, "r", encoding="utf-8") as f:
+            cache = json.load(f)
+            return cache if isinstance(cache, dict) else {}
+    except Exception:
+        return {}
+
+def save_history_failure_cache(cache):
+    try:
+        with open(HISTORY_FAILURE_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False)
+    except Exception:
+        pass
+
 HISTORY_CACHE = load_history_cache()
+HISTORY_FAILURE_CACHE = load_history_failure_cache()
 NEWS_CACHE = load_cache()
 
 def _parse_year_from_week(week):
@@ -68,16 +87,19 @@ def scrape_ff_week(week='this'):
     
     try:
         import cloudscraper
+        from requests.adapters import HTTPAdapter
         scraper = cloudscraper.create_scraper()
-        # cloudscraper will handle CF bypass and cookies
-        response = scraper.get(url, timeout=20)
+        # Do not let an unavailable calendar hold up chart/backtest requests.
+        scraper.mount('https://', HTTPAdapter(max_retries=0))
+        response = scraper.get(url, timeout=(2, 3))
         if response.status_code != 200:
-            print(f"Scrape error for week={week}: Status {response.status_code}")
-            return []
+            print(f"Skipping Forex Factory week={week}: HTTP {response.status_code}.")
+            return None
         html = response.text
     except Exception as e:
-        print(f"Scrape error for week={week}: {e}")
-        return []
+        # Avoid logging long connection tracebacks on every replay request.
+        print(f"Skipping Forex Factory week={week}: {type(e).__name__}.")
+        return None
     soup = BeautifulSoup(html, 'html.parser')
     
     # Step 1: Extract event JSON data (contains UTC timestamps as 'dateline')
@@ -182,19 +204,36 @@ def get_backtest_news(timestamp):
     
     for ts in timestamps:
         week_str = _timestamp_to_ff_week(ts)
-        
-        # Kiểm tra cache
-        if week_str in HISTORY_CACHE and len(HISTORY_CACHE[week_str]) > 0:
-            all_events.extend(HISTORY_CACHE[week_str])
-        else:
-            # Chưa có -> cào từ ForexFactory
+
+        # Serialize cache misses so playback/poll requests cannot launch the
+        # same slow scrape repeatedly at once.
+        with HISTORY_FETCH_LOCK:
+            if week_str in HISTORY_CACHE:
+                all_events.extend(HISTORY_CACHE[week_str] or [])
+                continue
+
+            failed_at = HISTORY_FAILURE_CACHE.get(week_str, 0)
+            try:
+                failed_at = float(failed_at)
+            except (TypeError, ValueError):
+                failed_at = 0
+            if time.time() - failed_at < HISTORY_FAILURE_COOLDOWN_SECONDS:
+                continue
+
             print(f"Fetching historical news for backtest week: {week_str}")
             week_events = scrape_ff_week(week_str)
-            
-            if len(week_events) > 0:
-                HISTORY_CACHE[week_str] = week_events
-                save_history_cache(HISTORY_CACHE)
-                all_events.extend(week_events)
+            if week_events is None:
+                HISTORY_FAILURE_CACHE[week_str] = time.time()
+                save_history_failure_cache(HISTORY_FAILURE_CACHE)
+                continue
+
+            # Cache successful empty weeks too; only network failures should
+            # be retried after the cooldown.
+            HISTORY_CACHE[week_str] = week_events
+            HISTORY_FAILURE_CACHE.pop(week_str, None)
+            save_history_cache(HISTORY_CACHE)
+            save_history_failure_cache(HISTORY_FAILURE_CACHE)
+            all_events.extend(week_events)
                 
     return all_events
 
@@ -226,12 +265,12 @@ def fetch_ff_calendar():
     NEWS_CACHE["last_fetch"] = current_time
     save_cache(NEWS_CACHE)
     
-    events_this = scrape_ff_week('this')
+    events_this = scrape_ff_week('this') or []
     
     # Chỉ tải tuần sau nếu hôm nay là Chủ Nhật (weekday() == 6) hoặc Thứ Bảy (5)
     events_next = []
     if datetime.datetime.now().weekday() >= 5:
-        events_next = scrape_ff_week('next')
+        events_next = scrape_ff_week('next') or []
     
     all_events = events_this + events_next
     if len(all_events) > 0:
