@@ -2247,7 +2247,7 @@ useEffect(() => {
             const latestTime = data[data.length - 1].time;
             const startIndex = Math.max(0, data.length - visibleBars);
             const defaultTo = latestTime + timeframeSeconds * futureBars;
-            const usSessionEnd = viewMode === 'chart' && !['D1', 'W1', 'MN1'].includes(timeframe)
+            const usSessionEnd = ['chart', 'backtest'].includes(viewMode) && !['D1', 'W1', 'MN1'].includes(timeframe)
               ? getUsSessionEndChartTime(latestTime, configsRef.current, /BTC|ETH|SOL|XRP|CRYPTO/i.test(symbol))
               : null;
             const range = {
@@ -3154,7 +3154,7 @@ useEffect(() => {
                       savedToTime >= latestCandleTime - tfSec * 5;
                     if (
                       savedViewportIncludesLatest &&
-                      viewMode === 'chart' &&
+                      ['chart', 'backtest'].includes(viewMode) &&
                       !['D1', 'W1', 'MN1'].includes(timeframe) &&
                       totalCandles > 0
                     ) {
@@ -5713,10 +5713,13 @@ function App() {
   useEffect(() => {
     if (!showMatrixBubble) return;
     
+    let active = true;
     let isFetching = false;
     let pendingBacktestRefresh = false;
     let isDvpTrendFetching = false;
+    let pendingDvpTrendRefresh = false;
     let lastDvpTrendRequestAt = 0;
+    let lastDvpTrendReplayTime = 0;
     let unlockTimer = null;
     const finishBubbleFetch = () => {
       if (viewMode !== 'backtest') {
@@ -5736,6 +5739,19 @@ function App() {
       }, 1000);
     };
     const fetchBubbleMatrix = () => {
+      if (viewMode === 'backtest' && !Number(window.currentSimulatedTime)) {
+        setBubbleSessionMatrix(null);
+        setBubblePowerLong([]);
+        setBubblePowerShort([]);
+        setBubbleDvpTrend(null);
+        setBubbleMatrixAsOf({ mode: 'backtest-unloaded', timestamp: 0 });
+        setBubbleDvpAsOf({ mode: 'backtest-unloaded', timestamp: 0 });
+        setBubbleMatrixError('');
+        setBubbleDvpTrendError('');
+        setBubbleMatrixLoading(false);
+        setBubbleDvpTrendLoading(false);
+        return;
+      }
       if (isFetching) {
         if (viewMode === 'backtest') pendingBacktestRefresh = true;
         return;
@@ -5758,7 +5774,9 @@ function App() {
         brokerTimezone: configs.brokerTimezone || 'Europe/Athens',
         ...sessionSettings
       };
-      if (viewMode === 'backtest' && window.currentSimulatedTime) params.end_time = window.currentSimulatedTime;
+      if (viewMode === 'backtest' && window.currentSimulatedTime) {
+        params.end_time = getClosedM5Cutoff(Number(window.currentSimulatedTime));
+      }
       const dataAsOf = params.end_time
         ? { mode: 'backtest', timestamp: Number(params.end_time) }
         : { mode: viewMode === 'backtest' ? 'backtest-unloaded' : 'live', timestamp: Math.floor(Date.now() / 1000) };
@@ -5771,9 +5789,19 @@ function App() {
         brokerTimezone: params.brokerTimezone
       };
 
-      if (!isDvpTrendFetching && Date.now() - lastDvpTrendRequestAt >= 60 * 1000) {
+      const shouldRefreshDvpTrend = viewMode === 'backtest'
+        ? Boolean(params.end_time) && (
+            !lastDvpTrendReplayTime ||
+            params.end_time < lastDvpTrendReplayTime ||
+            params.end_time - lastDvpTrendReplayTime >= 5 * 60
+          )
+        : Date.now() - lastDvpTrendRequestAt >= 60 * 1000;
+      if (shouldRefreshDvpTrend && isDvpTrendFetching) {
+        pendingDvpTrendRefresh = true;
+      } else if (shouldRefreshDvpTrend) {
         isDvpTrendFetching = true;
         lastDvpTrendRequestAt = Date.now();
+        if (viewMode === 'backtest') lastDvpTrendReplayTime = Number(params.end_time);
         setBubbleDvpTrendLoading(true);
         setBubbleDvpTrendError('');
         axios.get(`${API_BASE}/api/v1/matrix/dvp-trend`, {
@@ -5790,14 +5818,21 @@ function App() {
             force: false
           }
         }).then(response => {
+          if (!active) return;
           setBubbleDvpTrend(response.data);
           setBubbleDvpAsOf(dataAsOf);
         }).catch(error => {
+          if (!active) return;
           console.error('Error fetching bubble D-VP trend ranking:', error);
           setBubbleDvpTrendError('Không tải được BXH D-VP.');
         }).finally(() => {
           isDvpTrendFetching = false;
+          if (!active) return;
           setBubbleDvpTrendLoading(false);
+          if (pendingDvpTrendRefresh) {
+            pendingDvpTrendRefresh = false;
+            fetchBubbleMatrix();
+          }
         });
       }
 
@@ -5811,12 +5846,14 @@ function App() {
         axios.get(`${API_BASE}/api/v1/matrix`, { params: { ...legacyParams, n_hours: longHours, matrix_mode: 'trend' } }),
         axios.get(`${API_BASE}/api/v1/matrix/session-stats`, { params })
       ]).then(([flowShort, flowLong, trendShort, trendLong, sessionStats]) => {
+          if (!active) return;
           setBubbleSessionMatrix(sessionStats.data);
           setBubblePowerLong(computeCompositeRanking(flowLong.data?.ranking, trendLong.data?.ranking));
           setBubblePowerShort(computeCompositeRanking(flowShort.data?.ranking, trendShort.data?.ranking));
           setBubbleMatrixAsOf(dataAsOf);
           finishBubbleFetch();
       }).catch(err => {
+          if (!active) return;
           console.error(err);
           setBubbleMatrixError('Không cập nhật được Matrix; các số đang thấy là dữ liệu lần trước.');
           finishBubbleFetch();
@@ -5829,6 +5866,7 @@ function App() {
     window.addEventListener('simulatedTimeChanged', fetchBubbleMatrix);
     
     return () => {
+      active = false;
       clearInterval(interval);
       if (unlockTimer) clearTimeout(unlockTimer);
       window.removeEventListener('simulatedTimeChanged', fetchBubbleMatrix);

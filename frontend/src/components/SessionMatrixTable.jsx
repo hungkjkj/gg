@@ -62,10 +62,17 @@ export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [
   const fixedColumnWidth = 455 + assetColumnWidth;
   const longLabel = `${data.long_hours || 89}h`;
   const shortLabel = `${data.short_hours || 24}h`;
+  const frameCellStyle = (first = false, last = false) => compact ? {
+    background: 'rgba(8, 20, 40, 0.62)',
+    borderTop: '1px solid rgba(34,211,238,0.28)',
+    borderBottom: '1px solid rgba(34,211,238,0.28)',
+    ...(first ? { borderLeft: '1px solid rgba(34,211,238,0.28)', borderTopLeftRadius: '6px', borderBottomLeftRadius: '6px' } : {}),
+    ...(last ? { borderRight: '1px solid rgba(34,211,238,0.28)', borderTopRightRadius: '6px', borderBottomRightRadius: '6px' } : {}),
+  } : {};
 
   return (
     <div style={{ width: '100%', minWidth: 0, overflowX: 'auto', overscrollBehaviorX: 'contain' }}>
-      <table style={{ width: '100%', minWidth: compact ? '900px' : '1120px', tableLayout: 'fixed', borderCollapse: 'collapse', color: '#e2e8f0', fontSize }}>
+      <table style={{ width: '100%', minWidth: compact ? '900px' : '1120px', tableLayout: 'fixed', borderCollapse: compact ? 'separate' : 'collapse', borderSpacing: compact ? '0 4px' : '0', color: '#e2e8f0', fontSize }}>
         <colgroup>
           <col style={{ width: compact ? '28px' : '34px' }} />
           <col style={{ width: `${assetColumnWidth}px` }} />
@@ -112,12 +119,12 @@ export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [
               );
             };
             return (
-              <tr key={item.currency} style={{ borderBottom: '1px solid rgba(148,163,184,0.09)' }}>
-                <td style={{ padding: cellPadding, color: index < 3 ? '#fbbf24' : '#94a3b8', fontWeight: 700 }}>{index + 1}</td>
-                <td title={item.currency} style={{ padding: cellPadding, fontWeight: 700, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.currency}</td>
+              <tr key={item.currency}>
+                <td style={{ ...frameCellStyle(true), padding: cellPadding, color: index < 3 ? '#fbbf24' : '#94a3b8', fontWeight: 700 }}>{index + 1}</td>
+                <td title={item.currency} style={{ ...frameCellStyle(), padding: cellPadding, fontWeight: 700, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.currency}</td>
                 <td
                   title={compact ? `Power V-target: ${longLabel} / ${shortLabel}. Phân vị volume của toàn cửa sổ so với các cửa sổ lịch sử trong ${data?.vol_days || 'Vol days'} ngày.` : undefined}
-                  style={{ padding: cellPadding, whiteSpace: compact ? 'normal' : 'nowrap' }}
+                  style={{ ...frameCellStyle(), padding: cellPadding, whiteSpace: compact ? 'normal' : 'nowrap' }}
                 >
                   <div style={{ whiteSpace: 'nowrap' }}>
                     <span style={{ color: powerColor, fontWeight: 700 }}>{powerValue == null ? '—' : `${powerValue > 0 ? '+' : ''}${powerValue.toFixed(1)}`}</span>
@@ -138,13 +145,13 @@ export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [
                 {sessions.map(session => {
                   const stats = item.sessions?.[session.key] || {};
                   return (
-                    <td key={session.key} style={{ padding: cellPadding, overflow: 'hidden' }}>
+                    <td key={session.key} style={{ ...frameCellStyle(), padding: cellPadding, overflow: 'hidden' }}>
                       <SessionPeriodCell period={stats.long} label={longLabel} />
                       <SessionPeriodCell period={stats.short} label={shortLabel} />
                     </td>
                   );
                 })}
-                <td style={{ padding: cellPadding, textAlign: 'right' }}>
+                <td style={{ ...frameCellStyle(false, true), padding: cellPadding, textAlign: 'right' }}>
                   <span style={{ color: statusColor, fontSize: compact ? '10px' : '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>{status || '—'}</span>
                 </td>
               </tr>

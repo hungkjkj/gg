@@ -7,14 +7,14 @@ const ASSISTIVE_VIEWPORT_MARGIN = 12;
 const ASSISTIVE_BOTTOM_MARGIN = 20;
 
 const formatMatrixAsOf = value => {
-  if (!value?.timestamp) return 'Đang chờ dữ liệu';
+  if (!value?.timestamp) return value?.mode === 'backtest-unloaded' ? 'Backtest · đang chờ thời gian giả lập' : 'Đang chờ dữ liệu';
   const time = new Date(value.timestamp * 1000).toLocaleString('vi-VN', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
     timeZoneName: 'short'
   });
   if (value.mode === 'backtest') return `Backtest · tính đến ${time} (giờ giả lập)`;
-  if (value.mode === 'backtest-unloaded') return `Backtest chưa tải mốc · đang dùng dữ liệu MT5 mới nhất (${time})`;
+  if (value.mode === 'backtest-unloaded') return `Backtest chưa tải mốc · đang chờ thời gian giả lập (${time})`;
   return `Live · dữ liệu MT5 mới nhất, tính lúc ${time}`;
 };
 
