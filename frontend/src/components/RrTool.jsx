@@ -402,7 +402,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
       <div
         ref={startHandleRef}
         title="Kéo để đổi thời điểm bắt đầu"
-        style={{ position: 'absolute', zIndex: 53, pointerEvents: 'auto', cursor: 'ew-resize', background: 'rgba(56, 189, 248, 0.08)' }}
+        style={{ position: 'absolute', zIndex: 53, pointerEvents: 'auto', cursor: 'ew-resize', background: 'transparent' }}
         onMouseDown={event => { event.stopPropagation(); if (event.button === 0) setIsDragging('start'); }}
         onContextMenu={openContextMenu}
       >
@@ -411,7 +411,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
       <div
         ref={endHandleRef}
         title="Kéo để đổi thời điểm kết thúc"
-        style={{ position: 'absolute', zIndex: 53, pointerEvents: 'auto', cursor: 'ew-resize', background: 'rgba(56, 189, 248, 0.08)' }}
+        style={{ position: 'absolute', zIndex: 53, pointerEvents: 'auto', cursor: 'ew-resize', background: 'transparent' }}
         onMouseDown={event => { event.stopPropagation(); if (event.button === 0) setIsDragging('end'); }}
         onContextMenu={openContextMenu}
       >
