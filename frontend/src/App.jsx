@@ -970,6 +970,52 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     setDrawingActionMenu(null);
   };
 
+  const getDrawingCountForSymbol = ownerSymbol => {
+    const chartDrawings = chartDrawingsBySymbol[ownerSymbol] || {};
+    return (drawnLines || []).filter(line => line.symbol === ownerSymbol).length
+      + (rrToolsBySymbol[ownerSymbol] || []).length
+      + (chartDrawings.fibonacci || []).length
+      + (chartDrawings.percent || []).length;
+  };
+
+  const clearAllDrawingsForSymbol = ownerSymbol => {
+    const chartDrawings = chartDrawingsBySymbol[ownerSymbol] || {};
+    const lines = (drawnLines || []).filter(line => line.symbol === ownerSymbol);
+    const rrTools = rrToolsBySymbol[ownerSymbol] || [];
+    const fibonacci = chartDrawings.fibonacci || [];
+    const percent = chartDrawings.percent || [];
+    const total = lines.length + rrTools.length + fibonacci.length + percent.length;
+
+    if (!total) {
+      closeContextMenu();
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Xóa ${total} bản vẽ thủ công của ${ownerSymbol}?\n\n`
+      + `Đường ngang: ${lines.length}; RR: ${rrTools.length}; Fibonacci: ${fibonacci.length}; đo %: ${percent.length}.\n\n`
+      + 'Các chỉ báo trên chart sẽ không bị xóa.'
+    );
+    if (!confirmed) {
+      closeContextMenu();
+      return;
+    }
+
+    const remainingLines = (drawnLines || []).filter(line => line.symbol !== ownerSymbol);
+    setDrawnLines(remainingLines);
+    try { localStorage.setItem('userDrawnLines', JSON.stringify(remainingLines)); } catch (e) {}
+    setRrToolsBySymbol(previous => ({ ...previous, [ownerSymbol]: [] }));
+    persistChartDrawings(previous => ({
+      ...previous,
+      [ownerSymbol]: { ...previous[ownerSymbol], fibonacci: [], percent: [] },
+    }));
+    chartDrawingModeRef.current = null;
+    pendingChartDrawingAnchorRef.current = null;
+    setChartDrawingMode(null);
+    setHasPendingChartDrawingAnchor(false);
+    closeContextMenu();
+  };
+
   const openDrawingActionMenu = (event, kind, drawingId) => {
     event.preventDefault();
     event.stopPropagation();
@@ -3709,6 +3755,15 @@ useEffect(() => {
             >
               📉 Thêm RR Bán (Short)
             </div>
+            {getDrawingCountForSymbol(contextMenu.symbol) > 0 && (
+              <div
+                className="context-menu-item"
+                style={{ color: '#fb7185', borderTop: '1px solid var(--border-color)', marginTop: '4px' }}
+                onClick={() => clearAllDrawingsForSymbol(contextMenu.symbol)}
+              >
+                🗑️ Xóa mọi bản vẽ ({getDrawingCountForSymbol(contextMenu.symbol)})
+              </div>
+            )}
           </div>
         )}
 
