@@ -75,7 +75,6 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
       const stopBottom = isLong ? yStop : yEntry;
       const boxTop = Math.min(targetTop, stopTop);
       const boxBottom = Math.max(targetBottom, stopBottom);
-
       const place = (element, x, y, w, h) => {
         if (!element) return;
         element.style.left = `${x}px`;
@@ -91,6 +90,7 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
       // price levels directly without accidentally moving the whole RR box.
       place(targetDragRef.current, left, yTarget - 7, width, 14);
       place(stopDragRef.current, left, yStop - 7, width, 14);
+      // Keep the horizontal resize hit areas while leaving the edge grips invisible.
       place(startHandleRef.current, left - 6, boxTop, 12, boxBottom - boxTop);
       place(endHandleRef.current, left + width - 6, boxTop, 12, boxBottom - boxTop);
       // Keep the whole-box drag handle close to entry instead of centered
@@ -398,25 +398,21 @@ const RrTool = ({ tool, chart, series, lastUpdateSignal, onUpdate, onRequestCont
         onContextMenu={openContextMenu}
       />
 
-      {/* TIME RANGE HANDLES */}
+      {/* Invisible edge hit areas retain horizontal/time resizing without visible grips. */}
       <div
         ref={startHandleRef}
         title="Kéo để đổi thời điểm bắt đầu"
         style={{ position: 'absolute', zIndex: 53, pointerEvents: 'auto', cursor: 'ew-resize', background: 'transparent' }}
         onMouseDown={event => { event.stopPropagation(); if (event.button === 0) setIsDragging('start'); }}
         onContextMenu={openContextMenu}
-      >
-        <div style={{ position: 'absolute', top: '50%', left: '50%', width: '4px', height: '28px', transform: 'translate(-50%, -50%)', borderRadius: '3px', background: '#38bdf8', boxShadow: '0 0 8px rgba(56,189,248,0.9)', pointerEvents: 'none' }} />
-      </div>
+      />
       <div
         ref={endHandleRef}
         title="Kéo để đổi thời điểm kết thúc"
         style={{ position: 'absolute', zIndex: 53, pointerEvents: 'auto', cursor: 'ew-resize', background: 'transparent' }}
         onMouseDown={event => { event.stopPropagation(); if (event.button === 0) setIsDragging('end'); }}
         onContextMenu={openContextMenu}
-      >
-        <div style={{ position: 'absolute', top: '50%', left: '50%', width: '4px', height: '28px', transform: 'translate(-50%, -50%)', borderRadius: '3px', background: '#38bdf8', boxShadow: '0 0 8px rgba(56,189,248,0.9)', pointerEvents: 'none' }} />
-      </div>
+      />
 
       <div
         ref={moveHandleRef}
