@@ -367,6 +367,10 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   
   const [contextMenu, setContextMenu] = useState(null);
   const [drawingActionMenu, setDrawingActionMenu] = useState(null);
+  const [clearDrawingsConfirm, setClearDrawingsConfirm] = useState(null);
+  const clearDrawingsConfirmRef = useRef(clearDrawingsConfirm);
+  clearDrawingsConfirmRef.current = clearDrawingsConfirm;
+  const confirmClearAllDrawingsRef = useRef(null);
   
   const [drawnLines, setDrawnLines] = useState(() => {
      try { return JSON.parse(localStorage.getItem('userDrawnLines')) || []; }
@@ -563,8 +567,13 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       if (event.key === 'F5' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
         && ['chart', 'backtest'].includes(viewMode)) {
         event.preventDefault();
-        if (shortcutsBlocked || event.repeat || event.isComposing || isEditableTarget(event.target)) return;
+        if (event.repeat || event.isComposing || isEditableTarget(event.target)) return;
         event.stopPropagation();
+        if (clearDrawingsConfirmRef.current) {
+          if (!shortcutsBlocked) confirmClearAllDrawingsRef.current?.();
+          return;
+        }
+        if (shortcutsBlocked) return;
         clearAllDrawingsForSymbolRef.current?.(symbolRef.current);
         return;
       }
@@ -1000,31 +1009,46 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       return;
     }
 
-    const confirmed = window.confirm(
-      `Xóa ${total} bản vẽ thủ công của ${ownerSymbol}?\n\n`
-      + `Đường ngang: ${lines.length}; RR: ${rrTools.length}; Fibonacci: ${fibonacci.length}; đo %: ${percent.length}.\n\n`
-      + 'Các chỉ báo trên chart sẽ không bị xóa.'
-    );
-    if (!confirmed) {
-      closeContextMenu();
-      return;
-    }
+    setClearDrawingsConfirm({
+      ownerSymbol,
+      counts: { lines: lines.length, rrTools: rrTools.length, fibonacci: fibonacci.length, percent: percent.length },
+      total,
+    });
+    closeContextMenu();
+  };
 
+  const confirmClearAllDrawings = () => {
+    if (!clearDrawingsConfirm) return;
+    const { ownerSymbol } = clearDrawingsConfirm;
     const remainingLines = (drawnLines || []).filter(line => line.symbol !== ownerSymbol);
     setDrawnLines(remainingLines);
     try { localStorage.setItem('userDrawnLines', JSON.stringify(remainingLines)); } catch (e) {}
     setRrToolsBySymbol(previous => ({ ...previous, [ownerSymbol]: [] }));
     persistChartDrawings(previous => ({
       ...previous,
-      [ownerSymbol]: { ...previous[ownerSymbol], fibonacci: [], percent: [] },
+      [ownerSymbol]: { ...(previous[ownerSymbol] || {}), fibonacci: [], percent: [] },
     }));
     chartDrawingModeRef.current = null;
     pendingChartDrawingAnchorRef.current = null;
     setChartDrawingMode(null);
     setHasPendingChartDrawingAnchor(false);
+    setClearDrawingsConfirm(null);
     closeContextMenu();
   };
   clearAllDrawingsForSymbolRef.current = clearAllDrawingsForSymbol;
+  confirmClearAllDrawingsRef.current = confirmClearAllDrawings;
+
+  useEffect(() => {
+    if (!clearDrawingsConfirm) return undefined;
+    const cancelConfirmation = event => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      setClearDrawingsConfirm(null);
+    };
+    window.addEventListener('keydown', cancelConfirmation, true);
+    return () => window.removeEventListener('keydown', cancelConfirmation, true);
+  }, [clearDrawingsConfirm]);
 
   const openDrawingActionMenu = (event, kind, drawingId) => {
     event.preventDefault();
@@ -1890,22 +1914,23 @@ useEffect(() => {
           // by interpolating between their neighboring chart times.
           const axisTimeline = newsSeriesRef.current?.data?.() || candlestickSeriesRef.current.data() || [];
           const coordinateForSessionTime = timestamp => {
-            const exact = timeScale.timeToCoordinate(timestamp);
-            if (Number.isFinite(exact)) return exact;
-
             let low = 0;
             let high = axisTimeline.length;
             while (low < high) {
               const middle = (low + high) >>> 1;
-              if (Number(axisTimeline[middle]?.time) < timestamp) low = middle + 1;
+              if (toUnixTime(axisTimeline[middle]?.time) < timestamp) low = middle + 1;
               else high = middle;
             }
 
             const before = axisTimeline[low - 1];
             const after = axisTimeline[low];
+            const afterTime = after ? toUnixTime(after.time) : NaN;
+            if (after && afterTime === timestamp) {
+              const exact = timeScale.timeToCoordinate(after.time);
+              return Number.isFinite(exact) ? exact : null;
+            }
             if (!before || !after) return null;
-            const beforeTime = Number(before.time);
-            const afterTime = Number(after.time);
+            const beforeTime = toUnixTime(before.time);
             const beforeX = timeScale.timeToCoordinate(before.time);
             const afterX = timeScale.timeToCoordinate(after.time);
             if (!Number.isFinite(beforeX) || !Number.isFinite(afterX) || afterTime <= beforeTime) return null;
@@ -3774,6 +3799,54 @@ useEffect(() => {
                 🗑️ Xóa mọi bản vẽ ({getDrawingCountForSymbol(contextMenu.symbol)})
               </div>
             )}
+          </div>
+        )}
+
+        {clearDrawingsConfirm && (
+          <div
+            role="presentation"
+            onMouseDown={event => {
+              if (event.target === event.currentTarget) setClearDrawingsConfirm(null);
+            }}
+            style={{ position: 'fixed', inset: 0, zIndex: 10060, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px', background: 'rgba(1,5,16,0.76)', backdropFilter: 'blur(4px)' }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="clear-drawings-title"
+              onMouseDown={event => event.stopPropagation()}
+              style={{ width: 'min(460px, 100%)', padding: '22px', border: '1px solid rgba(0,240,255,0.48)', borderRadius: '14px', background: '#081225', color: '#e2e8f0', boxShadow: '0 18px 60px rgba(0,0,0,0.65), 0 0 28px rgba(0,240,255,0.1)' }}
+            >
+              <h2 id="clear-drawings-title" style={{ margin: '0 0 8px', color: '#67e8f9', fontSize: '20px' }}>Xác nhận xóa bản vẽ</h2>
+              <p style={{ margin: '0 0 16px', color: '#cbd5e1', lineHeight: 1.55 }}>
+                Xóa {clearDrawingsConfirm.total} bản vẽ thủ công của <strong>{clearDrawingsConfirm.ownerSymbol}</strong>?
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px', color: '#cbd5e1', fontSize: '13px' }}>
+                <div style={{ padding: '9px 10px', borderRadius: '7px', background: 'rgba(148,163,184,0.08)' }}>Đường ngang: <strong>{clearDrawingsConfirm.counts.lines}</strong></div>
+                <div style={{ padding: '9px 10px', borderRadius: '7px', background: 'rgba(148,163,184,0.08)' }}>RR: <strong>{clearDrawingsConfirm.counts.rrTools}</strong></div>
+                <div style={{ padding: '9px 10px', borderRadius: '7px', background: 'rgba(148,163,184,0.08)' }}>Fibonacci: <strong>{clearDrawingsConfirm.counts.fibonacci}</strong></div>
+                <div style={{ padding: '9px 10px', borderRadius: '7px', background: 'rgba(148,163,184,0.08)' }}>Đo %: <strong>{clearDrawingsConfirm.counts.percent}</strong></div>
+              </div>
+              <p style={{ margin: '0 0 16px', color: '#94a3b8', fontSize: '12px', lineHeight: 1.5 }}>
+                Chỉ báo và bản vẽ của tài sản khác sẽ được giữ nguyên. Nhấn F5 lần nữa để xác nhận nhanh.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setClearDrawingsConfirm(null)}
+                  style={{ padding: '9px 16px', borderRadius: '8px', border: '1px solid rgba(148,163,184,0.35)', background: 'rgba(15,23,42,0.85)', color: '#cbd5e1', cursor: 'pointer', fontWeight: 700 }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmClearAllDrawings}
+                  style={{ padding: '9px 16px', borderRadius: '8px', border: '1px solid rgba(251,113,133,0.65)', background: 'rgba(190,24,93,0.22)', color: '#fecdd3', cursor: 'pointer', fontWeight: 700 }}
+                >
+                  OK, xóa
+                </button>
+              </div>
+            </section>
           </div>
         )}
 
