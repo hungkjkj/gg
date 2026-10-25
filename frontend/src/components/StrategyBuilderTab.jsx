@@ -5,6 +5,7 @@ const symbolGroups = {
   "Chỉ số Tổng hợp": [
     {name: "FX GI", description: "Thị trường chung"},
     {name: "US Stocks GI", description: "Chỉ số Cổ phiếu Mỹ"},
+    {name: "EU_STOCKS_GI", description: "Chỉ số Chứng khoán Châu Âu"},
     {name: "Commodities GI", description: "Chỉ số Hàng hóa"},
     {name: "Crypto GI", description: "Chỉ số Tiền điện tử"}
   ],
@@ -40,6 +41,12 @@ const symbolGroups = {
     {name: "US100.i#", description: "NASDAQ 100"},
     {name: "GER40.i#", description: "DAX 40 (Đức)"},
     {name: "UK100.i#", description: "FTSE 100 (Anh)"},
+    {name: "EU50Cash", description: "Euro Stoxx 50"},
+    {name: "FRA40Cash", description: "CAC 40 (Pháp)"},
+    {name: "IT40Cash", description: "FTSE MIB 40 (Ý)"},
+    {name: "SWI20Cash", description: "SMI 20 (Thụy Sĩ)"},
+    {name: "SPAIN35Cash", description: "IBEX 35 (Tây Ban Nha)"},
+    {name: "NETH25Cash", description: "AEX 25 (Hà Lan)"},
     {name: "JP225.i#", description: "Nikkei 225 (Nhật Bản)"}
   ]
 };

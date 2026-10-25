@@ -359,7 +359,32 @@ const getNextDayChartTimeAtHour = (latestChartTime, hour, sessionConfig) => {
   return nextLocalDayStart + Number(hour) * 3600 - browserOffsetHours * 3600 + timeShiftSeconds;
 };
 
+const getChartThemePalette = (theme) => {
+  if (theme === 'sunset') return {
+    background: '#211713', text: '#e7d5c5', grid: 'rgba(231, 213, 197, 0.08)',
+    up: '#f3c969', down: '#e87962', line: '#7dd3fc', vwap: '#f8d477',
+    bandUp: 'rgba(232, 121, 98, 0.7)', bandDown: 'rgba(243, 201, 105, 0.7)',
+    volumeLow: '#64748b', volumeBlue: '#60a5fa', volumeAmber: '#e8a84b', volumeHigh: '#e87962', volumeExtreme: '#c94f4f',
+    threshold: '#d6b36a',
+  };
+  if (theme === 'night') return {
+    background: '#111827', text: '#cbd5e1', grid: 'rgba(148, 163, 184, 0.08)',
+    up: '#a78bfa', down: '#fb7185', line: '#67e8f9', vwap: '#fbbf24',
+    bandUp: 'rgba(251, 113, 133, 0.68)', bandDown: 'rgba(167, 139, 250, 0.68)',
+    volumeLow: '#64748b', volumeBlue: '#818cf8', volumeAmber: '#fbbf24', volumeHigh: '#fb7185', volumeExtreme: '#dc4459',
+    threshold: '#a78bfa',
+  };
+  return {
+    background: '#0b1220', text: '#aebccc', grid: 'rgba(148, 163, 184, 0.075)',
+    up: '#26a69a', down: '#ef5350', line: '#60a5fa', vwap: '#f5c451',
+    bandUp: 'rgba(239, 83, 80, 0.68)', bandDown: 'rgba(38, 166, 154, 0.68)',
+    volumeLow: '#64748b', volumeBlue: '#60a5fa', volumeAmber: '#d8a443', volumeHigh: '#e66b5b', volumeExtreme: '#c94f4f',
+    threshold: '#d8a443',
+  };
+};
+
 const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true, shortcutsBlocked = false }) => {
+  const chartPalette = getChartThemePalette(chartTheme);
   const momFlipDataRef = useRef([]);
   const [momFlipDataVersion, setMomFlipDataVersion] = useState(0);
   const [momFlipDataRevision, setMomFlipDataRevision] = useState(0);
@@ -1326,19 +1351,18 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
 
 useEffect(() => {
     // Khởi tạo biểu đồ
+    const palette = getChartThemePalette('dark');
     const chart = createChart(chartContainerRef.current, {
       autoSize: false,
       layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#f8fafc',
+        background: { type: ColorType.Solid, color: palette.background },
+        textColor: palette.text,
       },
       grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
+        vertLines: { color: palette.grid },
+        horzLines: { color: palette.grid },
       },
-      crosshair: {
-        mode: 0,
-      },
+      crosshair: { mode: 0, vertLine: { color: 'rgba(148, 163, 184, 0.35)' }, horizLine: { color: 'rgba(148, 163, 184, 0.35)' } },
       localization: {
         timeFormatter: customTimeFormatter,
       },
@@ -1363,7 +1387,7 @@ useEffect(() => {
     }
 
     const upperBandSeries = chart.addLineSeries({
-      color: 'rgba(239, 68, 68, 0.8)',
+      color: palette.bandUp,
       lineWidth: 2,
       lineStyle: 2, // 2 = Dashed
       priceLineVisible: false,
@@ -1376,7 +1400,7 @@ useEffect(() => {
     });
     
     const lowerBandSeries = chart.addLineSeries({
-      color: 'rgba(16, 185, 129, 0.8)',
+      color: palette.bandDown,
       lineWidth: 2,
       lineStyle: 2, // 2 = Dashed
       priceLineVisible: false,
@@ -1397,11 +1421,11 @@ useEffect(() => {
     alertsSeriesRef.current = alertsSeries;
 
     const candlestickSeries = chart.addCandlestickSeries({
-      upColor: '#00f0ff',
-      downColor: '#ff3333',
+      upColor: palette.up,
+      downColor: palette.down,
       borderVisible: false,
-      wickUpColor: '#00f0ff',
-      wickDownColor: '#ff3333',
+      wickUpColor: palette.up,
+      wickDownColor: palette.down,
       priceLineVisible: false,
       priceFormat: {
         type: 'price',
@@ -1447,26 +1471,26 @@ useEffect(() => {
     });
 
     const lineCloseSeries = chart.addLineSeries({
-        color: '#2962FF',
+        color: palette.line,
         lineWidth: 2,
         visible: false,
         priceFormat: { type: 'price', precision, minMove },
     });
     const lineHighSeries = chart.addLineSeries({
-        color: '#00f0ff',
+        color: palette.up,
         lineWidth: 2,
         visible: false,
         priceFormat: { type: 'price', precision, minMove },
     });
     const lineLowSeries = chart.addLineSeries({
-        color: '#ff3333',
+        color: palette.down,
         lineWidth: 2,
         visible: false,
         priceFormat: { type: 'price', precision, minMove },
     });
     
     const vwapSeries = chart.addLineSeries({
-        color: '#f8fafc',
+        color: palette.vwap,
         lineWidth: 2,
         priceFormat: {
           type: 'price',
@@ -1519,14 +1543,14 @@ useEffect(() => {
       const momentumChart = createChart(momentumChartContainerRef.current, {
         autoSize: false,
         layout: {
-          background: { type: ColorType.Solid, color: 'transparent' },
-          textColor: '#f8fafc',
+          background: { type: ColorType.Solid, color: palette.background },
+          textColor: palette.text,
         },
         grid: {
-          vertLines: { color: 'rgba(255, 255, 255, 0.03)' },
-          horzLines: { color: 'rgba(255, 255, 255, 0.03)' },
+          vertLines: { color: palette.grid },
+          horzLines: { color: palette.grid },
         },
-        crosshair: { mode: 0 },
+        crosshair: { mode: 0, vertLine: { color: 'rgba(148, 163, 184, 0.35)' }, horizLine: { color: 'rgba(148, 163, 184, 0.35)' } },
         localization: {
           timeFormatter: customTimeFormatter,
         },
@@ -1543,10 +1567,10 @@ useEffect(() => {
         autoscaleInfoProvider: () => null,
       });
       
-      const mom85Up = momentumChart.addLineSeries({ color: 'rgba(255, 165, 0, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
-      const mom85Dn = momentumChart.addLineSeries({ color: 'rgba(255, 165, 0, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
-      const mom75Up = momentumChart.addLineSeries({ color: 'rgba(225, 230, 38, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
-      const mom75Dn = momentumChart.addLineSeries({ color: 'rgba(225, 230, 38, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
+      const mom85Up = momentumChart.addLineSeries({ color: palette.threshold, lineWidth: 1, crosshairMarkerVisible: false });
+      const mom85Dn = momentumChart.addLineSeries({ color: palette.threshold, lineWidth: 1, crosshairMarkerVisible: false });
+      const mom75Up = momentumChart.addLineSeries({ color: 'rgba(203, 213, 225, 0.45)', lineWidth: 1, crosshairMarkerVisible: false });
+      const mom75Dn = momentumChart.addLineSeries({ color: 'rgba(203, 213, 225, 0.45)', lineWidth: 1, crosshairMarkerVisible: false });
       const mom50Up = momentumChart.addLineSeries({ color: 'rgba(128, 128, 128, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
       const mom50Dn = momentumChart.addLineSeries({ color: 'rgba(128, 128, 128, 0.5)', lineWidth: 1, crosshairMarkerVisible: false });
       
@@ -1556,14 +1580,14 @@ useEffect(() => {
       const volumeChart = createChart(volumeChartContainerRef.current, {
         autoSize: false,
         layout: {
-          background: { type: ColorType.Solid, color: 'transparent' },
-          textColor: '#f8fafc',
+          background: { type: ColorType.Solid, color: palette.background },
+          textColor: palette.text,
         },
         grid: {
-          vertLines: { color: 'rgba(255, 255, 255, 0.03)' },
-          horzLines: { color: 'rgba(255, 255, 255, 0.03)' },
+          vertLines: { color: palette.grid },
+          horzLines: { color: palette.grid },
         },
-        crosshair: { mode: 0 },
+        crosshair: { mode: 0, vertLine: { color: 'rgba(148, 163, 184, 0.35)' }, horizLine: { color: 'rgba(148, 163, 184, 0.35)' } },
         localization: {
           timeFormatter: customTimeFormatter,
         },
@@ -1581,10 +1605,10 @@ useEffect(() => {
       const projectedVolSeries = volumeChart.addHistogramSeries({
         priceFormat: { type: 'volume' },
       });
-      const maVolSeries = volumeChart.addLineSeries({ color: 'rgba(57, 255, 20, 0.8)', lineWidth: 2 });
+      const maVolSeries = volumeChart.addLineSeries({ color: 'rgba(52, 211, 153, 0.8)', lineWidth: 2 });
       
-      const vol85Line = volumeChart.addLineSeries({ color: 'rgba(255, 177, 0, 0.98)', lineWidth: 2, crosshairMarkerVisible: false });
-      const vol75Line = volumeChart.addLineSeries({ color: 'rgba(255, 242, 0, 0.98)', lineWidth: 2, crosshairMarkerVisible: false });
+      const vol85Line = volumeChart.addLineSeries({ color: palette.threshold, lineWidth: 2, crosshairMarkerVisible: false });
+      const vol75Line = volumeChart.addLineSeries({ color: 'rgba(203, 213, 225, 0.65)', lineWidth: 2, crosshairMarkerVisible: false });
       const vol50Line = volumeChart.addLineSeries({ color: 'rgba(203, 213, 225, 0.88)', lineWidth: 1, crosshairMarkerVisible: false });
       const vol15Line = volumeChart.addLineSeries({ color: 'rgba(56, 189, 248, 0.9)', lineWidth: 1, crosshairMarkerVisible: false });
       
@@ -1885,7 +1909,7 @@ useEffect(() => {
     if (lineCloseSeriesRef.current) {
         lineCloseSeriesRef.current.applyOptions({ 
             visible: chartType === 'line' || chartType === 'hlc',
-            color: chartType === 'hlc' ? '#ffffff' : '#2962FF'
+            color: chartType === 'hlc' ? getChartThemePalette(chartTheme).text : getChartThemePalette(chartTheme).line
         });
     }
     if (lineHighSeriesRef.current) lineHighSeriesRef.current.applyOptions({ visible: chartType === 'hlc' });
@@ -1897,19 +1921,42 @@ useEffect(() => {
       bands?.upper?.applyOptions({ visible: showSdBands });
       bands?.lower?.applyOptions({ visible: showSdBands });
     });
-  }, [chartType, showSdBands]);
+  }, [chartType, showSdBands, chartTheme]);
 
   useEffect(() => {
+    const palette = getChartThemePalette(chartTheme);
+    const chartOptions = {
+      layout: { background: { type: ColorType.Solid, color: palette.background }, textColor: palette.text },
+      grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
+      crosshair: {
+        vertLine: { color: 'rgba(148, 163, 184, 0.35)' },
+        horizLine: { color: 'rgba(148, 163, 184, 0.35)' },
+      },
+      rightPriceScale: { borderColor: 'rgba(148, 163, 184, 0.2)' },
+      timeScale: { borderColor: 'rgba(148, 163, 184, 0.2)' },
+    };
+    [chartRef.current, momentumChartRef.current, volumeChartRef.current].forEach(chart => {
+      chart?.applyOptions(chartOptions);
+    });
     if (candlestickSeriesRef.current) {
-      const isSunset = chartTheme === 'sunset';
       candlestickSeriesRef.current.applyOptions({
-        upColor: isSunset ? '#ffffff' : '#00f0ff',
-        downColor: isSunset ? '#1f2937' : '#ff3333',
-        wickUpColor: isSunset ? '#ffffff' : '#00f0ff',
-        wickDownColor: isSunset ? '#1f2937' : '#ff3333',
+        upColor: palette.up,
+        downColor: palette.down,
+        wickUpColor: palette.up,
+        wickDownColor: palette.down,
+        borderUpColor: palette.up,
+        borderDownColor: palette.down,
       });
     }
-  }, [chartTheme]);
+    lineCloseSeriesRef.current?.applyOptions({ color: chartType === 'hlc' ? palette.text : palette.line });
+    lineHighSeriesRef.current?.applyOptions({ color: palette.up });
+    lineLowSeriesRef.current?.applyOptions({ color: palette.down });
+    vwapSeriesRef.current?.applyOptions({ color: palette.vwap });
+    upperBandSeriesRef.current?.applyOptions({ color: palette.bandUp });
+    lowerBandSeriesRef.current?.applyOptions({ color: palette.bandDown });
+    [mom85UpRef.current, mom85DnRef.current, vol85Ref.current].forEach(series => series?.applyOptions({ color: palette.threshold }));
+    [mom75UpRef.current, mom75DnRef.current, vol75Ref.current].forEach(series => series?.applyOptions({ color: 'rgba(203, 213, 225, 0.58)' }));
+  }, [chartTheme, chartType]);
   
   // Hàm cập nhật toạ độ HTML Overlay liên tục
   const updateOverlays = () => {
@@ -2734,12 +2781,11 @@ useEffect(() => {
           ]))
         ]));
           
-          const isSunsetMom = chartTheme === 'sunset';
           const momentumData = rawData.filter(d => d.mom_raw != null && !isNaN(d.mom_raw)).map(item => {
             return {
               time: item.time,
               value: item.mom_raw,
-              color: item.mom_raw >= 0 ? (isSunsetMom ? '#ffffff' : '#00f0ff') : (isSunsetMom ? '#1f2937' : '#ff3333')
+              color: item.mom_raw >= 0 ? chartPalette.up : chartPalette.down
             };
           }).sort((a,b)=>a.time-b.time);
           
@@ -2767,16 +2813,16 @@ useEffect(() => {
                 const pastTime = ft.time - (7 * 86400); // 1 week ago
                 const pastRaw = rawMap.get(pastTime);
                 if (pastRaw && pastRaw.mean_ma_vol != null && !isNaN(pastRaw.mean_ma_vol)) {
-                    let color = 'rgba(0, 240, 255, 0.1)'; // Purple semi-transparent
+                    let color = 'rgba(100, 116, 139, 0.18)';
                     const value = pastRaw.mean_ma_vol;
                     const lvl1 = pastRaw.mean_vol_lvl1;
                     const lvl2 = pastRaw.mean_vol_lvl2;
                     const lvl3 = pastRaw.mean_vol_lvl3;
                     const lvl4 = pastRaw.mean_vol_lvl4;
-                    if (value <= lvl4) color = 'rgba(0, 240, 255, 0.5)';
-                    else if (value <= lvl3) color = 'rgba(255, 165, 0, 0.5)';
-                    else if (value <= lvl2) color = 'rgba(255, 69, 0, 0.5)';
-                    else if (value <= lvl1) color = 'rgba(255, 0, 0, 0.6)';
+                    if (value <= lvl4) color = chartPalette.volumeBlue;
+                    else if (value <= lvl3) color = chartPalette.volumeAmber;
+                    else if (value <= lvl2) color = chartPalette.volumeHigh;
+                    else if (value <= lvl1) color = chartPalette.volumeExtreme;
                     
                     projectedNormVol.push({ time: ft.time, value: value, color });
                 }
@@ -2788,26 +2834,26 @@ useEffect(() => {
           if (activeVolMode === 'mean_vol') return d.mean_ma_vol != null && !isNaN(d.mean_ma_vol);
           return d.norm_vol != null && !isNaN(d.norm_vol);
         }).map(i => {
-          let color = '#9c27b0';
+          let color = chartPalette.volumeLow;
           let value = i.norm_vol;
           if (activeVolMode === 'rvol') value = i.rvol;
           if (activeVolMode === 'mean_vol') value = i.mean_ma_vol;
           
           if (activeVolMode === 'rvol') {
-            if (value < 0.5) color = '#0033ff'; 
-            else if (value < 1.0) color = '#ff8c00'; 
-            else if (value < 2.0) color = '#ffff00'; 
-            else color = '#ff3333'; 
+            if (value < 0.5) color = chartPalette.volumeLow;
+            else if (value < 1.0) color = chartPalette.volumeBlue;
+            else if (value < 2.0) color = chartPalette.volumeAmber;
+            else color = chartPalette.volumeExtreme;
           } else {
             const lvl1 = activeVolMode === 'mean_vol' ? i.mean_vol_lvl1 : i.vol_lvl1;
             const lvl2 = activeVolMode === 'mean_vol' ? i.mean_vol_lvl2 : i.vol_lvl2;
             const lvl3 = activeVolMode === 'mean_vol' ? i.mean_vol_lvl3 : i.vol_lvl3;
             const lvl4 = activeVolMode === 'mean_vol' ? i.mean_vol_lvl4 : i.vol_lvl4;
             
-            if (value <= lvl4) color = '#0033ff'; // Blue
-            else if (value <= lvl3) color = '#ff8c00'; // Orange
-            else if (value <= lvl2) color = '#ffff00'; // Yellow
-            else if (value <= lvl1) color = '#ff3333'; // Red
+            if (value <= lvl4) color = chartPalette.volumeBlue;
+            else if (value <= lvl3) color = chartPalette.volumeAmber;
+            else if (value <= lvl2) color = chartPalette.volumeHigh;
+            else if (value <= lvl1) color = chartPalette.volumeExtreme;
           }
           return { time: i.time, value: value, color };
         }).sort((a,b)=>a.time-b.time);
@@ -2833,14 +2879,14 @@ useEffect(() => {
 
         const sortedRawForMaVol = rawData.filter(d => d.ma_vol != null && !isNaN(d.ma_vol)).sort((a,b)=>a.time-b.time);
         const maVolData = sortedRawForMaVol.map((i, index, arr) => {
-          let col = "rgba(128, 128, 128, 0.8)";
+          let col = "rgba(148, 163, 184, 0.65)";
           if (index < arr.length - 1) {
-            if (arr[index + 1].ma_vol >= i.ma_vol) col = "rgba(0, 255, 0, 1)";
-            else col = "rgba(255, 0, 0, 1)";
+            if (arr[index + 1].ma_vol >= i.ma_vol) col = "rgba(52, 211, 153, 0.9)";
+            else col = "rgba(239, 83, 80, 0.9)";
           } else {
             if (index > 0) {
-              if (i.ma_vol >= arr[index - 1].ma_vol) col = "rgba(0, 255, 0, 1)";
-              else col = "rgba(255, 0, 0, 1)";
+              if (i.ma_vol >= arr[index - 1].ma_vol) col = "rgba(52, 211, 153, 0.9)";
+              else col = "rgba(239, 83, 80, 0.9)";
             } else if (lastMaVolColorRef.current !== null) {
               col = lastMaVolColorRef.current;
             }
@@ -2861,16 +2907,16 @@ useEffect(() => {
         
         const sortedHl2Raw = rawData.filter(d => d.hl2 != null && !isNaN(d.hl2)).sort((a,b)=>a.time-b.time);
         const fairValueData = sortedHl2Raw.map((item, index, arr) => {
-          let col = "rgba(128, 128, 128, 0.8)";
+          let col = "rgba(148, 163, 184, 0.65)";
           if (index < arr.length - 1) {
             // Look ahead: color this segment based on direction from current to next
-            if (arr[index + 1].hl2 >= item.hl2) col = "rgba(0, 255, 0, 1)";
-            else col = "rgba(255, 0, 0, 1)";
+            if (arr[index + 1].hl2 >= item.hl2) col = "rgba(52, 211, 153, 0.9)";
+            else col = "rgba(239, 83, 80, 0.9)";
           } else {
             // Last point: determine color by comparing with previous point
             if (index > 0) {
-              if (item.hl2 >= arr[index - 1].hl2) col = "rgba(0, 255, 0, 1)";
-              else col = "rgba(255, 0, 0, 1)";
+              if (item.hl2 >= arr[index - 1].hl2) col = "rgba(52, 211, 153, 0.9)";
+              else col = "rgba(239, 83, 80, 0.9)";
             } else if (lastHl2ColorRef.current !== null) {
               col = lastHl2ColorRef.current;
             }
@@ -2883,9 +2929,8 @@ useEffect(() => {
         const lowerBandData = [];
         const bandwidthHistory = [...bandwidthHistoryRef.current];
         
-        const isSunset = chartTheme === 'sunset';
-        const colUp = isSunset ? "rgba(255, 255, 255, 0.9)" : "rgba(0, 230, 118, 0.9)";
-        const colDn = isSunset ? "rgba(31, 41, 55, 0.9)" : "rgba(255, 23, 68, 0.9)";
+        const colUp = chartPalette.bandDown;
+        const colDn = chartPalette.bandUp;
         
         const sortedRawForSD = rawData.filter(d => d.upper_band != null && d.lower_band != null && !isNaN(d.upper_band)).sort((a,b)=>a.time-b.time);
         sortedRawForSD.forEach((item, index, arr) => {
@@ -4374,7 +4419,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
       {/* Header điều khiển */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '15px', background: 'var(--bg-panel)', padding: '15px 20px', borderRadius: '12px', flexWrap: 'wrap' }}>
         {matrixView === 'groups' && <div style={{ display: 'flex', gap: '10px', marginRight: '15px', borderRight: '1px solid #4b5563', paddingRight: '15px', flexWrap: 'wrap' }}>
-          {['fx', 'us_stocks', 'commodities', 'crypto', 'usd_assets'].map(type => (
+          {['fx', 'us_stocks', 'eu_stocks', 'commodities', 'crypto', 'usd_assets'].map(type => (
             <button
               key={type}
               onClick={() => setMatrixType(type)}
@@ -4389,7 +4434,7 @@ const MatrixComponent = ({ simulatedTime, brokerTimezone, initialMatrixHours, in
                 fontSize: '0.9rem'
               }}
             >
-              {type === 'fx' ? 'Forex' : type === 'us_stocks' ? 'Cổ phiếu Mỹ' : type === 'commodities' ? 'Hàng hóa' : type === 'crypto' ? 'Crypto' : 'USD vs Assets'}
+              {type === 'fx' ? 'Forex' : type === 'us_stocks' ? 'Cổ phiếu Mỹ' : type === 'eu_stocks' ? 'Chứng khoán Châu Âu' : type === 'commodities' ? 'Hàng hóa' : type === 'crypto' ? 'Crypto' : 'USD vs Assets'}
             </button>
           ))}
         </div>}
@@ -4984,12 +5029,16 @@ const CatalystTab = ({ configs }) => {
 const getMatrixTypeForSymbol = (sym) => {
   if (!sym) return 'fx';
   const s = sym.toUpperCase();
+  if (s.includes('EU_STOCKS_GI')) return 'eu_stocks';
+  if (s.includes('US_STOCKS_GI')) return 'us_stocks';
   // Crypto
   if (s.includes('BTC') || s.includes('ETH') || s.includes('SOL') || s.includes('XRP') || s.includes('DOGE') || s.includes('ADA') || s.includes('DOT') || s.includes('LINK') || s.includes('BNB') || s.includes('AVAX')) return 'crypto';
   // Commodities
   if (s.includes('GOLD') || s.includes('XAU') || s.includes('SILVER') || s.includes('XAG') || s.includes('OIL') || s.includes('BRENT') || s.includes('WTI') || s.includes('NATGAS') || s.includes('COPPER') || s.includes('PLATINUM') || s.includes('PALLADIUM')) return 'commodities';
-  // US Stocks / Indices  
-  if (s.includes('NASDAQ') || s.includes('US500') || s.includes('US30') || s.includes('US100') || s.includes('SPX') || s.includes('DJI') || s.includes('NDX') || s === 'NAS100' || s.includes('AAPL') || s.includes('TSLA') || s.includes('MSFT') || s.includes('AMZN') || s.includes('GOOG') || s.includes('META') || s.includes('NVDA') || s.includes('DAX') || s.includes('FTSE') || s.includes('JP225') || s.includes('NIKKEI')) return 'us_stocks';
+  // European indices are their own Matrix group (rather than being folded into US stocks).
+  if (['GER40', 'DAX', 'UK100', 'FTSE', 'EU50', 'FRA40', 'CAC40', 'IT40', 'MIB', 'SWI20', 'SMI', 'SPAIN35', 'IBEX', 'NETH25', 'AEX'].some(code => s.includes(code))) return 'eu_stocks';
+  // US stocks / indices. Keep the existing Asia index classification for compatibility.
+  if (s.includes('NASDAQ') || s.includes('US500') || s.includes('US30') || s.includes('US100') || s.includes('SPX') || s.includes('DJI') || s.includes('NDX') || s === 'NAS100' || s.includes('AAPL') || s.includes('TSLA') || s.includes('MSFT') || s.includes('AMZN') || s.includes('GOOG') || s.includes('META') || s.includes('NVDA') || s.includes('JP225') || s.includes('NIKKEI')) return 'us_stocks';
   // Forex (default) - các cặp tiền tệ
   return 'fx';
 };
@@ -5286,6 +5335,7 @@ const getQuickSymbolMatches = (query, symbols) => {
   const syntheticSymbols = [
     { name: 'GLOBAL_INDEX', description: 'Thị trường chung · FX GI', aliases: 'global index thi truong chung fx gi' },
     { name: 'US_STOCKS_GI', description: 'Chỉ số Cổ phiếu Mỹ · US Stocks GI', aliases: 'us stocks stocks gi chi so co phieu my' },
+    { name: 'EU_STOCKS_GI', description: 'Chỉ số Chứng khoán Châu Âu · European Stocks GI', aliases: 'eu stocks europe european stocks chi so chung khoan chau au' },
     { name: 'COMMODITIES_GI', description: 'Chỉ số Hàng hóa · Commodities GI', aliases: 'commodities hang hoa chi so hang hoa' },
     { name: 'CRYPTO_GI', description: 'Chỉ số Tiền điện tử · Crypto GI', aliases: 'crypto tien dien tu chi so tien dien tu' },
   ];
@@ -6105,6 +6155,7 @@ function App() {
                   
                   if ("thị trường chung fx gi global_index".includes(searchStr)) matchedSymbol = "GLOBAL_INDEX";
                   else if ("us stocks us_stocks_gi".includes(searchStr)) matchedSymbol = "US_STOCKS_GI";
+                  else if ("eu stocks europe european stocks eu_stocks_gi chứng khoán châu âu".includes(searchStr)) matchedSymbol = "EU_STOCKS_GI";
                   else if ("hàng hóa commodities commodities_gi".includes(searchStr)) matchedSymbol = "COMMODITIES_GI";
                   else if ("tiền điện tử crypto crypto_gi".includes(searchStr)) matchedSymbol = "CRYPTO_GI";
                   
@@ -6134,6 +6185,7 @@ function App() {
               <optgroup label="Chỉ số Tổng hợp">
                 <option value="GLOBAL_INDEX">Thị trường chung (FX GI)</option>
                 <option value="US_STOCKS_GI">Chỉ số Cổ phiếu Mỹ (US Stocks GI)</option>
+                <option value="EU_STOCKS_GI">Chỉ số Chứng khoán Châu Âu (European Stocks GI)</option>
                 <option value="COMMODITIES_GI">Chỉ số Hàng hóa (Commodities GI)</option>
                 <option value="CRYPTO_GI">Chỉ số Tiền điện tử (Crypto GI)</option>
               </optgroup>
@@ -6249,6 +6301,7 @@ function App() {
               >
                 <option value="GLOBAL_INDEX">FX GI</option>
                 <option value="US_STOCKS_GI">US Stocks GI</option>
+                <option value="EU_STOCKS_GI">European Stocks GI</option>
                 <option value="COMMODITIES_GI">Commodities GI</option>
                 <option value="CRYPTO_GI">Crypto GI</option>
                 {availableSymbols ? (

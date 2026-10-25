@@ -11,6 +11,7 @@ from typing import List, Optional
 import concurrent.futures
 import threading
 from runtime_paths import get_data_file, get_data_dir, get_frontend_dist_dir
+from matrix_defaults import load_app_config, merge_matrix_groups
 
 # Nháº­p cÃ¡c hÃ m tá»« service MT5
 import mt5_service
@@ -126,19 +127,18 @@ def get_latest_ohlcv(
 
 @app.get("/api/v1/configs")
 def get_configs():
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r") as f:
-                return json.load(f)
-        except:
-            pass
-    return {}
+    return load_app_config(CONFIG_FILE)
 
 @app.post("/api/v1/configs")
 def save_configs(config: dict):
     try:
+        merged_config = load_app_config(CONFIG_FILE)
+        merged_config.update(config)
+        merged_config["matrix_groups"] = merge_matrix_groups(
+            config.get("matrix_groups", merged_config.get("matrix_groups"))
+        )
         with open(CONFIG_FILE, "w") as f:
-            json.dump(config, f)
+            json.dump(merged_config, f)
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -357,11 +357,7 @@ def get_symbol_spread_comparison(
     if cache_key in _SYMBOL_SPREAD_CACHE and now - _SYMBOL_SPREAD_CACHE_TIME.get(cache_key, 0) < 30:
         return JSONResponse(content=_json_safe(_SYMBOL_SPREAD_CACHE[cache_key]))
 
-    try:
-        with open(CONFIG_FILE, "r") as config_file:
-            config = json.load(config_file)
-    except Exception:
-        config = {}
+    config = load_app_config(CONFIG_FILE)
 
     if matrix_type in ("fx", "currency"):
         group_symbols = [
@@ -1085,14 +1081,21 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                     ratio = (b['vol'] - val_pct1) / (val_95 - val_pct1)
                     ratio = max(0.0, min(1.0, ratio))
                 
-                # G (Green) value decreases from 180 to 0 as volume increases
-                # This makes the color transition from Yellow-Orange to Pure Red
-                g_val = int(180 * (1.0 - ratio))
-                
-                # Opacity increases from 0.35 to 0.75 as volume increases
-                a_val = 0.35 + (0.4 * ratio)
-                
-                color = f"rgba(255, {g_val}, 0, {a_val:.2f})"
+                # Use a restrained heat ramp so D-VP remains readable over candles:
+                # teal for lighter nodes, amber in the middle, coral for the strongest.
+                low_heat = np.array([38.0, 166.0, 154.0])
+                mid_heat = np.array([216.0, 164.0, 67.0])
+                high_heat = np.array([230.0, 107.0, 91.0])
+                if ratio <= 0.55:
+                    blend = ratio / 0.55
+                    rgb = low_heat + (mid_heat - low_heat) * blend
+                else:
+                    blend = (ratio - 0.55) / 0.45
+                    rgb = mid_heat + (high_heat - mid_heat) * blend
+                r_val, g_val, b_val = (int(round(channel)) for channel in rgb)
+                a_val = 0.12 + (0.16 * ratio)
+
+                color = f"rgba({r_val}, {g_val}, {b_val}, {a_val:.2f})"
                 level = f"Heat: {int(ratio*100)}%"
                 
                 # Map M1 timestamps to the closest available timestamp in the main series
@@ -1226,11 +1229,7 @@ def get_session_currency_matrix(
     usEnd: Optional[str] = None,
 ):
     """Calculate session-based trend, flow and tick-volume statistics for Matrix."""
-    try:
-        with open(CONFIG_FILE, "r") as config_file:
-            config = json.load(config_file)
-    except Exception:
-        config = {}
+    config = load_app_config(CONFIG_FILE)
 
     # Avoid unbounded history requests while retaining the configured volume baseline.
     short_hours = max(1, min(int(short_hours), 24 * 30))
@@ -1681,13 +1680,7 @@ def get_currency_matrix(n_hours: int = 24, vol_days: int = 30, matrix_type: str 
     if cache_key in _MATRIX_CACHE and current_time - _MATRIX_CACHE_TIME.get(cache_key, 0) < 10:
         return JSONResponse(content=_json_safe(_MATRIX_CACHE[cache_key]))
         
-    import json
-    config_path = os.path.join(os.path.dirname(__file__), "app_configs.json")
-    try:
-        with open(config_path, "r") as f:
-            config = json.load(f)
-    except:
-        config = {}
+    config = load_app_config(CONFIG_FILE)
         
     if matrix_type == "fx" or matrix_type == "currency":
         currencies = ["EUR", "GBP", "AUD", "NZD", "JPY", "USD", "GI"]
@@ -2113,11 +2106,7 @@ def get_dvp_trend_ranking(
     force: bool = False,
 ):
     """Rank assets by today's D-VP gap spacing versus same-time snapshots in Vol days."""
-    try:
-        with open(CONFIG_FILE, "r") as config_file:
-            config = json.load(config_file)
-    except Exception:
-        config = {}
+    config = load_app_config(CONFIG_FILE)
 
     vol_days = max(1, min(int(vol_days), 365))
     lookback_days = max(1.0, min(float(dvp_lookback_days or config.get("dvpLookbackDays", 5)), 90.0))
@@ -2284,15 +2273,12 @@ def get_market_flow_matrix(
     if not force and cache_key in _MARKET_FLOW_CACHE and now - _MARKET_FLOW_CACHE_TIME.get(cache_key, 0) < 30:
         return JSONResponse(content=_json_safe(_MARKET_FLOW_CACHE[cache_key]))
 
-    try:
-        with open(CONFIG_FILE, "r") as config_file:
-            config = json.load(config_file)
-    except Exception:
-        config = {}
+    config = load_app_config(CONFIG_FILE)
 
     markets = [
         {"key": "fx", "label": "Forex", "gi_symbol": "GLOBAL_INDEX"},
         {"key": "us_stocks", "label": "Cổ phiếu Mỹ", "gi_symbol": "US_STOCKS_GI"},
+        {"key": "eu_stocks", "label": "Chứng khoán Châu Âu", "gi_symbol": "EU_STOCKS_GI"},
         {"key": "commodities", "label": "Hàng hóa", "gi_symbol": "COMMODITIES_GI"},
         {"key": "crypto", "label": "Crypto", "gi_symbol": "CRYPTO_GI"},
         {"key": "usd_assets", "label": "USD vs Assets", "gi_symbol": "USD_ASSETS_GI"},

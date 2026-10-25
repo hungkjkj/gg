@@ -2,6 +2,8 @@ import MetaTrader5 as mt5
 import pandas as pd
 from datetime import datetime
 import threading
+from matrix_defaults import load_app_config
+from runtime_paths import get_data_file
 
 # Cấu hình đăng nhập
 # Tạm thời vô hiệu hóa Login tự động để MT5 sử dụng tài khoản XM đang đăng nhập sẵn trên máy.
@@ -24,7 +26,8 @@ def pre_scan_symbols():
         "EURGBP", "EURAUD", "EURNZD", "EURJPY",
         "GBPAUD", "GBPNZD", "GBPJPY",
         "AUDNZD", "AUDJPY", "NZDJPY",
-        "XAUUSD", "XAGUSD", "BTCUSD", "ETHUSD", "SOLUSD", "USD_FX_Index#"
+        "XAUUSD", "XAGUSD", "BTCUSD", "ETHUSD", "SOLUSD", "USD_FX_Index#",
+        "GER40Cash", "UK100Cash", "EU50Cash", "FRA40Cash", "IT40Cash", "SWI20Cash", "SPAIN35Cash", "NETH25Cash",
     ]
     print("Pre-scanning symbols to build cache...")
     for sym in common_symbols:
@@ -423,17 +426,12 @@ def get_historical_data(symbol: str, timeframe: str, count: int = 1000, end_time
                 return df
             return pd.DataFrame()
         else:
-            import json
             import numpy as np
-            config_path = os.path.join(os.path.dirname(__file__), "app_configs.json")
-            try:
-                with open(config_path, "r") as f:
-                    config = json.load(f)
-            except:
-                return pd.DataFrame()
+            config = load_app_config(get_data_file("app_configs.json"))
                 
             group_map = {
                 "US_STOCKS_GI": "us_stocks",
+                "EU_STOCKS_GI": "eu_stocks",
                 "COMMODITIES_GI": "commodities",
                 "CRYPTO_GI": "crypto",
                 "USD_ASSETS_GI": "usd_assets"
@@ -455,9 +453,14 @@ def get_historical_data(symbol: str, timeframe: str, count: int = 1000, end_time
             
             df_merged = dfs[0].copy()
             for i in range(1, len(dfs)):
-                df_merged = df_merged.join(dfs[i], lsuffix='', rsuffix=f'_{i}', how='inner')
+                # European index CFDs have slightly different trading hours.
+                # Keep the union of available candles and carry forward the last
+                # close for markets that are closed instead of losing the whole
+                # composite at every session boundary.
+                df_merged = df_merged.join(dfs[i], lsuffix='', rsuffix=f'_{i}', how='outer')
                 
             if df_merged.empty: return pd.DataFrame()
+            df_merged = df_merged.sort_index()
             
             # Geometric mean calculation
             N = len(dfs)
@@ -466,9 +469,21 @@ def get_historical_data(symbol: str, timeframe: str, count: int = 1000, end_time
             high_cols = ['high'] + [f'high_{i}' for i in range(1, N)]
             low_cols = ['low'] + [f'low_{i}' for i in range(1, N)]
             vol_cols = ['tick_volume'] + [f'tick_volume_{i}' for i in range(1, N)]
+
+            for i, close_col in enumerate(close_cols):
+                suffix = '' if i == 0 else f'_{i}'
+                df_merged[close_col] = pd.to_numeric(df_merged[close_col], errors='coerce').ffill()
+                for field in ('open', 'high', 'low'):
+                    col = f'{field}{suffix}'
+                    df_merged[col] = pd.to_numeric(df_merged[col], errors='coerce').fillna(df_merged[close_col])
+                volume_col = vol_cols[i]
+                df_merged[volume_col] = pd.to_numeric(df_merged[volume_col], errors='coerce').fillna(0)
+
+            df_merged = df_merged.dropna(subset=close_cols)
+            if df_merged.empty: return pd.DataFrame()
             
             df_res = pd.DataFrame(index=df_merged.index)
-            df_res['datetime'] = df_merged['datetime']
+            df_res['datetime'] = df_merged['datetime'].ffill()
             df_res['time'] = df_merged.index
             
             # Use np.exp(np.mean(np.log(X))) for geometric mean to avoid overflow
