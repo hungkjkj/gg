@@ -112,7 +112,7 @@ export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [
                 : value >= 75 ? '#4ade80' : value <= 20 ? '#f87171' : '#7dd3fc';
               const formatValue = value => `${colorByDirection && value > 0 ? '+' : ''}${value.toFixed(0)}%`;
               return (
-                <td style={{ padding: cellPadding, whiteSpace: 'nowrap' }}>
+                <td style={{ ...frameCellStyle(), padding: cellPadding, whiteSpace: 'nowrap' }}>
                   <span style={{ color: longValue == null ? '#64748b' : colorFor(longValue) }}>{longValue == null ? '—' : formatValue(longValue)}</span>
                   <span style={{ color: shortValue == null ? '#64748b' : colorFor(shortValue), fontSize: compact ? '10px' : '11px' }}> ({shortValue == null ? '—' : formatValue(shortValue)})</span>
                 </td>
