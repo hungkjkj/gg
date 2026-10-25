@@ -3281,6 +3281,43 @@ useEffect(() => {
       }
     };
 
+  const requestBacktestNews = useCallback((timestamp, { merge = false } = {}) => {
+    const requestId = ++backtestNewsRequestRef.current;
+    const requestSymbol = symbolRef.current;
+    const timeShiftSeconds = (Number(configsRef.current?.timeShiftHours) || 0) * 3600;
+    setBacktestNewsStatus('Đang tải lịch tin…');
+
+    axios.get(`${API_BASE}/api/v1/news/backtest`, {
+      params: { symbol: requestSymbol, timestamp },
+      timeout: 12000,
+    }).then(response => {
+      if (requestId !== backtestNewsRequestRef.current || symbolRef.current !== requestSymbol) return;
+      if (response.data.status !== 'success') {
+        setBacktestNewsStatus('Không có lịch tin — đã bỏ qua');
+        return;
+      }
+
+      let finalData = Array.isArray(response.data.data) ? response.data.data : [];
+      if (timeShiftSeconds) {
+        finalData = finalData.map(item => ({ ...item, time: item.time + timeShiftSeconds }));
+      }
+      if (merge) {
+        setNewsData(previous => {
+          const existingKeys = new Set(previous.map(event => `${event.time}_${event.title}`));
+          return [...previous, ...finalData.filter(event => !existingKeys.has(`${event.time}_${event.title}`))];
+        });
+      } else {
+        setNewsData(finalData);
+      }
+      setBacktestNewsStatus(finalData.length
+        ? (merge ? 'Đã cập nhật lịch tin' : `${finalData.length} tin`)
+        : 'Không có tin — backtest tiếp tục');
+    }).catch(() => {
+      if (requestId !== backtestNewsRequestRef.current || symbolRef.current !== requestSymbol) return;
+      setBacktestNewsStatus('Nguồn tin không khả dụng — đã bỏ qua');
+    });
+  }, []);
+
   useEffect(() => {
     if (viewMode !== 'backtest') backtestNewsRequestRef.current += 1;
 
@@ -3324,43 +3361,6 @@ useEffect(() => {
     d.setUTCHours(0, 0, 0, 0);
     return Math.floor(d.getTime() / 1000);
   };
-
-  const requestBacktestNews = useCallback((timestamp, { merge = false } = {}) => {
-    const requestId = ++backtestNewsRequestRef.current;
-    const requestSymbol = symbolRef.current;
-    const timeShiftSeconds = (Number(configsRef.current?.timeShiftHours) || 0) * 3600;
-    setBacktestNewsStatus('Đang tải lịch tin…');
-
-    axios.get(`${API_BASE}/api/v1/news/backtest`, {
-      params: { symbol: requestSymbol, timestamp },
-      timeout: 12000,
-    }).then(response => {
-      if (requestId !== backtestNewsRequestRef.current || symbolRef.current !== requestSymbol) return;
-      if (response.data.status !== 'success') {
-        setBacktestNewsStatus('Không có lịch tin — đã bỏ qua');
-        return;
-      }
-
-      let finalData = Array.isArray(response.data.data) ? response.data.data : [];
-      if (timeShiftSeconds) {
-        finalData = finalData.map(item => ({ ...item, time: item.time + timeShiftSeconds }));
-      }
-      if (merge) {
-        setNewsData(previous => {
-          const existingKeys = new Set(previous.map(event => `${event.time}_${event.title}`));
-          return [...previous, ...finalData.filter(event => !existingKeys.has(`${event.time}_${event.title}`))];
-        });
-      } else {
-        setNewsData(finalData);
-      }
-      setBacktestNewsStatus(finalData.length
-        ? (merge ? 'Đã cập nhật lịch tin' : `${finalData.length} tin`)
-        : 'Không có tin — backtest tiếp tục');
-    }).catch(() => {
-      if (requestId !== backtestNewsRequestRef.current || symbolRef.current !== requestSymbol) return;
-      setBacktestNewsStatus('Nguồn tin không khả dụng — đã bỏ qua');
-    });
-  }, []);
 
   useEffect(() => {
     let timeoutId;
