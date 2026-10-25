@@ -62,17 +62,17 @@ export const SessionMatrixTable = ({ data, compact = false, longPowerRanking = [
   const fixedColumnWidth = 455 + assetColumnWidth;
   const longLabel = `${data.long_hours || 89}h`;
   const shortLabel = `${data.short_hours || 24}h`;
-  const frameCellStyle = (first = false, last = false) => compact ? {
-    background: 'rgba(8, 20, 40, 0.62)',
+  const frameCellStyle = (first = false, last = false) => ({
+    background: compact ? 'rgba(8, 20, 40, 0.62)' : 'rgba(8, 20, 40, 0.28)',
     borderTop: '1px solid rgba(34,211,238,0.28)',
     borderBottom: '1px solid rgba(34,211,238,0.28)',
     ...(first ? { borderLeft: '1px solid rgba(34,211,238,0.28)', borderTopLeftRadius: '6px', borderBottomLeftRadius: '6px' } : {}),
     ...(last ? { borderRight: '1px solid rgba(34,211,238,0.28)', borderTopRightRadius: '6px', borderBottomRightRadius: '6px' } : {}),
-  } : {};
+  });
 
   return (
     <div style={{ width: '100%', minWidth: 0, overflowX: 'auto', overscrollBehaviorX: 'contain' }}>
-      <table style={{ width: '100%', minWidth: compact ? '900px' : '1120px', tableLayout: 'fixed', borderCollapse: compact ? 'separate' : 'collapse', borderSpacing: compact ? '0 4px' : '0', color: '#e2e8f0', fontSize }}>
+      <table style={{ width: '100%', minWidth: compact ? '900px' : '1120px', tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: '0 4px', color: '#e2e8f0', fontSize }}>
         <colgroup>
           <col style={{ width: compact ? '28px' : '34px' }} />
           <col style={{ width: `${assetColumnWidth}px` }} />
