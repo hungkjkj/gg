@@ -10,6 +10,8 @@ Máy chạy ứng dụng không cần cài Python hoặc Node.js. Tải và gi�
 
 Cài đặt, cảnh báo, chiến lược và nhật ký được lưu trong `%LOCALAPPDATA%\TOOL TRADE`.
 
+Ứng dụng desktop có watchdog nền: nếu backend mất phản hồi hoặc chart live gặp nhiều lỗi kết nối dữ liệu nến liên tiếp, backend sẽ được khởi động lại có giới hạn. Nếu luồng JavaScript của giao diện ngừng heartbeat khi cửa sổ đang hiển thị, giao diện sẽ tự tải lại; cặp, timeframe và mốc backtest được giữ trong phiên. Watchdog không đóng/mở MetaTrader 5.
+
 ## Tạo bộ cài Windows
 
 Trên máy build Windows 64-bit, chạy PowerShell:

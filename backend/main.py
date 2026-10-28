@@ -19,6 +19,13 @@ from mt5_service import initialize_mt5, get_historical_data, shutdown_mt5, get_t
 
 app = FastAPI(title="Quant Trading Dashboard API")
 _VP_BOXES_CACHE = {}
+_WATCHDOG_LOCK = threading.Lock()
+_WATCHDOG_STATE = {
+    "client_heartbeat_at": None,
+    "client_visible": False,
+    "client_view_mode": None,
+    "live_poll_transport_failures": 0,
+}
 
 
 def _json_safe(value):
@@ -79,7 +86,33 @@ import json
 
 @app.get("/api/v1/health")
 def health_check():
-    return {"status": "ok", "time": time.time()}
+    now = time.time()
+    with _WATCHDOG_LOCK:
+        state = dict(_WATCHDOG_STATE)
+    heartbeat_at = state.pop("client_heartbeat_at")
+    state["client_heartbeat_age_seconds"] = (
+        max(0.0, now - heartbeat_at) if heartbeat_at is not None else None
+    )
+    return {"status": "ok", "time": now, "watchdog": state}
+
+
+class WatchdogHeartbeat(BaseModel):
+    visible: bool = True
+    view_mode: str = "unknown"
+    live_poll_transport_failures: int = 0
+
+
+@app.post("/api/v1/watchdog/heartbeat")
+def watchdog_heartbeat(payload: WatchdogHeartbeat):
+    """Record a lightweight UI heartbeat for the desktop process supervisor."""
+    with _WATCHDOG_LOCK:
+        _WATCHDOG_STATE.update({
+            "client_heartbeat_at": time.time(),
+            "client_visible": payload.visible,
+            "client_view_mode": payload.view_mode[:32],
+            "live_poll_transport_failures": max(0, min(payload.live_poll_transport_failures, 100)),
+        })
+    return {"status": "ok"}
 
 CONFIG_FILE = get_data_file("app_configs.json")
 TRADING_LOGS_FILE = os.path.join(get_data_dir(), "trading_logs.json")

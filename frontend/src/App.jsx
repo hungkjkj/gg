@@ -719,7 +719,14 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [backtestNewsStatus, setBacktestNewsStatus] = useState('Chưa tải');
-  const simulatedTimeRef = useRef(0);
+  const simulatedTimeRef = useRef(Number(sessionStorage.getItem('toolTrade.backtestTimestamp')) || 0);
+  const lastReplayPersistAtRef = useRef(0);
+  useEffect(() => {
+    if (simulatedTimeRef.current > 0 && !window.currentSimulatedTime) {
+      window.currentSimulatedTime = simulatedTimeRef.current;
+    }
+    window.__toolTradeLivePollTransportFailures = 0;
+  }, []);
   const isPlayingRef = useRef(false);
   const backtestNewsRequestRef = useRef(0);
   const lastMaVolColorRef = useRef(null);
@@ -2311,6 +2318,7 @@ useEffect(() => {
 
   const isPollingRef = useRef(false);
   const isLatestCandlePollingRef = useRef(false);
+  const livePollTransportFailuresRef = useRef(0);
 
   const fetchLatestCandle = async () => {
     // Keep live price polling independent from the slower indicator refresh.
@@ -2338,6 +2346,8 @@ useEffect(() => {
       const latestRows = (response.data.data || [])
         .filter(item => item && Number.isFinite(Number(item.time)))
         .sort((a, b) => Number(a.time) - Number(b.time));
+      livePollTransportFailuresRef.current = 0;
+      window.__toolTradeLivePollTransportFailures = 0;
       if (latestRows.length === 0) return;
 
       const existingRaw = rawCandlesRef.current || [];
@@ -2386,6 +2396,12 @@ useEffect(() => {
     } catch (error) {
       // Preserve the last valid chart, log the failure, and let the next short
       // poll retry instead of leaving this path silently stale.
+      if (viewMode === 'chart' && !error?.response) {
+        livePollTransportFailuresRef.current = Math.min(livePollTransportFailuresRef.current + 1, 100);
+      } else {
+        livePollTransportFailuresRef.current = 0;
+      }
+      window.__toolTradeLivePollTransportFailures = livePollTransportFailuresRef.current;
       console.warn('Live candle refresh failed; retrying on next poll:', error);
     } finally {
       isLatestCandlePollingRef.current = false;
@@ -3465,6 +3481,10 @@ useEffect(() => {
       
       // Cập nhật thời gian giả lập 1 lần duy nhất sau khi tiến xong
       window.currentSimulatedTime = simulatedTimeRef.current;
+      if (Date.now() - lastReplayPersistAtRef.current >= 1000) {
+        sessionStorage.setItem('toolTrade.backtestTimestamp', String(simulatedTimeRef.current));
+        lastReplayPersistAtRef.current = Date.now();
+      }
       window.dispatchEvent(new Event('simulatedTimeChanged'));
       
       // Phát hiện qua tuần mới -> tải tin tức tuần mới
@@ -3499,6 +3519,7 @@ useEffect(() => {
     const targetTimestamp = Math.floor(new Date(backtestDate).getTime() / 1000);
     simulatedTimeRef.current = targetTimestamp;
     window.currentSimulatedTime = simulatedTimeRef.current;
+    sessionStorage.setItem('toolTrade.backtestTimestamp', String(simulatedTimeRef.current));
     window.dispatchEvent(new Event('simulatedTimeChanged'));
     backtestWeekRef.current = getWeekMonday(targetTimestamp);
     setIsPlaying(false);
@@ -5420,7 +5441,7 @@ function ShortcutHelpModal({ onClose }) {
 }
 
 function App() {
-  const [symbol, setSymbol] = useState('EURUSD');
+  const [symbol, setSymbol] = useState(() => sessionStorage.getItem('toolTrade.symbol') || 'EURUSD');
   const [searchSymbol, setSearchSymbol] = useState('');
   const [alerts, setAlerts] = useState([]);
   const [toasts, setToasts] = useState([]);
@@ -5523,10 +5544,37 @@ function App() {
     setAlertSymbol(symbol);
   }, [symbol]);
 
-  const [timeframe, setTimeframe] = useState('H1');
-  const [viewMode, setViewMode] = useState('chart'); // 'chart' hoặc 'matrix'
+  const [timeframe, setTimeframe] = useState(() => sessionStorage.getItem('toolTrade.timeframe') || 'H1');
+  const [viewMode, setViewMode] = useState(() => {
+    const savedMode = sessionStorage.getItem('toolTrade.viewMode');
+    return ['chart', 'matrix', 'backtest', 'catalyst', 'strategy'].includes(savedMode) ? savedMode : 'chart';
+  }); // 'chart' hoặc 'matrix'
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
+
+  useEffect(() => {
+    sessionStorage.setItem('toolTrade.symbol', symbol);
+    sessionStorage.setItem('toolTrade.timeframe', timeframe);
+    sessionStorage.setItem('toolTrade.viewMode', viewMode);
+  }, [symbol, timeframe, viewMode]);
+
+  useEffect(() => {
+    const reportHeartbeat = () => {
+      axios.post(`${API_BASE}/api/v1/watchdog/heartbeat`, {
+        visible: document.visibilityState === 'visible',
+        view_mode: viewModeRef.current,
+        live_poll_transport_failures: Number(window.__toolTradeLivePollTransportFailures) || 0,
+      }, { timeout: 5000 }).catch(() => {});
+    };
+    reportHeartbeat();
+    const intervalId = setInterval(reportHeartbeat, 15000);
+    document.addEventListener('visibilitychange', reportHeartbeat);
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', reportHeartbeat);
+    };
+  }, []);
+
   const [isShortcutHelpOpen, setIsShortcutHelpOpen] = useState(false);
   const shortcutHelpOpenRef = useRef(isShortcutHelpOpen);
   shortcutHelpOpenRef.current = isShortcutHelpOpen;
