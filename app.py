@@ -270,7 +270,11 @@ def run_app():
 
             watchdog_thread = threading.Thread(target=watchdog_loop, name="ToolTradeWatchdog", daemon=True)
             watchdog_thread.start()
-            webview.start()
+            # Keep WebView cookies/localStorage between launches so drawings and
+            # other user settings survive closing the desktop app.
+            local_app_data = os.environ.get("LOCALAPPDATA") or str(Path.home())
+            webview_storage_path = Path(local_app_data) / "TOOL TRADE" / "webview"
+            webview.start(private_mode=False, storage_path=str(webview_storage_path))
         except Exception as error:
             show_startup_error(
                 "Không thể mở giao diện ứng dụng. Hãy đảm bảo Microsoft Edge WebView2 Runtime đã được cài đặt.\n\n"
