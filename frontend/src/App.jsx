@@ -507,6 +507,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   });
   const [chartDrawingMode, setChartDrawingMode] = useState(null);
   const [chartStrokeTool, setChartStrokeTool] = useState(null);
+  const [chartDrawingToolsEnabled, setChartDrawingToolsEnabled] = useState(false);
   const chartStrokeToolRef = useRef(chartStrokeTool);
   useEffect(() => {
     chartStrokeToolRef.current = chartStrokeTool;
@@ -3700,37 +3701,59 @@ useEffect(() => {
           <div style={{ position: 'absolute', top: '8px', right: '72px', zIndex: 20, display: 'flex', alignItems: 'center', gap: '5px', padding: '5px', border: '1px solid rgba(34,211,238,0.24)', borderRadius: '8px', background: 'rgba(2,6,23,0.9)', boxShadow: '0 4px 16px rgba(0,0,0,0.28)' }}>
             <button
               type="button"
-              aria-pressed={chartStrokeTool === 'pen'}
-              title="Giữ chuột trái và kéo để vẽ"
+              aria-pressed={chartDrawingToolsEnabled}
+              title="Bật hoặc tắt thanh công cụ vẽ"
               onClick={() => {
-                chartDrawingModeRef.current = null;
-                pendingChartDrawingAnchorRef.current = null;
-                setChartDrawingMode(null);
-                setHasPendingChartDrawingAnchor(false);
-                setChartStrokeTool(current => current === 'pen' ? null : 'pen');
+                if (chartDrawingToolsEnabled) {
+                  chartDrawingModeRef.current = null;
+                  pendingChartDrawingAnchorRef.current = null;
+                  setChartDrawingMode(null);
+                  setHasPendingChartDrawingAnchor(false);
+                  setChartStrokeTool(null);
+                  setChartDrawingToolsEnabled(false);
+                  return;
+                }
+                setChartDrawingToolsEnabled(true);
               }}
-              style={{ padding: '5px 8px', borderRadius: '6px', border: `1px solid ${chartStrokeTool === 'pen' ? '#22d3ee' : 'rgba(148,163,184,0.28)'}`, background: chartStrokeTool === 'pen' ? 'rgba(34,211,238,0.2)' : 'rgba(15,23,42,0.72)', color: '#cffafe', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-            >✎ Vẽ</button>
-            <button
-              type="button"
-              aria-pressed={chartStrokeTool === 'eraser'}
-              title="Nhấn hoặc kéo chuột trái qua nét để tẩy"
-              onClick={() => {
-                chartDrawingModeRef.current = null;
-                pendingChartDrawingAnchorRef.current = null;
-                setChartDrawingMode(null);
-                setHasPendingChartDrawingAnchor(false);
-                setChartStrokeTool(current => current === 'eraser' ? null : 'eraser');
-              }}
-              style={{ padding: '5px 8px', borderRadius: '6px', border: `1px solid ${chartStrokeTool === 'eraser' ? '#fbbf24' : 'rgba(148,163,184,0.28)'}`, background: chartStrokeTool === 'eraser' ? 'rgba(251,191,36,0.18)' : 'rgba(15,23,42,0.72)', color: '#fde68a', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-            >⌫ Tẩy</button>
-            <button
-              type="button"
-              title="Xóa toàn bộ nét vẽ tay của tài sản đang xem"
-              disabled={visibleFreehandDrawings.length === 0}
-              onClick={() => clearFreehandForSymbol(symbolRef.current)}
-              style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid rgba(251,113,133,0.4)', background: visibleFreehandDrawings.length ? 'rgba(190,24,93,0.16)' : 'rgba(15,23,42,0.55)', color: visibleFreehandDrawings.length ? '#fecdd3' : '#64748b', fontSize: '11px', fontWeight: 700, cursor: visibleFreehandDrawings.length ? 'pointer' : 'not-allowed' }}
-            >Xóa nét</button>
+              style={{ padding: '5px 8px', borderRadius: '6px', border: `1px solid ${chartDrawingToolsEnabled ? '#22d3ee' : 'rgba(148,163,184,0.28)'}`, background: chartDrawingToolsEnabled ? 'rgba(34,211,238,0.2)' : 'rgba(15,23,42,0.72)', color: '#cffafe', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+            >✎ Tương tác {chartDrawingToolsEnabled ? 'ON' : 'OFF'}</button>
+            {chartDrawingToolsEnabled && (
+              <>
+                <button
+                  type="button"
+                  aria-pressed={chartStrokeTool === 'pen'}
+                  title="Giữ chuột trái và kéo để vẽ"
+                  onClick={() => {
+                    chartDrawingModeRef.current = null;
+                    pendingChartDrawingAnchorRef.current = null;
+                    setChartDrawingMode(null);
+                    setHasPendingChartDrawingAnchor(false);
+                    setChartStrokeTool(current => current === 'pen' ? null : 'pen');
+                  }}
+                  style={{ padding: '5px 8px', borderRadius: '6px', border: `1px solid ${chartStrokeTool === 'pen' ? '#22d3ee' : 'rgba(148,163,184,0.28)'}`, background: chartStrokeTool === 'pen' ? 'rgba(34,211,238,0.2)' : 'rgba(15,23,42,0.72)', color: '#cffafe', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                >✎ Vẽ</button>
+                <button
+                  type="button"
+                  aria-pressed={chartStrokeTool === 'eraser'}
+                  title="Nhấn hoặc kéo chuột trái qua nét để tẩy"
+                  onClick={() => {
+                    chartDrawingModeRef.current = null;
+                    pendingChartDrawingAnchorRef.current = null;
+                    setChartDrawingMode(null);
+                    setHasPendingChartDrawingAnchor(false);
+                    setChartStrokeTool(current => current === 'eraser' ? null : 'eraser');
+                  }}
+                  style={{ padding: '5px 8px', borderRadius: '6px', border: `1px solid ${chartStrokeTool === 'eraser' ? '#fbbf24' : 'rgba(148,163,184,0.28)'}`, background: chartStrokeTool === 'eraser' ? 'rgba(251,191,36,0.18)' : 'rgba(15,23,42,0.72)', color: '#fde68a', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                >⌫ Tẩy</button>
+                <button
+                  type="button"
+                  title="Xóa toàn bộ nét vẽ tay của tài sản đang xem"
+                  disabled={visibleFreehandDrawings.length === 0}
+                  onClick={() => clearFreehandForSymbol(symbolRef.current)}
+                  style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid rgba(251,113,133,0.4)', background: visibleFreehandDrawings.length ? 'rgba(190,24,93,0.16)' : 'rgba(15,23,42,0.55)', color: visibleFreehandDrawings.length ? '#fecdd3' : '#64748b', fontSize: '11px', fontWeight: 700, cursor: visibleFreehandDrawings.length ? 'pointer' : 'not-allowed' }}
+                >Xóa nét</button>
+              </>
+            )}
           </div>
           {(chartDrawingMode || chartStrokeTool) && (
             <div style={{ position: 'absolute', top: '42px', right: '72px', zIndex: 14, padding: '5px 8px', border: '1px solid rgba(34,211,238,0.28)', borderRadius: '6px', background: 'rgba(2,6,23,0.9)', color: '#bae6fd', fontSize: '10px', pointerEvents: 'none' }}>
