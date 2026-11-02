@@ -383,7 +383,7 @@ const getChartThemePalette = (theme) => {
   };
 };
 
-const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true, shortcutsBlocked = false }) => {
+const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts = [], setAlerts, handleAddAlert, chartType, chartTheme, showSdBands, showMomFlipChart, showVolChart = true, showMomChart = true, shortcutsBlocked = false, chartDrawingToolsEnabled = false, drawingToolsDisableRef = null }) => {
   const chartPalette = getChartThemePalette(chartTheme);
   const momFlipDataRef = useRef([]);
   const [momFlipDataVersion, setMomFlipDataVersion] = useState(0);
@@ -507,7 +507,6 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   });
   const [chartDrawingMode, setChartDrawingMode] = useState(null);
   const [chartStrokeTool, setChartStrokeTool] = useState(null);
-  const [chartDrawingToolsEnabled, setChartDrawingToolsEnabled] = useState(false);
   const chartStrokeToolRef = useRef(chartStrokeTool);
   useEffect(() => {
     chartStrokeToolRef.current = chartStrokeTool;
@@ -515,6 +514,15 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const [hasPendingChartDrawingAnchor, setHasPendingChartDrawingAnchor] = useState(false);
   const chartDrawingModeRef = useRef(null);
   const pendingChartDrawingAnchorRef = useRef(null);
+  useEffect(() => {
+    if (!drawingToolsDisableRef) return undefined;
+    drawingToolsDisableRef.current = () => {
+      setChartStrokeTool(null);
+    };
+    return () => {
+      drawingToolsDisableRef.current = null;
+    };
+  }, [drawingToolsDisableRef]);
   const currentChartDrawings = chartDrawingsBySymbol[symbol] || { fibonacci: [], percent: [], freehand: [] };
   const visibleChartDrawings = [
     ...(currentChartDrawings.fibonacci || []),
@@ -3698,27 +3706,8 @@ useEffect(() => {
         {/* Main Chart */}
         <div style={{ flex: 3, position: 'relative', width: '100%', overflow: 'hidden' }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
-          <div style={{ position: 'absolute', top: '8px', right: '72px', zIndex: 20, display: 'flex', alignItems: 'center', gap: '5px', padding: '5px', border: '1px solid rgba(34,211,238,0.24)', borderRadius: '8px', background: 'rgba(2,6,23,0.9)', boxShadow: '0 4px 16px rgba(0,0,0,0.28)' }}>
-            <button
-              type="button"
-              aria-pressed={chartDrawingToolsEnabled}
-              title="Bật hoặc tắt thanh công cụ vẽ"
-              onClick={() => {
-                if (chartDrawingToolsEnabled) {
-                  chartDrawingModeRef.current = null;
-                  pendingChartDrawingAnchorRef.current = null;
-                  setChartDrawingMode(null);
-                  setHasPendingChartDrawingAnchor(false);
-                  setChartStrokeTool(null);
-                  setChartDrawingToolsEnabled(false);
-                  return;
-                }
-                setChartDrawingToolsEnabled(true);
-              }}
-              style={{ padding: '5px 8px', borderRadius: '6px', border: `1px solid ${chartDrawingToolsEnabled ? '#22d3ee' : 'rgba(148,163,184,0.28)'}`, background: chartDrawingToolsEnabled ? 'rgba(34,211,238,0.2)' : 'rgba(15,23,42,0.72)', color: '#cffafe', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-            >✎ Tương tác {chartDrawingToolsEnabled ? 'ON' : 'OFF'}</button>
-            {chartDrawingToolsEnabled && (
-              <>
+          {chartDrawingToolsEnabled && (
+            <div style={{ position: 'absolute', top: '8px', right: '72px', zIndex: 20, display: 'flex', alignItems: 'center', gap: '5px', padding: '5px', border: '1px solid rgba(34,211,238,0.24)', borderRadius: '8px', background: 'rgba(2,6,23,0.9)', boxShadow: '0 4px 16px rgba(0,0,0,0.28)' }}>
                 <button
                   type="button"
                   aria-pressed={chartStrokeTool === 'pen'}
@@ -3752,10 +3741,9 @@ useEffect(() => {
                   onClick={() => clearFreehandForSymbol(symbolRef.current)}
                   style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid rgba(251,113,133,0.4)', background: visibleFreehandDrawings.length ? 'rgba(190,24,93,0.16)' : 'rgba(15,23,42,0.55)', color: visibleFreehandDrawings.length ? '#fecdd3' : '#64748b', fontSize: '11px', fontWeight: 700, cursor: visibleFreehandDrawings.length ? 'pointer' : 'not-allowed' }}
                 >Xóa nét</button>
-              </>
-            )}
-          </div>
-          {(chartDrawingMode || chartStrokeTool) && (
+            </div>
+          )}
+          {(chartDrawingMode || (chartDrawingToolsEnabled && chartStrokeTool)) && (
             <div style={{ position: 'absolute', top: '42px', right: '72px', zIndex: 14, padding: '5px 8px', border: '1px solid rgba(34,211,238,0.28)', borderRadius: '6px', background: 'rgba(2,6,23,0.9)', color: '#bae6fd', fontSize: '10px', pointerEvents: 'none' }}>
               {chartStrokeTool === 'pen'
                 ? 'Giữ chuột trái và kéo để vẽ · Esc thoát'
@@ -3777,7 +3765,7 @@ useEffect(() => {
             chart={chartReady ? chartRef.current : null}
             series={candlestickSeriesRef.current}
             drawings={visibleFreehandDrawings}
-            drawingTool={chartStrokeTool}
+            drawingTool={chartDrawingToolsEnabled ? chartStrokeTool : null}
             lastUpdateSignal={lastUpdateSignal}
             onCreate={addFreehandDrawing}
             onDelete={removeFreehandDrawing}
@@ -5782,6 +5770,12 @@ function App() {
   const [showVolChart, setShowVolChart] = useState(localStorage.getItem('showVolChart') !== 'false');
   const [showMomChart, setShowMomChart] = useState(localStorage.getItem('showMomChart') !== 'false');
   const [showMatrixBubble, setShowMatrixBubble] = useState(localStorage.getItem('showMatrixBubble') === 'true');
+  const [chartDrawingToolsEnabled, setChartDrawingToolsEnabled] = useState(false);
+  const drawingToolsDisableRef = useRef(null);
+  const handleChartDrawingToolsChange = enabled => {
+    setChartDrawingToolsEnabled(enabled);
+    if (!enabled) drawingToolsDisableRef.current?.();
+  };
   const [bubbleSessionMatrix, setBubbleSessionMatrix] = useState(null);
   const [bubblePowerLong, setBubblePowerLong] = useState(null);
   const [bubblePowerShort, setBubblePowerShort] = useState(null);
@@ -6298,6 +6292,8 @@ function App() {
         setShowMomChart={setShowMomChart}
         showMatrixBubble={showMatrixBubble}
         setShowMatrixBubble={setShowMatrixBubble}
+        chartDrawingToolsEnabled={chartDrawingToolsEnabled}
+        onChartDrawingToolsChange={handleChartDrawingToolsChange}
         bubbleSessionMatrix={bubbleSessionMatrix}
         bubblePowerLong={bubblePowerLong}
         bubblePowerShort={bubblePowerShort}
@@ -6610,7 +6606,7 @@ function App() {
         <div className="chart-container">
           <div className={`chart-wrapper theme-${chartTheme}`} style={{ overflow: (viewMode === 'matrix' || viewMode === 'catalyst' || viewMode === 'strategy') ? 'auto' : 'hidden' }}>
             {viewMode === 'chart' || viewMode === 'backtest' ? (
-              <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} chartTheme={chartTheme} showSdBands={showSdBands} showMomFlipChart={showMomFlipChart} showVolChart={showVolChart} showMomChart={showMomChart} shortcutsBlocked={isShortcutHelpOpen || isAssetInfoOpen || isLogOpen || showSettings || Boolean(quickSymbolQuery)} />
+              <ChartComponent symbol={symbol} timeframe={timeframe} configs={configs} viewMode={viewMode} alerts={alerts} setAlerts={setAlerts} handleAddAlert={handleAddAlert} chartType={chartType} chartTheme={chartTheme} showSdBands={showSdBands} showMomFlipChart={showMomFlipChart} showVolChart={showVolChart} showMomChart={showMomChart} shortcutsBlocked={isShortcutHelpOpen || isAssetInfoOpen || isLogOpen || showSettings || Boolean(quickSymbolQuery)} chartDrawingToolsEnabled={chartDrawingToolsEnabled} drawingToolsDisableRef={drawingToolsDisableRef} />
             ) : viewMode === 'matrix' ? (
               <MatrixComponent 
                 simulatedTime={null} 

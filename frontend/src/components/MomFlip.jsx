@@ -33,6 +33,7 @@ export const AssistiveTouch = ({
   showVolChart, setShowVolChart, 
   showMomChart, setShowMomChart, 
   showMatrixBubble, setShowMatrixBubble, 
+  chartDrawingToolsEnabled, onChartDrawingToolsChange,
   bubbleSessionMatrix,
   bubblePowerLong,
   bubblePowerShort,
@@ -143,6 +144,10 @@ export const AssistiveTouch = ({
     {
       id: 'matrix-ranking', label: 'Xếp hạng Matrix', description: 'Price Trend + Money Flow', checked: showMatrixBubble,
       onChange: checked => { setShowMatrixBubble(checked); localStorage.setItem('showMatrixBubble', checked); }
+    },
+    {
+      id: 'chart-drawing-tools', label: 'Nét vẽ', description: 'Hiện công cụ Vẽ / Tẩy / Xóa nét', checked: chartDrawingToolsEnabled,
+      onChange: checked => onChartDrawingToolsChange && onChartDrawingToolsChange(checked)
     }
   ];
   const enabledControlCount = controlOptions.filter(option => option.checked).length;
