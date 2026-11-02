@@ -7,7 +7,7 @@ import MarketFlowMatrix from './components/MarketFlowMatrix';
 import { computeCompositeRanking } from './utils/matrixUtils';
 import StrategyBuilderTab from './components/StrategyBuilderTab';
 import RrTool from './components/RrTool';
-import ChartDrawingOverlay from './components/ChartDrawingTools';
+import ChartDrawingOverlay, { FreehandDrawingOverlay } from './components/ChartDrawingTools';
 import TradingLogPanel from './components/TradingLogPanel';
 import './index.css';
 
@@ -506,14 +506,20 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     }
   });
   const [chartDrawingMode, setChartDrawingMode] = useState(null);
+  const [chartStrokeTool, setChartStrokeTool] = useState(null);
+  const chartStrokeToolRef = useRef(chartStrokeTool);
+  useEffect(() => {
+    chartStrokeToolRef.current = chartStrokeTool;
+  }, [chartStrokeTool]);
   const [hasPendingChartDrawingAnchor, setHasPendingChartDrawingAnchor] = useState(false);
   const chartDrawingModeRef = useRef(null);
   const pendingChartDrawingAnchorRef = useRef(null);
-  const currentChartDrawings = chartDrawingsBySymbol[symbol] || { fibonacci: [], percent: [] };
+  const currentChartDrawings = chartDrawingsBySymbol[symbol] || { fibonacci: [], percent: [], freehand: [] };
   const visibleChartDrawings = [
     ...(currentChartDrawings.fibonacci || []),
     ...(currentChartDrawings.percent || []),
   ];
+  const visibleFreehandDrawings = currentChartDrawings.freehand || [];
 
   const persistChartDrawings = updater => {
     setChartDrawingsBySymbol(updater);
@@ -533,7 +539,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     };
     const ownerSymbol = symbolRef.current;
     persistChartDrawings(previous => {
-      const current = previous[ownerSymbol] || { fibonacci: [], percent: [] };
+      const current = previous[ownerSymbol] || { fibonacci: [], percent: [], freehand: [] };
       return {
         ...previous,
         [ownerSymbol]: { ...current, [key]: [...(current[key] || []), drawing] },
@@ -544,7 +550,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
   const updateChartDrawing = (id, updates) => {
     const ownerSymbol = symbolRef.current;
     persistChartDrawings(previous => {
-      const current = previous[ownerSymbol] || { fibonacci: [], percent: [] };
+      const current = previous[ownerSymbol] || { fibonacci: [], percent: [], freehand: [] };
       return {
         ...previous,
         [ownerSymbol]: {
@@ -552,6 +558,35 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
           fibonacci: (current.fibonacci || []).map(drawing => drawing.id === id ? { ...drawing, ...updates } : drawing),
           percent: (current.percent || []).map(drawing => drawing.id === id ? { ...drawing, ...updates } : drawing),
         },
+      };
+    });
+  };
+
+  const addFreehandDrawing = points => {
+    if (!Array.isArray(points) || points.length < 2) return;
+    const ownerSymbol = symbolRef.current;
+    const drawing = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type: 'freehand',
+      color: '#22d3ee',
+      points,
+    };
+    persistChartDrawings(previous => {
+      const current = previous[ownerSymbol] || { fibonacci: [], percent: [], freehand: [] };
+      return {
+        ...previous,
+        [ownerSymbol]: { ...current, freehand: [...(current.freehand || []), drawing] },
+      };
+    });
+  };
+
+  const removeFreehandDrawing = id => {
+    const ownerSymbol = symbolRef.current;
+    persistChartDrawings(previous => {
+      const current = previous[ownerSymbol] || { fibonacci: [], percent: [], freehand: [] };
+      return {
+        ...previous,
+        [ownerSymbol]: { ...current, freehand: (current.freehand || []).filter(drawing => drawing.id !== id) },
       };
     });
   };
@@ -580,6 +615,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       logical,
     };
     chartDrawingModeRef.current = mode;
+    setChartStrokeTool(null);
     pendingChartDrawingAnchorRef.current = anchor;
     setChartDrawingMode(mode);
     setHasPendingChartDrawingAnchor(true);
@@ -588,10 +624,11 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
 
   useEffect(() => {
     const cancelDrawing = event => {
-      if (event.key !== 'Escape' || !chartDrawingModeRef.current) return;
+      if (event.key !== 'Escape' || (!chartDrawingModeRef.current && !chartStrokeToolRef.current)) return;
       chartDrawingModeRef.current = null;
       pendingChartDrawingAnchorRef.current = null;
       setChartDrawingMode(null);
+      setChartStrokeTool(null);
       setHasPendingChartDrawingAnchor(false);
     };
     window.addEventListener('keydown', cancelDrawing);
@@ -602,6 +639,7 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     chartDrawingModeRef.current = null;
     pendingChartDrawingAnchorRef.current = null;
     setChartDrawingMode(null);
+    setChartStrokeTool(null);
     setHasPendingChartDrawingAnchor(false);
   }, [symbol, timeframe]);
 
@@ -1086,7 +1124,8 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     return (drawnLines || []).filter(line => line.symbol === ownerSymbol).length
       + (rrToolsBySymbol[ownerSymbol] || []).length
       + (chartDrawings.fibonacci || []).length
-      + (chartDrawings.percent || []).length;
+      + (chartDrawings.percent || []).length
+      + (chartDrawings.freehand || []).length;
   };
 
   const clearAllDrawingsForSymbol = ownerSymbol => {
@@ -1095,7 +1134,8 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
     const rrTools = rrToolsBySymbol[ownerSymbol] || [];
     const fibonacci = chartDrawings.fibonacci || [];
     const percent = chartDrawings.percent || [];
-    const total = lines.length + rrTools.length + fibonacci.length + percent.length;
+    const freehand = chartDrawings.freehand || [];
+    const total = lines.length + rrTools.length + fibonacci.length + percent.length + freehand.length;
 
     if (!total) {
       closeContextMenu();
@@ -1104,26 +1144,49 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
 
     setClearDrawingsConfirm({
       ownerSymbol,
-      counts: { lines: lines.length, rrTools: rrTools.length, fibonacci: fibonacci.length, percent: percent.length },
+      counts: { lines: lines.length, rrTools: rrTools.length, fibonacci: fibonacci.length, percent: percent.length, freehand: freehand.length },
       total,
+    });
+    closeContextMenu();
+  };
+
+  const clearFreehandForSymbol = ownerSymbol => {
+    const chartDrawings = chartDrawingsBySymbol[ownerSymbol] || {};
+    const freehand = chartDrawings.freehand || [];
+    if (!freehand.length) return;
+    setClearDrawingsConfirm({
+      ownerSymbol,
+      counts: { lines: 0, rrTools: 0, fibonacci: 0, percent: 0, freehand: freehand.length },
+      total: freehand.length,
+      freehandOnly: true,
     });
     closeContextMenu();
   };
 
   const confirmClearAllDrawings = () => {
     if (!clearDrawingsConfirm) return;
-    const { ownerSymbol } = clearDrawingsConfirm;
+    const { ownerSymbol, freehandOnly } = clearDrawingsConfirm;
+    if (freehandOnly) {
+      persistChartDrawings(previous => {
+        const current = previous[ownerSymbol] || { fibonacci: [], percent: [], freehand: [] };
+        return { ...previous, [ownerSymbol]: { ...current, freehand: [] } };
+      });
+      setChartStrokeTool(null);
+      setClearDrawingsConfirm(null);
+      return;
+    }
     const remainingLines = (drawnLines || []).filter(line => line.symbol !== ownerSymbol);
     setDrawnLines(remainingLines);
     try { localStorage.setItem('userDrawnLines', JSON.stringify(remainingLines)); } catch (e) {}
     setRrToolsBySymbol(previous => ({ ...previous, [ownerSymbol]: [] }));
     persistChartDrawings(previous => ({
       ...previous,
-      [ownerSymbol]: { ...(previous[ownerSymbol] || {}), fibonacci: [], percent: [] },
+      [ownerSymbol]: { ...(previous[ownerSymbol] || {}), fibonacci: [], percent: [], freehand: [] },
     }));
     chartDrawingModeRef.current = null;
     pendingChartDrawingAnchorRef.current = null;
     setChartDrawingMode(null);
+    setChartStrokeTool(null);
     setHasPendingChartDrawingAnchor(false);
     setClearDrawingsConfirm(null);
     closeContextMenu();
@@ -1168,13 +1231,14 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
       }));
     } else {
       persistChartDrawings(previous => {
-        const current = previous[ownerSymbol] || { fibonacci: [], percent: [] };
+        const current = previous[ownerSymbol] || { fibonacci: [], percent: [], freehand: [] };
         return {
           ...previous,
           [ownerSymbol]: {
             ...current,
             fibonacci: (current.fibonacci || []).filter(drawing => drawing.id !== drawingId),
             percent: (current.percent || []).filter(drawing => drawing.id !== drawingId),
+            freehand: (current.freehand || []).filter(drawing => drawing.id !== drawingId),
           },
         };
       });
@@ -1221,15 +1285,18 @@ const ChartComponent = ({ symbol, timeframe, configs, viewMode = 'chart', alerts
         }));
       }
     } else {
-      const current = chartDrawingsBySymbol[ownerSymbol] || { fibonacci: [], percent: [] };
-      const source = [...(current.fibonacci || []), ...(current.percent || [])].find(drawing => drawing.id === drawingId);
+      const current = chartDrawingsBySymbol[ownerSymbol] || { fibonacci: [], percent: [], freehand: [] };
+      const source = [...(current.fibonacci || []), ...(current.percent || []), ...(current.freehand || [])].find(drawing => drawing.id === drawingId);
       if (source) {
-        const key = source.type === 'fibonacci' ? 'fibonacci' : 'percent';
+        const key = source.type === 'fibonacci' ? 'fibonacci' : source.type === 'freehand' ? 'freehand' : 'percent';
+        const copy = source.type === 'freehand'
+          ? { ...source, id: newId, points: (source.points || []).map(shiftAnchor) }
+          : { ...source, id: newId, start: shiftAnchor(source.start), end: shiftAnchor(source.end) };
         persistChartDrawings(previous => {
-          const latest = previous[ownerSymbol] || { fibonacci: [], percent: [] };
+          const latest = previous[ownerSymbol] || { fibonacci: [], percent: [], freehand: [] };
           return {
             ...previous,
-            [ownerSymbol]: { ...latest, [key]: [...(latest[key] || []), { ...source, id: newId, start: shiftAnchor(source.start), end: shiftAnchor(source.end) }] },
+            [ownerSymbol]: { ...latest, [key]: [...(latest[key] || []), copy] },
           };
         });
       }
@@ -3630,9 +3697,48 @@ useEffect(() => {
         {/* Main Chart */}
         <div style={{ flex: 3, position: 'relative', width: '100%', overflow: 'hidden' }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} />
-          {chartDrawingMode && (
-            <div style={{ position: 'absolute', top: '10px', right: '12px', zIndex: 14, padding: '6px 9px', border: '1px solid rgba(34,211,238,0.28)', borderRadius: '6px', background: 'rgba(2,6,23,0.9)', color: '#bae6fd', fontSize: '10px', pointerEvents: 'none' }}>
-              {hasPendingChartDrawingAnchor ? 'Bấm điểm kết thúc · Esc để hủy' : 'Bấm điểm bắt đầu · Esc để hủy'}
+          <div style={{ position: 'absolute', top: '8px', right: '72px', zIndex: 20, display: 'flex', alignItems: 'center', gap: '5px', padding: '5px', border: '1px solid rgba(34,211,238,0.24)', borderRadius: '8px', background: 'rgba(2,6,23,0.9)', boxShadow: '0 4px 16px rgba(0,0,0,0.28)' }}>
+            <button
+              type="button"
+              aria-pressed={chartStrokeTool === 'pen'}
+              title="Giữ chuột trái và kéo để vẽ"
+              onClick={() => {
+                chartDrawingModeRef.current = null;
+                pendingChartDrawingAnchorRef.current = null;
+                setChartDrawingMode(null);
+                setHasPendingChartDrawingAnchor(false);
+                setChartStrokeTool(current => current === 'pen' ? null : 'pen');
+              }}
+              style={{ padding: '5px 8px', borderRadius: '6px', border: `1px solid ${chartStrokeTool === 'pen' ? '#22d3ee' : 'rgba(148,163,184,0.28)'}`, background: chartStrokeTool === 'pen' ? 'rgba(34,211,238,0.2)' : 'rgba(15,23,42,0.72)', color: '#cffafe', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+            >✎ Vẽ</button>
+            <button
+              type="button"
+              aria-pressed={chartStrokeTool === 'eraser'}
+              title="Nhấn hoặc kéo chuột trái qua nét để tẩy"
+              onClick={() => {
+                chartDrawingModeRef.current = null;
+                pendingChartDrawingAnchorRef.current = null;
+                setChartDrawingMode(null);
+                setHasPendingChartDrawingAnchor(false);
+                setChartStrokeTool(current => current === 'eraser' ? null : 'eraser');
+              }}
+              style={{ padding: '5px 8px', borderRadius: '6px', border: `1px solid ${chartStrokeTool === 'eraser' ? '#fbbf24' : 'rgba(148,163,184,0.28)'}`, background: chartStrokeTool === 'eraser' ? 'rgba(251,191,36,0.18)' : 'rgba(15,23,42,0.72)', color: '#fde68a', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+            >⌫ Tẩy</button>
+            <button
+              type="button"
+              title="Xóa toàn bộ nét vẽ tay của tài sản đang xem"
+              disabled={visibleFreehandDrawings.length === 0}
+              onClick={() => clearFreehandForSymbol(symbolRef.current)}
+              style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid rgba(251,113,133,0.4)', background: visibleFreehandDrawings.length ? 'rgba(190,24,93,0.16)' : 'rgba(15,23,42,0.55)', color: visibleFreehandDrawings.length ? '#fecdd3' : '#64748b', fontSize: '11px', fontWeight: 700, cursor: visibleFreehandDrawings.length ? 'pointer' : 'not-allowed' }}
+            >Xóa nét</button>
+          </div>
+          {(chartDrawingMode || chartStrokeTool) && (
+            <div style={{ position: 'absolute', top: '42px', right: '72px', zIndex: 14, padding: '5px 8px', border: '1px solid rgba(34,211,238,0.28)', borderRadius: '6px', background: 'rgba(2,6,23,0.9)', color: '#bae6fd', fontSize: '10px', pointerEvents: 'none' }}>
+              {chartStrokeTool === 'pen'
+                ? 'Giữ chuột trái và kéo để vẽ · Esc thoát'
+                : chartStrokeTool === 'eraser'
+                  ? 'Nhấn hoặc kéo qua nét để tẩy · Esc thoát'
+                  : hasPendingChartDrawingAnchor ? 'Bấm điểm kết thúc · Esc để hủy' : 'Bấm điểm bắt đầu · Esc để hủy'}
             </div>
           )}
           <ChartDrawingOverlay
@@ -3642,6 +3748,16 @@ useEffect(() => {
             symbol={symbol}
             lastUpdateSignal={lastUpdateSignal}
             onUpdate={updateChartDrawing}
+            onRequestContextMenu={(event, drawing) => openDrawingActionMenu(event, 'chart', drawing.id)}
+          />
+          <FreehandDrawingOverlay
+            chart={chartReady ? chartRef.current : null}
+            series={candlestickSeriesRef.current}
+            drawings={visibleFreehandDrawings}
+            drawingTool={chartStrokeTool}
+            lastUpdateSignal={lastUpdateSignal}
+            onCreate={addFreehandDrawing}
+            onDelete={removeFreehandDrawing}
             onRequestContextMenu={(event, drawing) => openDrawingActionMenu(event, 'chart', drawing.id)}
           />
           <div ref={sessionSdTooltipRef} style={{ display: 'none', position: 'absolute', zIndex: 12, pointerEvents: 'none', padding: '5px 8px', border: '1px solid', borderRadius: '6px', background: 'rgba(2, 6, 23, 0.94)', fontSize: '11px', fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }} />
@@ -3923,18 +4039,24 @@ useEffect(() => {
               onMouseDown={event => event.stopPropagation()}
               style={{ width: 'min(460px, 100%)', padding: '22px', border: '1px solid rgba(0,240,255,0.48)', borderRadius: '14px', background: '#081225', color: '#e2e8f0', boxShadow: '0 18px 60px rgba(0,0,0,0.65), 0 0 28px rgba(0,240,255,0.1)' }}
             >
-              <h2 id="clear-drawings-title" style={{ margin: '0 0 8px', color: '#67e8f9', fontSize: '20px' }}>Xác nhận xóa bản vẽ</h2>
+              <h2 id="clear-drawings-title" style={{ margin: '0 0 8px', color: '#67e8f9', fontSize: '20px' }}>{clearDrawingsConfirm.freehandOnly ? 'Xóa nét vẽ tay' : 'Xác nhận xóa bản vẽ'}</h2>
               <p style={{ margin: '0 0 16px', color: '#cbd5e1', lineHeight: 1.55 }}>
-                Xóa {clearDrawingsConfirm.total} bản vẽ thủ công của <strong>{clearDrawingsConfirm.ownerSymbol}</strong>?
+                {clearDrawingsConfirm.freehandOnly
+                  ? `Xóa ${clearDrawingsConfirm.total} nét vẽ tay của `
+                  : `Xóa ${clearDrawingsConfirm.total} bản vẽ thủ công của `}
+                <strong>{clearDrawingsConfirm.ownerSymbol}</strong>?
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px', color: '#cbd5e1', fontSize: '13px' }}>
                 <div style={{ padding: '9px 10px', borderRadius: '7px', background: 'rgba(148,163,184,0.08)' }}>Đường ngang: <strong>{clearDrawingsConfirm.counts.lines}</strong></div>
                 <div style={{ padding: '9px 10px', borderRadius: '7px', background: 'rgba(148,163,184,0.08)' }}>RR: <strong>{clearDrawingsConfirm.counts.rrTools}</strong></div>
                 <div style={{ padding: '9px 10px', borderRadius: '7px', background: 'rgba(148,163,184,0.08)' }}>Fibonacci: <strong>{clearDrawingsConfirm.counts.fibonacci}</strong></div>
                 <div style={{ padding: '9px 10px', borderRadius: '7px', background: 'rgba(148,163,184,0.08)' }}>Đo %: <strong>{clearDrawingsConfirm.counts.percent}</strong></div>
+                <div style={{ padding: '9px 10px', borderRadius: '7px', background: 'rgba(148,163,184,0.08)' }}>Nét vẽ tay: <strong>{clearDrawingsConfirm.counts.freehand || 0}</strong></div>
               </div>
               <p style={{ margin: '0 0 16px', color: '#94a3b8', fontSize: '12px', lineHeight: 1.5 }}>
-                Chỉ báo và bản vẽ của tài sản khác sẽ được giữ nguyên. Nhấn F5 lần nữa để xác nhận nhanh.
+                {clearDrawingsConfirm.freehandOnly
+                  ? 'Chỉ nét vẽ tay của tài sản này bị xóa; RR, Fibonacci, đo % và các bản vẽ khác vẫn được giữ. Nhấn F5 lần nữa để xác nhận nhanh.'
+                  : 'Chỉ báo và bản vẽ của tài sản khác sẽ được giữ nguyên. Nhấn F5 lần nữa để xác nhận nhanh.'}
               </p>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button
@@ -3949,7 +4071,7 @@ useEffect(() => {
                   onClick={confirmClearAllDrawings}
                   style={{ padding: '9px 16px', borderRadius: '8px', border: '1px solid rgba(251,113,133,0.65)', background: 'rgba(190,24,93,0.22)', color: '#fecdd3', cursor: 'pointer', fontWeight: 700 }}
                 >
-                  OK, xóa
+                  {clearDrawingsConfirm.freehandOnly ? 'OK, xóa nét' : 'OK, xóa'}
                 </button>
               </div>
             </section>

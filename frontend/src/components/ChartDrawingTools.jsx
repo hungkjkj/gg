@@ -294,3 +294,199 @@ export const ChartDrawingOverlay = ({ chart, series, drawings = [], symbol, last
 };
 
 export default ChartDrawingOverlay;
+
+export const FreehandDrawingOverlay = ({
+  chart,
+  series,
+  drawings = [],
+  drawingTool = null,
+  lastUpdateSignal,
+  onCreate,
+  onDelete,
+  onRequestContextMenu,
+}) => {
+  const svgRef = useRef(null);
+  const draftRef = useRef([]);
+  const lastDraftPixelRef = useRef(null);
+  const activePointerRef = useRef(null);
+  const latestPropsRef = useRef({ chart, series, drawingTool, onCreate, onDelete });
+  const [draft, setDraft] = useState([]);
+  const [, setLayoutRevision] = useState(0);
+
+  useEffect(() => {
+    latestPropsRef.current = { chart, series, drawingTool, onCreate, onDelete };
+  }, [chart, series, drawingTool, onCreate, onDelete]);
+
+  useEffect(() => {
+    if (!chart) return undefined;
+    const timeScale = chart.timeScale();
+    const update = () => setLayoutRevision(value => value + 1);
+    timeScale.subscribeVisibleLogicalRangeChange(update);
+    timeScale.subscribeVisibleTimeRangeChange(update);
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    const element = chart.chartElement?.();
+    if (element) observer?.observe(element);
+    update();
+    return () => {
+      timeScale.unsubscribeVisibleLogicalRangeChange(update);
+      timeScale.unsubscribeVisibleTimeRangeChange(update);
+      observer?.disconnect();
+    };
+  }, [chart, lastUpdateSignal]);
+
+  useEffect(() => {
+    if (drawingTool === 'pen') return undefined;
+    draftRef.current = [];
+    lastDraftPixelRef.current = null;
+    activePointerRef.current = null;
+    return undefined;
+  }, [drawingTool]);
+
+  if (!chart || !series) return null;
+  const element = chart.chartElement?.();
+  if (!element) return null;
+  const width = element.clientWidth;
+  const height = element.clientHeight;
+  if (!width || !height) return null;
+
+  const timeScale = chart.timeScale();
+  const project = point => {
+    if (!point || !Number.isFinite(Number(point.time)) || !Number.isFinite(Number(point.price))) return null;
+    const x = timeScale.timeToCoordinate(Number(point.time));
+    const y = series.priceToCoordinate(Number(point.price));
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  };
+  const toAnchor = event => {
+    const bounds = element.getBoundingClientRect();
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+    const price = latestPropsRef.current.series?.coordinateToPrice(y);
+    const rawLogical = latestPropsRef.current.chart?.timeScale().coordinateToLogical(x);
+    const logical = Number.isFinite(rawLogical) ? rawLogical : null;
+    const rawTime = latestPropsRef.current.chart?.timeScale().coordinateToTime(x);
+    const time = typeof rawTime === 'number'
+      ? Math.floor(rawTime)
+      : rawTime && typeof rawTime === 'object'
+        ? Math.floor(Date.UTC(rawTime.year, rawTime.month - 1, rawTime.day) / 1000)
+        : null;
+    if (!Number.isFinite(price) || !Number.isFinite(time)) return null;
+    return { time, price, logical };
+  };
+  const stopEvent = event => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const handlePointerDown = event => {
+    const { drawingTool: activeTool } = latestPropsRef.current;
+    if (!activeTool) return;
+    stopEvent(event);
+    if (activeTool !== 'pen') return;
+    const anchor = toAnchor(event);
+    if (!anchor) return;
+    activePointerRef.current = event.pointerId;
+    draftRef.current = [anchor];
+    lastDraftPixelRef.current = {
+      x: event.clientX - element.getBoundingClientRect().left,
+      y: event.clientY - element.getBoundingClientRect().top,
+    };
+    setDraft(draftRef.current);
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* Ignore unsupported pointer capture. */ }
+  };
+  const handlePointerMove = event => {
+    const { drawingTool: activeTool } = latestPropsRef.current;
+    if (activeTool !== 'pen' || activePointerRef.current !== event.pointerId) return;
+    stopEvent(event);
+    const anchor = toAnchor(event);
+    if (!anchor) return;
+    const points = draftRef.current;
+    const bounds = element.getBoundingClientRect();
+    const current = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    if (lastDraftPixelRef.current && Math.hypot(current.x - lastDraftPixelRef.current.x, current.y - lastDraftPixelRef.current.y) < 2.5) return;
+    if (points.length >= 1500) return;
+    const nextPoints = [...points, anchor];
+    draftRef.current = nextPoints;
+    lastDraftPixelRef.current = current;
+    setDraft(nextPoints);
+  };
+  const finishStroke = event => {
+    if (activePointerRef.current !== event.pointerId) return;
+    stopEvent(event);
+    const points = draftRef.current;
+    activePointerRef.current = null;
+    draftRef.current = [];
+    lastDraftPixelRef.current = null;
+    setDraft([]);
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch { /* Ignore pointer release errors after window blur. */ }
+    if (points.length > 1) latestPropsRef.current.onCreate?.(points);
+  };
+  const handleErase = (event, drawing) => {
+    if (latestPropsRef.current.drawingTool !== 'eraser') return;
+    if (event.type === 'pointermove' && !(event.buttons & 1)) return;
+    stopEvent(event);
+    latestPropsRef.current.onDelete?.(drawing.id);
+  };
+  const renderPath = (points, key, color = '#22d3ee', isDraft = false) => {
+    const projected = points.map(project).filter(Boolean);
+    if (!projected.length) return null;
+    const path = projected.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+    if (projected.length === 1) {
+      return <circle key={key} cx={projected[0].x} cy={projected[0].y} r="2" fill={color} />;
+    }
+    return <path key={key} d={path} fill="none" stroke={color} strokeWidth={isDraft ? 2.5 : 2.25} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" pointerEvents="none" />;
+  };
+
+  return (
+    <svg
+      ref={svgRef}
+      aria-label="Nét vẽ tay trên biểu đồ"
+      width={width}
+      height={height}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 8,
+        overflow: 'hidden',
+        pointerEvents: drawingTool ? 'auto' : 'none',
+        cursor: drawingTool === 'pen' ? 'crosshair' : drawingTool === 'eraser' ? 'cell' : 'default',
+        touchAction: 'none',
+      }}
+    >
+      {drawingTool && (
+        <rect
+          x="0" y="0" width={width} height={height} fill="transparent"
+          pointerEvents="all"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={finishStroke}
+          onPointerCancel={finishStroke}
+        />
+      )}
+      {drawings.map(drawing => {
+        const projected = (drawing.points || []).map(project).filter(Boolean);
+        if (projected.length < 2) return null;
+        const path = projected.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+        return (
+          <g key={drawing.id}>
+            <path d={path} fill="none" stroke={drawing.color || '#22d3ee'} strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+            <path
+              d={path} fill="none" stroke="rgba(0,0,0,0.01)" strokeWidth={drawingTool === 'eraser' ? 18 : 8}
+              strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
+              pointerEvents={drawingTool === 'pen' ? 'none' : 'stroke'}
+              style={{ cursor: drawingTool === 'eraser' ? 'cell' : 'context-menu' }}
+              onPointerDown={event => handleErase(event, drawing)}
+              onPointerMove={event => handleErase(event, drawing)}
+              onContextMenu={event => {
+                event.preventDefault();
+                event.stopPropagation();
+                onRequestContextMenu?.(event, drawing);
+              }}
+            />
+          </g>
+        );
+      })}
+      {drawingTool === 'pen' && draft.length > 0 && renderPath(draft, 'draft-freehand', '#22d3ee', true)}
+    </svg>
+  );
+};
