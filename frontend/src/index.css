@@ -118,9 +118,9 @@ body {
 }
 
 .chart-wrapper.theme-dark {
-  background: #0b1220 !important;
-  border-color: rgba(148, 163, 184, 0.24);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.24);
+  background: #000000 !important;
+  border-color: rgba(160, 160, 160, 0.28);
+  box-shadow: none;
 }
 
 .chart-wrapper.theme-sunset {

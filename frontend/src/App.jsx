@@ -375,11 +375,13 @@ const getChartThemePalette = (theme) => {
     threshold: '#a78bfa',
   };
   return {
-    background: '#0b1220', text: '#aebccc', grid: 'rgba(148, 163, 184, 0.075)',
-    up: '#26a69a', down: '#ef5350', line: '#60a5fa', vwap: '#f5c451',
-    bandUp: 'rgba(239, 83, 80, 0.68)', bandDown: 'rgba(38, 166, 154, 0.68)',
-    volumeLow: '#64748b', volumeBlue: '#60a5fa', volumeAmber: '#d8a443', volumeHigh: '#e66b5b', volumeExtreme: '#c94f4f',
-    threshold: '#d8a443',
+    // Simple MT5-style palette: black chart, neutral grid, green/red candles.
+    background: '#000000', text: '#d0d0d0', grid: 'rgba(160, 160, 160, 0.24)',
+    up: '#00ff00', down: '#ff3333', line: '#d0d0d0', vwap: '#d0d0d0',
+    bandUp: 'rgba(190, 190, 190, 0.4)', bandDown: 'rgba(190, 190, 190, 0.4)',
+    volumeLow: 'rgba(190, 190, 190, 0.58)', volumeBlue: 'rgba(190, 190, 190, 0.68)',
+    volumeAmber: 'rgba(210, 210, 210, 0.74)', volumeHigh: 'rgba(225, 225, 225, 0.82)', volumeExtreme: '#f0f0f0',
+    threshold: 'rgba(210, 210, 210, 0.7)', sessionBand: 'rgba(190, 190, 190, 0.48)',
   };
 };
 
@@ -1442,8 +1444,8 @@ useEffect(() => {
         textColor: palette.text,
       },
       grid: {
-        vertLines: { color: palette.grid },
-        horzLines: { color: palette.grid },
+        vertLines: { color: palette.grid, style: 1 },
+        horzLines: { color: palette.grid, style: 1 },
       },
       crosshair: { mode: 0, vertLine: { color: 'rgba(148, 163, 184, 0.35)' }, horizLine: { color: 'rgba(148, 163, 184, 0.35)' } },
       localization: {
@@ -1506,7 +1508,7 @@ useEffect(() => {
     const candlestickSeries = chart.addCandlestickSeries({
       upColor: palette.up,
       downColor: palette.down,
-      borderVisible: false,
+      borderVisible: true,
       wickUpColor: palette.up,
       wickDownColor: palette.down,
       priceLineVisible: false,
@@ -1584,20 +1586,20 @@ useEffect(() => {
 
     const sessionVwapBandSeries = {
       asia: {
-        upper: chart.addLineSeries({ color: 'rgba(249, 115, 22, 0.72)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
-        lower: chart.addLineSeries({ color: 'rgba(249, 115, 22, 0.72)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+        upper: chart.addLineSeries({ color: palette.sessionBand || 'rgba(249, 115, 22, 0.72)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+        lower: chart.addLineSeries({ color: palette.sessionBand || 'rgba(249, 115, 22, 0.72)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
       },
       europe: {
-        upper: chart.addLineSeries({ color: 'rgba(217, 70, 239, 0.72)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
-        lower: chart.addLineSeries({ color: 'rgba(217, 70, 239, 0.72)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+        upper: chart.addLineSeries({ color: palette.sessionBand || 'rgba(217, 70, 239, 0.72)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+        lower: chart.addLineSeries({ color: palette.sessionBand || 'rgba(217, 70, 239, 0.72)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
       },
       preUs: {
-        upper: chart.addLineSeries({ color: 'rgba(250, 204, 21, 0.78)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
-        lower: chart.addLineSeries({ color: 'rgba(250, 204, 21, 0.78)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+        upper: chart.addLineSeries({ color: palette.sessionBand || 'rgba(250, 204, 21, 0.78)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+        lower: chart.addLineSeries({ color: palette.sessionBand || 'rgba(250, 204, 21, 0.78)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
       },
       us: {
-        upper: chart.addLineSeries({ color: 'rgba(59, 130, 246, 0.78)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
-        lower: chart.addLineSeries({ color: 'rgba(59, 130, 246, 0.78)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+        upper: chart.addLineSeries({ color: palette.sessionBand || 'rgba(59, 130, 246, 0.78)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
+        lower: chart.addLineSeries({ color: palette.sessionBand || 'rgba(59, 130, 246, 0.78)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision, minMove } }),
       },
     };
     const sessionSdHoverTargets = [
@@ -1630,8 +1632,8 @@ useEffect(() => {
           textColor: palette.text,
         },
         grid: {
-          vertLines: { color: palette.grid },
-          horzLines: { color: palette.grid },
+          vertLines: { color: palette.grid, style: 1 },
+          horzLines: { color: palette.grid, style: 1 },
         },
         crosshair: { mode: 0, vertLine: { color: 'rgba(148, 163, 184, 0.35)' }, horizLine: { color: 'rgba(148, 163, 184, 0.35)' } },
         localization: {
@@ -1667,8 +1669,8 @@ useEffect(() => {
           textColor: palette.text,
         },
         grid: {
-          vertLines: { color: palette.grid },
-          horzLines: { color: palette.grid },
+          vertLines: { color: palette.grid, style: 1 },
+          horzLines: { color: palette.grid, style: 1 },
         },
         crosshair: { mode: 0, vertLine: { color: 'rgba(148, 163, 184, 0.35)' }, horizLine: { color: 'rgba(148, 163, 184, 0.35)' } },
         localization: {
@@ -1688,12 +1690,12 @@ useEffect(() => {
       const projectedVolSeries = volumeChart.addHistogramSeries({
         priceFormat: { type: 'volume' },
       });
-      const maVolSeries = volumeChart.addLineSeries({ color: 'rgba(52, 211, 153, 0.8)', lineWidth: 2 });
+      const maVolSeries = volumeChart.addLineSeries({ color: palette.line, lineWidth: 2 });
       
       const vol85Line = volumeChart.addLineSeries({ color: palette.threshold, lineWidth: 2, crosshairMarkerVisible: false });
       const vol75Line = volumeChart.addLineSeries({ color: 'rgba(203, 213, 225, 0.65)', lineWidth: 2, crosshairMarkerVisible: false });
       const vol50Line = volumeChart.addLineSeries({ color: 'rgba(203, 213, 225, 0.88)', lineWidth: 1, crosshairMarkerVisible: false });
-      const vol15Line = volumeChart.addLineSeries({ color: 'rgba(56, 189, 248, 0.9)', lineWidth: 1, crosshairMarkerVisible: false });
+      const vol15Line = volumeChart.addLineSeries({ color: 'rgba(190, 190, 190, 0.48)', lineWidth: 1, crosshairMarkerVisible: false });
       
       const volumeDummySeries = volumeChart.addLineSeries({ color: 'rgba(0,0,0,0)', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
       volumeDummySeriesRef.current = volumeDummySeries;
@@ -2010,7 +2012,7 @@ useEffect(() => {
     const palette = getChartThemePalette(chartTheme);
     const chartOptions = {
       layout: { background: { type: ColorType.Solid, color: palette.background }, textColor: palette.text },
-      grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
+      grid: { vertLines: { color: palette.grid, style: 1 }, horzLines: { color: palette.grid, style: 1 } },
       crosshair: {
         vertLine: { color: 'rgba(148, 163, 184, 0.35)' },
         horizLine: { color: 'rgba(148, 163, 184, 0.35)' },
@@ -2037,6 +2039,10 @@ useEffect(() => {
     vwapSeriesRef.current?.applyOptions({ color: palette.vwap });
     upperBandSeriesRef.current?.applyOptions({ color: palette.bandUp });
     lowerBandSeriesRef.current?.applyOptions({ color: palette.bandDown });
+    Object.values(sessionVwapBandSeriesRef.current).forEach(bands => {
+      bands?.upper?.applyOptions({ color: palette.sessionBand || 'rgba(190, 190, 190, 0.48)' });
+      bands?.lower?.applyOptions({ color: palette.sessionBand || 'rgba(190, 190, 190, 0.48)' });
+    });
     [mom85UpRef.current, mom85DnRef.current, vol85Ref.current].forEach(series => series?.applyOptions({ color: palette.threshold }));
     [mom75UpRef.current, mom75DnRef.current, vol75Ref.current].forEach(series => series?.applyOptions({ color: 'rgba(203, 213, 225, 0.58)' }));
   }, [chartTheme, chartType]);
@@ -2204,21 +2210,15 @@ useEffect(() => {
                  const left = Math.max(0, startX - barSpacing / 2);
                  const right = Math.min(canvas.width, endX - barSpacing / 2);
                  const width = Math.max(barSpacing, right - left);
-                 ctx.fillStyle = first.color;
+                 // Keep session periods visible without letting saturated fills
+                 // compete with price. Identity remains in the session label.
+                 ctx.fillStyle = 'rgba(170, 170, 170, 0.035)';
                  ctx.fillRect(left, 0, width, canvas.height);
 
                  // Keep the session tint subtle, but make its time boundaries
                  // visible over SD shading and other colored chart overlays.
-                 const rgb = first.color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-                 let edgeColor = first.color;
-                 let frameColor = first.color;
-                 if (rgb) {
-                   const channels = [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
-                   const brightnessScale = 255 / Math.max(...channels, 1);
-                   const brightChannels = channels.map(channel => Math.min(255, Math.round(channel * brightnessScale)));
-                   edgeColor = `rgba(${brightChannels.join(', ')}, 0.98)`;
-                   frameColor = `rgba(${brightChannels.join(', ')}, 0.62)`;
-                 }
+                 const edgeColor = 'rgba(205, 205, 205, 0.58)';
+                 const frameColor = 'rgba(175, 175, 175, 0.22)';
 
                  const leftEdge = Math.round(left) + 0.5;
                  const rightEdge = Math.round(right) - 0.5;
@@ -2232,7 +2232,7 @@ useEffect(() => {
                  ctx.lineWidth = 2;
                  ctx.strokeStyle = edgeColor;
                  ctx.shadowColor = edgeColor;
-                 ctx.shadowBlur = 8;
+                 ctx.shadowBlur = 0;
                  ctx.moveTo(leftEdge, 0);
                  ctx.lineTo(leftEdge, canvas.height);
                  if (width > 2) {
@@ -2252,8 +2252,8 @@ useEffect(() => {
                    const labelWidth = Math.ceil(ctx.measureText(first.name).width) + 14;
                    const labelHeight = 19;
                    const labelLeft = Math.max(4, Math.min(canvas.width - labelWidth - 4, centerX - labelWidth / 2));
-                   ctx.fillStyle = 'rgba(7, 12, 24, 0.9)';
-                   ctx.strokeStyle = edgeColor;
+                   ctx.fillStyle = 'rgba(16, 16, 16, 0.92)';
+                   ctx.strokeStyle = frameColor;
                    ctx.lineWidth = 1;
                    ctx.fillRect(labelLeft, labelY, labelWidth, labelHeight);
                    ctx.strokeRect(labelLeft + 0.5, labelY + 0.5, labelWidth - 1, labelHeight - 1);
@@ -2297,6 +2297,8 @@ useEffect(() => {
            // Fix: Đảm bảo chiều cao tối thiểu là 1 pixel để không bị biến mất khi thu nhỏ thanh giá (sub-pixel rendering)
            const height = Math.max(1, Math.abs(bottomY - topY));
            
+           // Preserve the D-VP heatmap ramp so higher-volume price nodes remain
+           // easy to distinguish from lower-volume nodes.
            ctx.fillStyle = box.color;
            ctx.fillRect(finalStartX, topY, width, height);
            
@@ -2334,7 +2336,7 @@ useEffect(() => {
                     ctx.beginPath();
                     ctx.moveTo(x, 0);
                     ctx.lineTo(x, canvas.height);
-                    ctx.strokeStyle = line.type === 'peak' ? 'rgba(0, 255, 0, 0.7)' : 'rgba(255, 0, 0, 0.7)';
+                    ctx.strokeStyle = 'rgba(190, 190, 190, 0.42)';
                     ctx.stroke();
                   }
                }
@@ -2973,12 +2975,12 @@ useEffect(() => {
         const maVolData = sortedRawForMaVol.map((i, index, arr) => {
           let col = "rgba(148, 163, 184, 0.65)";
           if (index < arr.length - 1) {
-            if (arr[index + 1].ma_vol >= i.ma_vol) col = "rgba(52, 211, 153, 0.9)";
-            else col = "rgba(239, 83, 80, 0.9)";
+            if (arr[index + 1].ma_vol >= i.ma_vol) col = chartPalette.up;
+            else col = chartPalette.down;
           } else {
             if (index > 0) {
-              if (i.ma_vol >= arr[index - 1].ma_vol) col = "rgba(52, 211, 153, 0.9)";
-              else col = "rgba(239, 83, 80, 0.9)";
+              if (i.ma_vol >= arr[index - 1].ma_vol) col = chartPalette.up;
+              else col = chartPalette.down;
             } else if (lastMaVolColorRef.current !== null) {
               col = lastMaVolColorRef.current;
             }
@@ -3002,13 +3004,13 @@ useEffect(() => {
           let col = "rgba(148, 163, 184, 0.65)";
           if (index < arr.length - 1) {
             // Look ahead: color this segment based on direction from current to next
-            if (arr[index + 1].hl2 >= item.hl2) col = "rgba(52, 211, 153, 0.9)";
-            else col = "rgba(239, 83, 80, 0.9)";
+            if (arr[index + 1].hl2 >= item.hl2) col = chartPalette.up;
+            else col = chartPalette.down;
           } else {
             // Last point: determine color by comparing with previous point
             if (index > 0) {
-              if (item.hl2 >= arr[index - 1].hl2) col = "rgba(52, 211, 153, 0.9)";
-              else col = "rgba(239, 83, 80, 0.9)";
+              if (item.hl2 >= arr[index - 1].hl2) col = chartPalette.up;
+              else col = chartPalette.down;
             } else if (lastHl2ColorRef.current !== null) {
               col = lastHl2ColorRef.current;
             }

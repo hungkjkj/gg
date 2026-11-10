@@ -513,6 +513,7 @@ export const MomFlipChartComponent = ({ data = [], dataVersion = 0, dataRevision
         ? data
         : data.slice(Math.max(0, previous.length - 2));
       const isSunsetMom = chartTheme === 'sunset';
+      const isMt5Mom = chartTheme === 'dark';
       const points = sourcePoints.map(d => {
         const score = Math.min(100, Math.max(0, Math.abs(d.value || 0)));
         const direction = d.mom_raw > 0 ? 1 : (d.mom_raw < 0 ? -1 : 0);
@@ -521,10 +522,10 @@ export const MomFlipChartComponent = ({ data = [], dataVersion = 0, dataRevision
         
         let r, g, b;
         if (direction >= 0) {
-           r = 34; g = 211; b = 238;
+           r = isMt5Mom ? 0 : 34; g = isMt5Mom ? 255 : 211; b = isMt5Mom ? 0 : 238;
            if (isSunsetMom) { r = 14; g = 165; b = 233; }
         } else {
-           r = 251; g = 146; b = 60;
+           r = isMt5Mom ? 255 : 251; g = isMt5Mom ? 51 : 146; b = isMt5Mom ? 51 : 60;
            if (isSunsetMom) { r = 249; g = 115; b = 22; }
         }
 
