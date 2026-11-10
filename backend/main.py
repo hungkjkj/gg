@@ -1114,19 +1114,23 @@ def get_ohlcv(symbol: str, timeframe: str, count: int = 10000,
                     ratio = (b['vol'] - val_pct1) / (val_95 - val_pct1)
                     ratio = max(0.0, min(1.0, ratio))
                 
-                # Use a restrained heat ramp so D-VP remains readable over candles:
-                # teal for lighter nodes, amber in the middle, coral for the strongest.
-                low_heat = np.array([38.0, 166.0, 154.0])
-                mid_heat = np.array([216.0, 164.0, 67.0])
-                high_heat = np.array([230.0, 107.0, 91.0])
-                if ratio <= 0.55:
-                    blend = ratio / 0.55
-                    rgb = low_heat + (mid_heat - low_heat) * blend
+                # High-energy thermal ramp: cyan -> yellow -> red -> white-hot.
+                # Keep a visible fill even for low heat and intensify it with volume.
+                cool_heat = np.array([0.0, 190.0, 255.0])
+                warm_heat = np.array([255.0, 230.0, 0.0])
+                hot_heat = np.array([255.0, 36.0, 0.0])
+                white_hot = np.array([255.0, 250.0, 235.0])
+                if ratio <= 0.45:
+                    blend = ratio / 0.45
+                    rgb = cool_heat + (warm_heat - cool_heat) * blend
+                elif ratio <= 0.88:
+                    blend = (ratio - 0.45) / 0.43
+                    rgb = warm_heat + (hot_heat - warm_heat) * blend
                 else:
-                    blend = (ratio - 0.55) / 0.45
-                    rgb = mid_heat + (high_heat - mid_heat) * blend
+                    blend = (ratio - 0.88) / 0.12
+                    rgb = hot_heat + (white_hot - hot_heat) * blend
                 r_val, g_val, b_val = (int(round(channel)) for channel in rgb)
-                a_val = 0.12 + (0.16 * ratio)
+                a_val = 0.3 + (0.42 * ratio)
 
                 color = f"rgba({r_val}, {g_val}, {b_val}, {a_val:.2f})"
                 level = f"Heat: {int(ratio*100)}%"
